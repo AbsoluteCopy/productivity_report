@@ -20,3 +20,22 @@ class User(models.Model):
 
     class Meta:
         db_table = 'users'
+
+
+class DailyReport(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_reports')
+    date = models.DateField()
+    task_category = models.CharField(max_length=100)
+    task_list = models.TextField()
+    number_of_tasks = models.IntegerField(default=0)
+    time_spent = models.DurationField()
+    meeting_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.first_name} {self.user.last_name} - {self.date}"
+
+    class Meta:
+        db_table = 'daily_reports'
+        ordering = ['-date']
