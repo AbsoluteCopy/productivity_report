@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from .models import User, DailyReport
 from .serializers import UserSerializer, DailyReportSerializer
+import hashlib
 
 # Create your views here.
 @api_view(["GET"])
@@ -12,6 +13,39 @@ def home(request):
     return Response({
         "message": "Django backend is connected!"
     })
+
+
+@api_view(["POST"])
+def login(request):
+    email = request.data.get('email')
+    password = request.data.get('password')
+    
+    if not email or not password:
+        return Response(
+            {"error": "Email and password are required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        user = User.objects.get(email=email)
+        # Hash the provided password and compare
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        if user.password == hashed_password:
+            serializer = UserSerializer(user)
+            return Response({
+                "message": "Login successful",
+                "user": serializer.data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"error": "Invalid credentials"}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+    except User.DoesNotExist:
+        return Response(
+            {"error": "Invalid credentials"}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
 
 class UserListView(APIView):

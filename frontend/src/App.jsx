@@ -11,7 +11,7 @@ function App() {
   return (
     <>
       <Router>
-          <AppContent />
+        <AppContent />
       </Router>
     </>
   )
@@ -22,10 +22,12 @@ function AppContent() {
   return (
     <div className="app-content">
       <Routes>
+        <Route element={<Layout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/new_data" element={<NewData />} />
+        </Route>
         <Route path="/" element={<Initial />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/new_data" element={<NewData />} />
       </Routes>
     </div>
   );

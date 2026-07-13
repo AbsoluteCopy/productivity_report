@@ -1,13 +1,42 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const Login = () => {
+    const navigate = useNavigate();
     const [showPassword, setShowPassword] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('Login attempt:', { email, password });
+        setError('');
+        setLoading(true);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/login/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                localStorage.setItem('user', JSON.stringify(data.user));
+                navigate('/dashboard');
+            } else {
+                setError(data.error || 'Login failed');
+            }
+        } catch (err) {
+            setError('Network error. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -46,6 +75,20 @@ const Login = () => {
                         Productivity Report
                     </h2>
                 </div>
+
+                {error && (
+                    <div style={{
+                        backgroundColor: '#fee',
+                        color: '#c33',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginBottom: '20px',
+                        fontSize: '14px',
+                        textAlign: 'center'
+                    }}>
+                        {error}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: '20px' }}>
@@ -138,28 +181,33 @@ const Login = () => {
 
                     <button
                         type="submit"
+                        disabled={loading}
                         style={{
                             width: '100%',
                             padding: '14px',
-                            backgroundColor: '#065d48',
+                            backgroundColor: loading ? '#999' : '#065d48',
                             color: 'white',
                             border: 'none',
                             borderRadius: '8px',
                             fontSize: '16px',
                             fontWeight: 'bold',
-                            cursor: 'pointer',
+                            cursor: loading ? 'not-allowed' : 'pointer',
                             transition: 'transform 0.2s, box-shadow 0.2s'
                         }}
                         onMouseOver={(e) => {
-                            e.target.style.transform = 'scale(1.02)';
-                            e.target.style.boxShadow = '0 4px 15px rgba(6, 93, 72, 0.3)';
+                            if (!loading) {
+                                e.target.style.transform = 'scale(1.02)';
+                                e.target.style.boxShadow = '0 4px 15px rgba(6, 93, 72, 0.3)';
+                            }
                         }}
                         onMouseOut={(e) => {
-                            e.target.style.transform = 'scale(1)';
-                            e.target.style.boxShadow = 'none';
+                            if (!loading) {
+                                e.target.style.transform = 'scale(1)';
+                                e.target.style.boxShadow = 'none';
+                            }
                         }}
                     >
-                        Sign In
+                        {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
             </div>

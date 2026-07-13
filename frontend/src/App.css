@@ -180,3 +180,7 @@
     border-right-color: var(--border);
   }
 }
+
+.main-background{
+  background-color:#055d47!important;
+}
