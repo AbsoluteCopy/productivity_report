@@ -184,3 +184,42 @@
 .main-background{
   background-color:#055d47!important;
 }
+
+.btn-primary{
+  background-color:#055D47!important;
+  border-color:#055D47!important;
+}
+
+.btn-secondary{
+  background-color:#2F8F83!important;
+  border-color:#2F8F83!important;
+}
+
+.btn-danger{
+  background-color:#c24955!important;
+  border-color:#c24955!important;
+}
+
+.btn-warning{
+  background-color:#F4B400!important;
+  border-color:#F4B400!important;
+}
+
+.btn-info{
+  background-color:#0D6EFD!important;
+  border-color:#0D6EFD!important;
+  color:white!important;
+}
+
+.middle{
+  vertical-align: middle!important;
+}
+
+.fitcell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.font-12{
+  font-size: 12px!important;
+}

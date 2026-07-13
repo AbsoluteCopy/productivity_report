@@ -28,13 +28,13 @@ function Navbar() {
                     {/* Left Links */}
                     <ul className="navbar-nav ms-4">
                         <li className="nav-item">
-                            <a className="nav-link active" href="/">
+                            <a className="nav-link active" href="/dashboard">
                                 Home
                             </a>
                         </li>
 
                         <li className="nav-item">
-                            <a className="nav-link" href="/new_data">
+                            <a className="nav-link" href="/daily_report">
                                 Daily Report
                             </a>
                         </li>
@@ -49,13 +49,6 @@ function Navbar() {
                                 role="button"
                                 data-bs-toggle="dropdown"
                             >
-                                <img
-                                    src="https://i.pravatar.cc/40"
-                                    alt="Profile"
-                                    className="rounded-circle me-2"
-                                    width="35"
-                                    height="35"
-                                />
                                 John Doe
                             </a>
 

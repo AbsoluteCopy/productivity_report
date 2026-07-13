@@ -142,6 +142,16 @@ class DailyReportDetailView(APIView):
 
 class UserDailyReportsView(APIView):
     def get(self, request, user_id):
+        year = request.GET.get('year')
+        month = request.GET.get('month')
+
         reports = DailyReport.objects.filter(user_id=user_id)
+
+        if year and month:
+            reports = reports.filter(
+                date__year=year,
+                date__month=month
+            )
+
         serializer = DailyReportSerializer(reports, many=True)
         return Response(serializer.data)
