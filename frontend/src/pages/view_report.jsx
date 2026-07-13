@@ -201,7 +201,106 @@ const ViewReport = () => {
         });
     };
 
-    const displayReports = addWeekendRows(groupedReports);
+    const addDailyTotalRows = (reports) => {
+        const rows = [];
+
+        let currentDate = null;
+        let dailyWorkingHours = 0;
+        let dailyMeetings = 0;
+        let hasWorkData = false;
+
+        const addTotalRow = () => {
+            if (hasWorkData) {
+                rows.push({
+                    id: `total-${currentDate}`,
+                    date: currentDate,
+                    task_category: 'Daily Total',
+                    working_hours_total: dailyWorkingHours,
+                    meeting_total: dailyMeetings,
+                    isTotal: true
+                });
+            }
+        };
+
+        reports.forEach((report, index) => {
+
+            if (currentDate && currentDate !== report.date) {
+                addTotalRow();
+
+                dailyWorkingHours = 0;
+                dailyMeetings = 0;
+                hasWorkData = false;
+            }
+
+            currentDate = report.date;
+
+            const isLeave =
+                report.task_category === 'Holiday' ||
+                report.task_category === 'PTO';
+
+            if (!report.isWeekend && !isLeave) {
+                dailyWorkingHours +=
+                    Number(report.number_of_tasks || 0) *
+                    Number(report.time_spent || 0);
+
+                dailyMeetings += Number(report.meeting_count || 0);
+
+                hasWorkData = true;
+            }
+
+            rows.push(report);
+
+            // last record
+            if (index === reports.length - 1) {
+                addTotalRow();
+            }
+        });
+
+        return rows;
+    };
+    const displayReports = addDailyTotalRows(
+        addWeekendRows(groupedReports)
+    );
+    const summaryTaskList = [
+        "Accounting Unapplied Payments",
+        "Accounting Cash Receipts",
+        "Checked/Reviewed Accounting Posted Payments",
+        "Check Deposits to Cash Receipts & UAP",
+        "Checked & Cleared 2025 ePay Transactions",
+        "Process Offset on Accounting from Matt/UW Team"
+    ];
+
+
+    const summaryReports = summaryTaskList.map(task => {
+
+        const taskReports = groupedReports.filter(
+            report => report.task_category === task
+        );
+
+        const totalTasks = taskReports.reduce(
+            (sum, report) =>
+                sum + Number(report.number_of_tasks || 0),
+            0
+        );
+
+        const totalTime = taskReports.reduce(
+            (sum, report) =>
+                sum +
+                (
+                    Number(report.number_of_tasks || 0) *
+                    Number(report.time_spent || 0)
+                ),
+            0
+        );
+
+
+        return {
+            task,
+            totalTasks,
+            totalTime
+        };
+
+    });
     return (
         <div className="px-4 mt-4">
             <div className="card shadow-sm">
@@ -259,125 +358,259 @@ const ViewReport = () => {
                         </div>
                     </div>
 
-                    <table className="table table-bordered table-striped table-hover table-sm mt-3">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Day</th>
-                                <th>Task</th>
-                                <th># of Task</th>
-                                <th>Time Spent(mins)</th>
-                                <th>Working Hours(mins)</th>
-                                <th>Meeting Trainings(mins)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {
-                                displayReports.map((report, index) => {
+                    <ul className="nav nav-tabs mt-3" id="reportTabs" role="tablist">
+                        <li className="nav-item" role="presentation">
+                            <button
+                                className="nav-link active"
+                                id="daily-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#daily-report"
+                                type="button"
+                                role="tab"
+                            >
+                                Daily Report
+                            </button>
+                        </li>
 
-                                    const [year, month, day] = report.date.split('-');
-                                    const date = new Date(year, month - 1, day);
-                                    const previousReport = displayReports[index - 1];
-                                    const showDate =
-                                        !previousReport ||
-                                        previousReport.date !== report.date;
-                                    const isLeave =
-                                        report.task_category === 'Holiday' ||
-                                        report.task_category === 'PTO';
-                                    return (
-                                        <tr
-                                            key={`${report.date}-${report.task_category}-${index}`}
-                                            className={`
+                        <li className="nav-item" role="presentation">
+                            <button
+                                className="nav-link"
+                                id="summary-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#summary-report"
+                                type="button"
+                                role="tab"
+                            >
+                                Summary of Task
+                            </button>
+                        </li>
+                    </ul>
+
+
+                    <div className="tab-content" id="reportTabsContent">
+
+                        {/* Daily Report Tab */}
+                        <div
+                            className="tab-pane fade show active"
+                            id="daily-report"
+                            role="tabpanel"
+                        >
+
+                            <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Day</th>
+                                        <th>Task</th>
+                                        <th># of Task</th>
+                                        <th>Time Spent(mins)</th>
+                                        <th>Working Hours(mins)</th>
+                                        <th>Meeting Trainings(mins)</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {
+                                        displayReports.map((report, index) => {
+                                            if (report.isTotal) {
+                                                return (
+                                                    <tr
+                                                        key={report.id}
+                                                        className="fw-bold"
+                                                    >
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td>{report.working_hours_total}</td>
+                                                        <td>{report.meeting_total}</td>
+                                                    </tr>
+                                                );
+                                            }
+                                            const [year, month, day] = report.date.split('-');
+                                            const date = new Date(year, month - 1, day);
+                                            const previousReport = displayReports[index - 1];
+                                            const showDate =
+                                                !previousReport ||
+                                                previousReport.date !== report.date;
+                                            const isLeave =
+                                                report.task_category === 'Holiday' ||
+                                                report.task_category === 'PTO';
+                                            return (
+                                                <tr
+                                                    key={`${report.date}-${report.task_category}-${index}`}
+                                                    className={`
         ${report.isWeekend ? "table-warning" : ""}
         ${isLeave ? "table-info" : ""}
         middle
     `}
-                                        >
-                                            <td>
-                                                {showDate &&
-                                                    `${date.getDate()}-${date.toLocaleString(
-                                                        'en-US',
-                                                        { month: 'short' }
-                                                    )}-${String(date.getFullYear()).slice(-2)}`
-                                                }
-                                            </td>
+                                                >
+                                                    <td>
+                                                        {showDate &&
+                                                            `${date.getDate()}-${date.toLocaleString(
+                                                                'en-US',
+                                                                { month: 'short' }
+                                                            )}-${String(date.getFullYear()).slice(-2)}`
+                                                        }
+                                                    </td>
 
-                                            <td>
-                                                {showDate &&
-                                                    date.toLocaleDateString(
-                                                        'en-US',
-                                                        { weekday: 'long' }
-                                                    )
-                                                }
-                                            </td>
-                                            <td>
-                                                <div>
-                                                    {report.task_category}
-                                                    {report.task_category === 'Holiday' && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
-                                                </div>
+                                                    <td>
+                                                        {showDate &&
+                                                            date.toLocaleDateString(
+                                                                'en-US',
+                                                                { weekday: 'long' }
+                                                            )
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <div>
+                                                            {report.task_category}
+                                                            {report.task_category === 'Holiday' && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
+                                                        </div>
 
-                                                {!report.isWeekend &&
-                                                    !isLeave &&
-                                                    report.task_list &&
-                                                    report.task_list.length > 0 && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-sm btn-outline-success mt-2"
-                                                                onClick={() =>
-                                                                    toggleTaskList(
+                                                        {!report.isWeekend &&
+                                                            !isLeave &&
+                                                            report.task_list &&
+                                                            report.task_list.length > 0 && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-success mt-2"
+                                                                        onClick={() =>
+                                                                            toggleTaskList(
+                                                                                `${report.date}-${report.task_category}-${report.time_spent}`
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {expandedRows[
+                                                                            `${report.date}-${report.task_category}-${report.time_spent}`
+                                                                        ]
+                                                                            ? 'Hide Tasks'
+                                                                            : `Show Tasks (${report.task_list.length})`
+                                                                        }
+                                                                    </button>
+
+
+                                                                    {expandedRows[
                                                                         `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                    )
-                                                                }
-                                                            >
-                                                                {expandedRows[
-                                                                    `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                ]
-                                                                    ? 'Hide Tasks'
-                                                                    : `Show Tasks (${report.task_list.length})`
-                                                                }
-                                                            </button>
+                                                                    ] && (
+                                                                            <ul className="mt-2 mb-0 ps-3">
+                                                                                {report.task_list.map((task, i) => (
+                                                                                    <li key={`${task}-${i}`}>
+                                                                                        {task}
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        )}
+                                                                </>
+                                                            )
+                                                        }
+                                                    </td>
+
+                                                    <td>{isLeave ? '' : report.number_of_tasks}</td>
+
+                                                    <td>{isLeave ? '' : report.time_spent}</td>
+
+                                                    <td>
+                                                        {isLeave
+                                                            ? ''
+                                                            : report.number_of_tasks && report.time_spent
+                                                                ? report.number_of_tasks * report.time_spent
+                                                                : ''
+                                                        }
+                                                    </td>
+
+                                                    <td>{isLeave ? '' : report.meeting_count}</td>
+
+                                                </tr>
+                                            );
+                                        })
+                                    }
+                                </tbody>
+                            </table>
+
+                        </div>
 
 
-                                                            {expandedRows[
-                                                                `${report.date}-${report.task_category}-${report.time_spent}`
-                                                            ] && (
-                                                                    <ul className="mt-2 mb-0 ps-3">
-                                                                        {report.task_list.map((task, i) => (
-                                                                            <li key={`${task}-${i}`}>
-                                                                                {task}
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                )}
-                                                        </>
+                        <div
+                            className="tab-pane fade"
+                            id="summary-report"
+                            role="tabpanel"
+                        >
+
+                            <div className="p-3">
+
+                                <table className="table table-bordered table-striped table-hover table-sm font-12">
+
+                                    <thead>
+                                        <tr>
+                                            <th>List of Task</th>
+                                            <th>Total # of Task Done</th>
+                                            <th>Total Time Spent (mins)</th>
+                                        </tr>
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        {summaryReports.map((item, index) => (
+
+                                            <tr key={index}>
+
+                                                <td>
+                                                    {item.task}
+                                                </td>
+
+                                                <td>
+                                                    {item.totalTasks}
+                                                </td>
+
+                                                <td>
+                                                    {item.totalTime}
+                                                </td>
+
+                                            </tr>
+
+                                        ))}
+
+                                        <tr className="fw-bold table-secondary">
+
+                                            <td>
+                                                Total
+                                            </td>
+
+                                            <td>
+                                                {
+                                                    summaryReports.reduce(
+                                                        (sum, item) =>
+                                                            sum + item.totalTasks,
+                                                        0
                                                     )
                                                 }
                                             </td>
 
-                                            <td>{isLeave ? '' : report.number_of_tasks}</td>
-
-                                            <td>{isLeave ? '' : report.time_spent}</td>
-
                                             <td>
-                                                {isLeave
-                                                    ? ''
-                                                    : report.number_of_tasks && report.time_spent
-                                                        ? report.number_of_tasks * report.time_spent
-                                                        : ''
+                                                {
+                                                    summaryReports.reduce(
+                                                        (sum, item) =>
+                                                            sum + item.totalTime,
+                                                        0
+                                                    )
                                                 }
                                             </td>
-
-                                            <td>{isLeave ? '' : report.meeting_count}</td>
 
                                         </tr>
-                                    );
-                                })
-                            }
-                        </tbody>
 
-                    </table>
+                                    </tbody>
 
+                                </table>
+
+                            </div>
+
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>
