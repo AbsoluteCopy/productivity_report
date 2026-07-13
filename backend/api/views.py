@@ -96,62 +96,162 @@ class UserDetailView(APIView):
 
 class DailyReportListView(APIView):
     def get(self, request):
+
         reports = DailyReport.objects.all()
-        serializer = DailyReportSerializer(reports, many=True)
+
+        year = request.GET.get("year")
+        month = request.GET.get("month")
+        user_id = request.GET.get("user_id")
+
+        if year:
+            reports = reports.filter(date__year=year)
+
+        if month:
+            reports = reports.filter(date__month=month)
+
+        if user_id:
+            reports = reports.filter(user_id=user_id)
+
+        serializer = DailyReportSerializer(
+            reports.order_by("date"),
+            many=True
+        )
+
         return Response(serializer.data)
 
     def post(self, request):
         serializer = DailyReportSerializer(data=request.data)
+
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class DailyReportDetailView(APIView):
+
     def get_object(self, pk):
         try:
             return DailyReport.objects.get(pk=pk)
         except DailyReport.DoesNotExist:
             return None
 
+
     def get(self, request, pk):
+
         report = self.get_object(pk)
-        if report:
-            serializer = DailyReportSerializer(report)
-            return Response(serializer.data)
-        return Response({"error": "Daily report not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not report:
+            return Response(
+                {"error": "Daily report not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = DailyReportSerializer(report)
+
+        return Response(serializer.data)
+
 
     def put(self, request, pk):
+
         report = self.get_object(pk)
-        if report:
-            serializer = DailyReportSerializer(report, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"error": "Daily report not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not report:
+            return Response(
+                {"error": "Daily report not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not self.has_permission(request, report):
+            return Response(
+                {"error": "Permission denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = DailyReportSerializer(
+            report,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    def has_permission(self, request, report):
+
+        user_id = request.GET.get("user_id")
+
+        if not user_id:
+            return False
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return False
+
+        if user.role == "admin":
+            return True
+
+        return report.user_id == user.id
 
     def delete(self, request, pk):
+
         report = self.get_object(pk)
-        if report:
-            report.delete()
-            return Response({"message": "Daily report deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-        return Response({"error": "Daily report not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not report:
+            return Response(
+                {"error": "Daily report not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not self.has_permission(request, report):
+            return Response(
+                {"error": "Permission denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        report.delete()
+
+        return Response(
+            {"message": "Daily report deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class UserDailyReportsView(APIView):
+
     def get(self, request, user_id):
-        year = request.GET.get('year')
-        month = request.GET.get('month')
 
-        reports = DailyReport.objects.filter(user_id=user_id)
+        reports = DailyReport.objects.filter(
+            user_id=user_id
+        )
 
-        if year and month:
-            reports = reports.filter(
-                date__year=year,
-                date__month=month
-            )
+        year = request.GET.get("year")
+        month = request.GET.get("month")
 
-        serializer = DailyReportSerializer(reports, many=True)
+        if year:
+            reports = reports.filter(date__year=year)
+
+        if month:
+            reports = reports.filter(date__month=month)
+
+
+        serializer = DailyReportSerializer(
+            reports.order_by("date"),
+            many=True
+        )
+
         return Response(serializer.data)

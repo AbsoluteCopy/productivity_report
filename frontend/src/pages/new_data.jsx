@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const categoryOptions = [
@@ -12,6 +13,9 @@ const categoryOptions = [
 ];
 
 const NewData = () => {
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('edit');
+    const [isEditMode, setIsEditMode] = useState(false);
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         work_type: 'Working'
@@ -28,7 +32,41 @@ const NewData = () => {
                 user_id: user.id
             }));
         }
-    }, []);
+
+        if (editId) {
+            setIsEditMode(true);
+            fetchReportForEdit(editId);
+        }
+    }, [editId]);
+
+    const fetchReportForEdit = async (id) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`);
+            const data = await response.json();
+            
+            setFormData({
+                date: data.date,
+                work_type: data.work_type,
+                user_id: data.user,
+                holiday_name: data.task_category === 'Holiday' ? data.task_list[0] : ''
+            });
+
+            if (data.work_type === 'Working') {
+                setCategories([
+                    {
+                        id: 1,
+                        category: data.task_category,
+                        tasks: data.task_list || [],
+                        currentTask: '',
+                        timeSpent: data.time_spent?.toString() || '15',
+                        meetingCount: data.meeting_count || 0
+                    }
+                ]);
+            }
+        } catch (error) {
+            console.error('Error fetching report:', error);
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -115,8 +153,11 @@ const NewData = () => {
             };
 
             try {
-                const response = await fetch(`${API_BASE_URL}/daily-reports/`, {
-                    method: 'POST',
+                const url = isEditMode ? `${API_BASE_URL}/daily-reports/${editId}/` : `${API_BASE_URL}/daily-reports/`;
+                const method = isEditMode ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -124,17 +165,19 @@ const NewData = () => {
                 });
 
                 if (response.ok) {
-                    alert(`${formData.work_type} submitted successfully!`);
-                    setFormData({
-                        date: new Date().toISOString().split('T')[0],
-                        work_type: 'Working'
-                    });
+                    alert(`${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`);
+                    if (!isEditMode) {
+                        setFormData({
+                            date: new Date().toISOString().split('T')[0],
+                            work_type: 'Working'
+                        });
+                    }
                 } else {
-                    alert('Error submitting report');
+                    alert(`Error ${isEditMode ? 'updating' : 'submitting'} report`);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error submitting report');
+                alert(`Error ${isEditMode ? 'updating' : 'submitting'} report`);
             }
             return;
         }
@@ -159,33 +202,52 @@ const NewData = () => {
         }
 
         try {
-            const promises = reports.map(report =>
-                fetch(`${API_BASE_URL}/daily-reports/`, {
-                    method: 'POST',
+            if (isEditMode) {
+                // Update single report
+                const report = reports[0];
+                const response = await fetch(`${API_BASE_URL}/daily-reports/${editId}/`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(report)
-                })
-            );
-
-            const responses = await Promise.all(promises);
-
-            if (responses.every(r => r.ok)) {
-                alert('All daily reports submitted successfully!');
-                setFormData({
-                    date: new Date().toISOString().split('T')[0],
-                    work_type: 'Working'
                 });
-                setCategories([
-                    { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0 }
-                ]);
+
+                if (response.ok) {
+                    alert('Daily report updated successfully!');
+                } else {
+                    alert('Error updating report');
+                }
             } else {
-                alert('Error submitting some reports');
+                // Create new reports
+                const promises = reports.map(report =>
+                    fetch(`${API_BASE_URL}/daily-reports/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(report)
+                    })
+                );
+
+                const responses = await Promise.all(promises);
+
+                if (responses.every(r => r.ok)) {
+                    alert('All daily reports submitted successfully!');
+                    setFormData({
+                        date: new Date().toISOString().split('T')[0],
+                        work_type: 'Working'
+                    });
+                    setCategories([
+                        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0 }
+                    ]);
+                } else {
+                    alert('Error submitting some reports');
+                }
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error submitting reports');
+            alert(`Error ${isEditMode ? 'updating' : 'submitting'} reports`);
         }
     };
 
@@ -196,7 +258,7 @@ const NewData = () => {
                     <div className="card shadow-sm">
                         <div className="card-body p-4">
                             <h2 className="text-center fw-bold mb-4" style={{ color: '#065d48' }}>
-                                New Daily Report
+                                {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
                             </h2>
 
                             <form onSubmit={handleSubmit}>

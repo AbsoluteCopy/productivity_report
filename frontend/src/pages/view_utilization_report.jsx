@@ -10,41 +10,118 @@ const ViewUtilizationReport = () => {
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
     const [name, setName] = useState('');
     const [employeeCode, setEmployeeCode] = useState('');
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState('');
 
     const [dailyReports, setDailyReports] = useState([]);
 
     useEffect(() => {
+
         const userData = localStorage.getItem('user');
 
         if (userData) {
+
             const parsedUser = JSON.parse(userData);
 
-            setName(parsedUser.first_name + ' ' + parsedUser.last_name);
+            const admin = parsedUser.role === "admin";
+
+            setIsAdmin(admin);
+
+            if (admin) {
+                fetchUsers();
+            }
+
+            setName(
+                parsedUser.first_name + ' ' + parsedUser.last_name
+            );
+
             setEmployeeCode(parsedUser.id_number);
 
             fetchReports(
-                parsedUser.id,
+                parsedUser,
                 selectedYear,
-                selectedMonth
+                selectedMonth,
+                selectedUser
             );
         }
 
-    }, [selectedMonth, selectedYear]);
+    }, [
+        selectedMonth,
+        selectedYear,
+        selectedUser
+    ]);
 
-    const fetchReports = async (userId, year, month) => {
+    const fetchUsers = async () => {
+
         try {
+
             const response = await fetch(
-                `${API_BASE_URL}/users/${userId}/reports/?year=${year}&month=${month}`
+                `${API_BASE_URL}/users/`
             );
+
+            const data = await response.json();
+
+            const employees = data.filter(
+                user => user.role === "employee"
+            );
+
+            setUsers(employees);
+
+        } catch (error) {
+
+            console.error(
+                "Error fetching users:",
+                error
+            );
+
+        }
+    };
+
+    const fetchReports = async (
+        user,
+        year,
+        month,
+        userId = ''
+    ) => {
+
+        try {
+
+            let url;
+
+            if (user.role === "admin") {
+
+                url =
+                    `${API_BASE_URL}/daily-reports/?year=${year}&month=${month}`;
+
+                if (userId) {
+                    url += `&user_id=${userId}`;
+                }
+
+            } else {
+
+                url =
+                    `${API_BASE_URL}/users/${user.id}/reports/?year=${year}&month=${month}`;
+
+            }
+
+
+            const response = await fetch(url);
 
             const data = await response.json();
 
             setDailyReports(data);
 
+
         } catch (error) {
-            console.error('Error fetching reports:', error);
+
+            console.error(
+                "Error fetching reports:",
+                error
+            );
 
         }
+
     };
 
 
@@ -196,6 +273,34 @@ const ViewUtilizationReport = () => {
                         </h3>
 
                         <div className="d-flex align-items-center gap-2">
+                            {isAdmin && (
+
+                                <select
+                                    className="form-select w-auto"
+                                    value={selectedUser}
+                                    onChange={(e) =>
+                                        setSelectedUser(e.target.value)
+                                    }
+                                >
+
+                                    <option value="">
+                                        All Users
+                                    </option>
+
+                                    {users.map(user => (
+
+                                        <option
+                                            key={user.id}
+                                            value={user.id}
+                                        >
+                                            {user.first_name} {user.last_name}
+                                        </option>
+
+                                    ))}
+
+                                </select>
+
+                            )}
                             <select className="form-select w-auto" value={selectedMonth}
                                 onChange={(e) =>
                                     setSelectedMonth(Number(e.target.value))

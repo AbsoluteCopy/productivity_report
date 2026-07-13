@@ -10,10 +10,13 @@ const ViewReport = () => {
 
     const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+    const [selectedUser, setSelectedUser] = useState('');
 
     const [dailyReports, setDailyReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedRows, setExpandedRows] = useState({});
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [users, setUsers] = useState([]);
 
     useEffect(() => {
         const userData = localStorage.getItem('user');
@@ -21,14 +24,24 @@ const ViewReport = () => {
         if (userData) {
             const parsedUser = JSON.parse(userData);
 
+            const admin = parsedUser.role === "admin";
+
+            setIsAdmin(admin);
+
+            if (admin) {
+                fetchUsers();
+            }
+
             fetchReports(
-                parsedUser.id,
+                parsedUser,
                 selectedYear,
-                selectedMonth
+                selectedMonth,
+                selectedUser
             );
         }
 
-    }, [selectedMonth, selectedYear]);
+    }, [selectedMonth, selectedYear, selectedUser]);
+
     const toggleTaskList = (key) => {
         setExpandedRows(prev => ({
             ...prev,
@@ -36,11 +49,32 @@ const ViewReport = () => {
         }));
     };
 
-    const fetchReports = async (userId, year, month) => {
+    const fetchUsers = async () => {
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/users/${userId}/reports/?year=${year}&month=${month}`
-            );
+            const response = await fetch(`${API_BASE_URL}/users/`);
+            const data = await response.json();
+
+            const filteredUsers = data.filter(user => user.role === 'employee');
+
+            setUsers(filteredUsers);
+
+        } catch (error) {
+            console.error("Error fetching users:", error);
+        }
+    };
+    const fetchReports = async (user, year, month, userId = '') => {
+        try {
+            let url;
+
+            if (user.role === 'admin') {
+                // Admin gets all reports
+                url = `${API_BASE_URL}/daily-reports/?year=${year}&month=${month}${userId ? `&user_id=${userId}` : ''}`;
+            } else {
+                // Normal user gets own reports
+                url = `${API_BASE_URL}/users/${user.id}/reports/?year=${year}&month=${month}`;
+            }
+
+            const response = await fetch(url);
 
             const data = await response.json();
 
@@ -180,6 +214,25 @@ const ViewReport = () => {
                         </h3>
 
                         <div className="d-flex align-items-center gap-2">
+                            {isAdmin && (
+                                <select
+                                    className="form-select w-auto"
+                                    value={selectedUser}
+                                    onChange={(e) =>
+                                        setSelectedUser(e.target.value)
+                                    }
+                                >
+                                    <option value="">All Users</option>
+
+                                    {users.map((user) => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.first_name} {user.last_name}
+                                        </option>
+                                    ))}
+
+                                </select>
+                            )}
+
                             <select className="form-select w-auto" value={selectedMonth}
                                 onChange={(e) =>
                                     setSelectedMonth(Number(e.target.value))
