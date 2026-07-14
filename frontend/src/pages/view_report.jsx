@@ -530,14 +530,8 @@ const ViewReport = () => {
                         </div>
 
 
-                        <div
-                            className="tab-pane fade"
-                            id="summary-report"
-                            role="tabpanel"
-                        >
-
+                        <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="p-3">
-
                                 <table className="table table-bordered table-striped table-hover table-sm font-12">
 
                                     <thead>

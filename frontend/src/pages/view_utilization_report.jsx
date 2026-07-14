@@ -234,7 +234,6 @@ const ViewUtilizationReport = () => {
         <div className="px-4 mt-4">
             <div className="card shadow-sm">
                 <div className="card-body">
-
                     <div className="d-flex align-items-center justify-content-between gap-3 p-3 bg-light rounded shadow-sm">
 
                         <h3 className="mb-0">
@@ -244,9 +243,7 @@ const ViewUtilizationReport = () => {
                         <div className="d-flex align-items-center gap-2">
                             {isAdmin && (
 
-                                <select
-                                    className="form-select w-auto"
-                                    value={selectedUser}
+                                <select className="form-select w-auto" value={selectedUser}
                                     onChange={e => setSelectedUser(e.target.value)}
                                 >
 

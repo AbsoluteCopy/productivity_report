@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 import Swal from "sweetalert2";
+import DataTable from "react-data-table-component";
 
 const ManageAccounts = () => {
     const API_URL = `${API_BASE_URL}/users/`;
@@ -121,11 +122,66 @@ const ManageAccounts = () => {
         });
     };
 
-    const filteredUsers = users.filter((user) =>
-        `${user.first_name} ${user.last_name} ${user.id_number} ${user.email}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
-    );
+    const columns = [
+        {
+            name: "ID Number",
+            selector: row => row.id_number,
+            sortable: true,
+        },
+        {
+            name: "Name",
+            selector: row => `${row.first_name} ${row.last_name}`,
+            sortable: true,
+        },
+        {
+            name: "Email",
+            selector: row => row.email,
+            sortable: true,
+        },
+        {
+            name: "Role",
+            cell: row => (
+                <span
+                    className={`badge ${row.role === "admin"
+                        ? "bg-danger"
+                        : "bg-primary"
+                        }`}
+                >
+                    {row.role.toUpperCase()}
+                </span>
+            ),
+            sortable: true,
+        },
+        {
+            name: "Actions",
+            cell: row => (
+                <>
+                    <button
+                        className="btn btn-primary btn-sm me-2"
+                        data-bs-toggle="modal"
+                        data-bs-target="#userModal"
+                        onClick={() => editUser(row)}
+                    >
+                        Edit
+                    </button>
+
+                    <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => deleteUser(row.id)}
+                    >
+                        Delete
+                    </button>
+                </>
+            ),
+        },
+    ];
+    const customStyles = {
+        rows: {
+            style: {
+                minHeight: "55px",
+            },
+        },
+    };
 
     return (
         <div className="container mt-4">
@@ -158,78 +214,21 @@ const ManageAccounts = () => {
                         onChange={(e) => setSearch(e.target.value)}
                     />
 
-                    <table className="table table-hover table-bordered align-middle">
-
-                        <thead className="table-dark">
-                            <tr>
-                                <th>ID Number</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th width="220">Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {filteredUsers.length > 0 ? (
-
-                                filteredUsers.map((user) => (
-
-                                    <tr key={user.id}>
-                                        <td>{user.id_number}</td>
-
-                                        <td>
-                                            {user.first_name} {user.last_name}
-                                        </td>
-
-                                        <td>{user.email}</td>
-
-                                        <td>
-                                            <span
-                                                className={`badge ${user.role === "admin"
-                                                    ? "bg-danger"
-                                                    : "bg-primary"
-                                                    }`}
-                                            >
-                                                {user.role}
-                                            </span>
-                                        </td>
-
-                                        <td>
-
-                                            <button
-                                                className="btn btn-primary btn-sm me-2"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#userModal"
-                                                onClick={() => editUser(user)}
-                                            >
-                                                Edit
-                                            </button>
-
-                                            <button
-                                                className="btn btn-danger btn-sm"
-                                                onClick={() => deleteUser(user.id)}
-                                            >
-                                                Delete
-                                            </button>
-
-                                        </td>
-
-                                    </tr>
-
-                                ))
-
-                            ) : (
-                                <tr>
-                                    <td colSpan="5" className="text-center">
-                                        No users found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-
-                    </table>
-
+                    <DataTable
+                        columns={columns}
+                        data={users.filter((user) =>
+                            `${user.first_name} ${user.last_name} ${user.id_number} ${user.email}`
+                                .toLowerCase()
+                                .includes(search.toLowerCase())
+                        )}
+                        pagination
+                        highlightOnHover
+                        striped
+                        responsive
+                        persistTableHead
+                        noDataComponent="No users found."
+                        customStyles={customStyles}
+                    />
                 </div>
 
             </div>

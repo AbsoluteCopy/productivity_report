@@ -42,28 +42,31 @@ const NewData = () => {
 
     const fetchReportForEdit = async (id) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`);
-            const data = await response.json();
+            const user = JSON.parse(localStorage.getItem("user"));
 
-            setFormData({
-                date: data.date,
-                work_type: data.work_type,
-                user_id: data.user,
-                holiday_name: data.task_category === 'Holiday' ? data.task_list[0] : ''
+            fetch(
+                `${API_BASE_URL}/daily-reports/${id}/?user_id=${user.id}`
+            ).then(response => response.json()).then(data => {
+                setFormData({
+                    date: data.date,
+                    work_type: data.work_type,
+                    user_id: data.user,
+                    holiday_name: data.task_category === 'Holiday' ? data.task_list[0] : ''
+                });
+
+                if (data.work_type === 'Working') {
+                    setCategories([
+                        {
+                            id: 1,
+                            category: data.task_category,
+                            tasks: data.task_list || [],
+                            currentTask: '',
+                            timeSpent: data.time_spent?.toString() || '15',
+                            meetingCount: data.meeting_count || 0
+                        }
+                    ]);
+                }
             });
-
-            if (data.work_type === 'Working') {
-                setCategories([
-                    {
-                        id: 1,
-                        category: data.task_category,
-                        tasks: data.task_list || [],
-                        currentTask: '',
-                        timeSpent: data.time_spent?.toString() || '15',
-                        meetingCount: data.meeting_count || 0
-                    }
-                ]);
-            }
         } catch (error) {
             console.error('Error fetching report:', error);
         }
@@ -234,7 +237,10 @@ const NewData = () => {
                 const responses = await Promise.all(promises);
 
                 if (responses.every(r => r.ok)) {
-                    alert('All daily reports submitted successfully!');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'All daily reports submitted successfully!'
+                    });
                     setFormData({
                         date: new Date().toISOString().split('T')[0],
                         work_type: 'Working'
@@ -243,12 +249,18 @@ const NewData = () => {
                         { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0 }
                     ]);
                 } else {
-                    alert('Error submitting some reports');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error submitting some reports'
+                    });
                 }
             }
         } catch (error) {
             console.error('Error:', error);
-            alert(`Error ${isEditMode ? 'updating' : 'submitting'} reports`);
+            Swal.fire({
+                icon: 'error',
+                title: `Error ${isEditMode ? 'updating' : 'submitting'} reports`
+            });
         }
     };
     const handleBack = () => {
@@ -262,11 +274,7 @@ const NewData = () => {
                     <div className="card shadow-sm">
                         <div className="card-body p-4">
                             <div className="d-flex justify-content-between align-items-center mb-4">
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary"
-                                    onClick={handleBack}
-                                >
+                                <button type="button" className="btn btn-outline-secondary" onClick={handleBack}>
                                     ← Back
                                 </button>
 
@@ -370,48 +378,6 @@ const NewData = () => {
                                                                 ))}
                                                             </select>
                                                         </div>
-                                                        <div className="mb-3 col-lg-6">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Number of Tasks
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                value={cat.tasks.length}
-                                                                readOnly
-                                                                className="form-control"
-                                                            />
-                                                        </div>
-                                                        <div className="mb-3 col-lg-12">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Task List *
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={cat.currentTask}
-                                                                onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                placeholder="Type task and press Enter to add"
-                                                                className="form-control"
-                                                            />
-                                                            {cat.tasks.length > 0 && (
-                                                                <div className="mt-2">
-                                                                    <ul className="list-group">
-                                                                        {cat.tasks.map((task, taskIndex) => (
-                                                                            <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
-                                                                                {task}
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="btn btn-sm btn-outline-danger"
-                                                                                    onClick={() => removeTask(cat.id, taskIndex)}
-                                                                                >
-                                                                                    ×
-                                                                                </button>
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                            )}
-                                                        </div>
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
@@ -446,6 +412,49 @@ const NewData = () => {
                                                                 />
                                                             </div>
                                                         )}
+                                                        <div className="mb-3 col-lg-8">
+                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                Task List *
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={cat.currentTask}
+                                                                onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                placeholder="Type task and press Enter to add"
+                                                                className="form-control"
+                                                            />
+                                                            {cat.tasks.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <ul className="list-group">
+                                                                        {cat.tasks.map((task, taskIndex) => (
+                                                                            <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
+                                                                                {task}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn btn-sm btn-outline-danger"
+                                                                                    onClick={() => removeTask(cat.id, taskIndex)}
+                                                                                >
+                                                                                    ×
+                                                                                </button>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="mb-3 col-lg-4">
+                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                Number of Tasks
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                value={cat.tasks.length}
+                                                                readOnly
+                                                                className="form-control"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

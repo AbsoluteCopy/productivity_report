@@ -61,11 +61,18 @@ function Navbar() {
 
 
                         {isAdmin && (
-                            <li className="nav-item">
-                                <a className="nav-link" href="/view_utilization_report">
-                                    Utilization Report
-                                </a>
-                            </li>
+                            <>
+                                <li className="nav-item">
+                                    <a className="nav-link" href="/view_utilization_report">
+                                        Utilization Report
+                                    </a>
+                                </li>
+                                <li className="nav-item">
+                                    <a className="nav-link" href="/manage_accounts">
+                                        Manage Accounts
+                                    </a>
+                                </li>
+                            </>
                         )}
 
                     </ul>
@@ -87,19 +94,6 @@ function Navbar() {
 
 
                             <ul className="dropdown-menu dropdown-menu-end shadow">
-
-                                <li>
-                                    <a className="dropdown-item" href="/settings">
-                                        <i className="bi bi-gear me-2"></i>
-                                        Settings
-                                    </a>
-                                </li>
-
-
-                                <li>
-                                    <hr className="dropdown-divider" />
-                                </li>
-
 
                                 <li>
                                     <a className="dropdown-item text-danger" href="/logout">

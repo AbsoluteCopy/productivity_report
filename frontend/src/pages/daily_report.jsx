@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import DataTable from 'react-data-table-component';
+import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const DailyReport = () => {
@@ -11,6 +12,7 @@ const DailyReport = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedReport, setSelectedReport] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [search, setSearch] = useState("");
 
     useEffect(() => {
         const userData = localStorage.getItem("user");
@@ -27,6 +29,21 @@ const DailyReport = () => {
             }
         }
     }, []);
+
+    const filteredReports = useMemo(() => {
+        return dailyReports.filter((report) => {
+            const text = search.toLowerCase();
+
+            return (
+                report.user_name?.toLowerCase().includes(text) ||
+                report.date?.toLowerCase().includes(text) ||
+                report.task_category?.toLowerCase().includes(text) ||
+                report.task_list?.join(" ").toLowerCase().includes(text) ||
+                String(report.number_of_tasks).includes(text) ||
+                String(report.time_spent).includes(text)
+            );
+        });
+    }, [search, dailyReports]);
 
     const fetchAllReports = async () => {
         try {
@@ -51,6 +68,7 @@ const DailyReport = () => {
             setLoading(false);
         }
     };
+
     const handleView = async (id) => {
         try {
             const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`);
@@ -78,7 +96,7 @@ const DailyReport = () => {
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
+            cancelButtonColor: "rgb(180, 65, 65)",
             confirmButtonText: "Yes, delete it!",
         });
 
@@ -93,7 +111,6 @@ const DailyReport = () => {
                 throw new Error("Failed to delete report");
             }
 
-            // Remove deleted report from state
             setDailyReports((prev) =>
                 prev.filter((report) => report.id !== id)
             );
@@ -168,27 +185,22 @@ const DailyReport = () => {
             name: 'Options',
             cell: row => (
                 <div className="btn-group">
-                    <button className="btn btn-primary btn-sm"
-                        onClick={() => handleView(row.id)}
-                    >
-                        View
+                    <button className="btn btn-primary btn-sm" onClick={() => handleView(row.id)}>
+                        <EyeIcon />
                     </button>
 
-                    <button className="btn btn-info btn-sm"
-                        onClick={() => handleEdit(row.id)}
-                    >
-                        Edit
+                    <button className="btn btn-info btn-sm" onClick={() => handleEdit(row.id)}>
+                        <PencilIcon />
                     </button>
 
-                    <button className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(row.id)}
-                    >
-                        Delete
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(row.id)}>
+                        <TrashIcon />
                     </button>
                 </div>
             ),
         },
     ];
+
     const customStyles = {
         headCells: {
             style: {
@@ -221,6 +233,12 @@ const DailyReport = () => {
                         <div className="card-body">
                             <div className="row">
                                 <div className="col-12">
+                                    <div className="d-flex justify-content-end mb-3">
+                                        <input type="text" className="form-control" style={{ maxWidth: "300px" }}
+                                            placeholder="Search reports..." value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                        />
+                                    </div>
                                     {loading ? (
                                         <div className="text-center py-4">
                                             <div className="spinner-border text-success" role="status">
@@ -230,11 +248,22 @@ const DailyReport = () => {
                                     ) : dailyReports.length > 0 ? (
                                         <DataTable
                                             columns={columns}
-                                            data={dailyReports}
+                                            data={filteredReports}
                                             customStyles={customStyles}
                                             pagination
                                             striped
                                             responsive
+                                            highlightOnHover
+                                            fixedHeader
+                                            noDataComponent="No daily reports found"
+                                            progressPending={loading}
+                                            progressComponent={
+                                                <div className="text-center py-4">
+                                                    <div className="spinner-border text-success" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                </div>
+                                            }
                                         />
                                     ) : (
                                         <div className="text-center py-4">
@@ -248,7 +277,6 @@ const DailyReport = () => {
                 </div>
             </div>
 
-            {/* Modal for viewing report details */}
             {showModal && selectedReport && (
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
                     <div className="modal-dialog modal-dialog-centered">
