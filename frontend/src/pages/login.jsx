@@ -60,13 +60,65 @@ const Login = () => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                background: "linear-gradient(135deg, #065d48, #0a8a69)",
+                position: "relative",
+                overflow: "hidden",
+                background: "linear-gradient(135deg, #055d47, #0a8a69)",
                 padding: "20px",
                 fontFamily: "Arial, sans-serif",
             }}
         >
+            {/* Background Circles */}
             <div
                 style={{
+                    position: "absolute",
+                    width: "300px",
+                    height: "300px",
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.12)",
+                    top: "-120px",
+                    left: "-100px",
+                }}
+            />
+
+            <div
+                style={{
+                    position: "absolute",
+                    width: "380px",
+                    height: "380px",
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.08)",
+                    bottom: "-180px",
+                    right: "-150px",
+                }}
+            />
+
+            <div
+                style={{
+                    position: "absolute",
+                    width: "130px",
+                    height: "130px",
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.1)",
+                    top: "15%",
+                    right: "10%",
+                }}
+            />
+
+            <div
+                style={{
+                    position: "absolute",
+                    width: "80px",
+                    height: "80px",
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.08)",
+                    bottom: "25%",
+                    left: "10%",
+                }}
+            />
+            <div
+                style={{
+                    position: "relative",
+                    zIndex: 1,
                     backgroundColor: "#fff",
                     width: "100%",
                     maxWidth: "430px",
@@ -116,7 +168,6 @@ const Login = () => {
                     </p>
                 </div>
 
-                {/* Error */}
                 {error && (
                     <div
                         style={{
@@ -135,7 +186,6 @@ const Login = () => {
                 )}
 
                 <form onSubmit={handleSubmit}>
-                    {/* Email */}
                     <div style={{ marginBottom: "20px" }}>
                         <label
                             style={{

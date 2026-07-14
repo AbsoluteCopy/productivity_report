@@ -438,14 +438,11 @@ const ViewReport = () => {
                                                 report.task_category === 'Holiday' ||
                                                 report.task_category === 'PTO';
                                             return (
-                                                <tr
-                                                    key={`${report.date}-${report.task_category}-${index}`}
-                                                    className={`
-        ${report.isWeekend ? "table-warning" : ""}
-        ${isLeave ? "table-info" : ""}
-        middle
-    `}
-                                                >
+                                                <tr key={`${report.date}-${report.task_category}-${index}`} className={`
+                                                            ${report.isWeekend ? "table-warning" : ""}
+                                                            ${isLeave ? "table-info" : ""}
+                                                            middle
+                                                        `}>
                                                     <td>
                                                         {showDate &&
                                                             `${date.getDate()}-${date.toLocaleString(

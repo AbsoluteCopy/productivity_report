@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const categoryOptions = [
@@ -14,6 +14,7 @@ const categoryOptions = [
 
 const NewData = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const editId = searchParams.get('edit');
     const [isEditMode, setIsEditMode] = useState(false);
     const [formData, setFormData] = useState({
@@ -43,7 +44,7 @@ const NewData = () => {
         try {
             const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`);
             const data = await response.json();
-            
+
             setFormData({
                 date: data.date,
                 work_type: data.work_type,
@@ -155,7 +156,7 @@ const NewData = () => {
             try {
                 const url = isEditMode ? `${API_BASE_URL}/daily-reports/${editId}/` : `${API_BASE_URL}/daily-reports/`;
                 const method = isEditMode ? 'PUT' : 'POST';
-                
+
                 const response = await fetch(url, {
                     method: method,
                     headers: {
@@ -250,6 +251,9 @@ const NewData = () => {
             alert(`Error ${isEditMode ? 'updating' : 'submitting'} reports`);
         }
     };
+    const handleBack = () => {
+        navigate('/daily_report');
+    };
 
     return (
         <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
@@ -257,9 +261,21 @@ const NewData = () => {
                 <div className="col-md-12 col-lg-12">
                     <div className="card shadow-sm">
                         <div className="card-body p-4">
-                            <h2 className="text-center fw-bold mb-4" style={{ color: '#065d48' }}>
-                                {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
-                            </h2>
+                            <div className="d-flex justify-content-between align-items-center mb-4">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={handleBack}
+                                >
+                                    ← Back
+                                </button>
+
+                                <h2 className="text-center fw-bold mb-0" style={{ color: '#065d48' }}>
+                                    {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
+                                </h2>
+
+                                <div></div>
+                            </div>
 
                             <form onSubmit={handleSubmit}>
                                 <div className="row mb-4">

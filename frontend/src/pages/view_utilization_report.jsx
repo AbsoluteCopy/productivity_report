@@ -1,56 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const ViewUtilizationReport = () => {
 
-    const today = new Date();
-
-    const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-    const [name, setName] = useState('');
-    const [employeeCode, setEmployeeCode] = useState('');
-    const [isAdmin, setIsAdmin] = useState(false);
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState('');
-
     const [dailyReports, setDailyReports] = useState([]);
+    const today = useMemo(() => new Date(), []);
+    const [currentUser, setCurrentUser] = useState(null);
+    const totalRequiredHours = 7.5;
+    const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+
+    const isAdmin = currentUser?.role === "admin";
+    const name = currentUser
+        ? `${currentUser.first_name} ${currentUser.last_name}`
+        : "";
+    const employeeCode = currentUser?.id_number ?? "";
+    const months = useMemo(
+        () =>
+            Array.from({ length: 12 }, (_, i) => ({
+                value: i + 1,
+                label: new Date(0, i).toLocaleString("default", {
+                    month: "long",
+                }),
+            })),
+        []
+    );
 
     useEffect(() => {
+        const stored = localStorage.getItem("user");
 
-        const userData = localStorage.getItem('user');
+        if (!stored) return;
 
-        if (userData) {
+        const user = JSON.parse(stored);
+        setCurrentUser(user);
 
-            const parsedUser = JSON.parse(userData);
-
-            const admin = parsedUser.role === "admin";
-
-            setIsAdmin(admin);
-
-            if (admin) {
-                fetchUsers();
-            }
-
-            setName(
-                parsedUser.first_name + ' ' + parsedUser.last_name
-            );
-
-            setEmployeeCode(parsedUser.id_number);
-
-            fetchReports(
-                parsedUser,
-                selectedYear,
-                selectedMonth,
-                selectedUser
-            );
+        if (user.role === "admin") {
+            fetchUsers();
         }
+    }, []);
 
-    }, [
-        selectedMonth,
-        selectedYear,
-        selectedUser
-    ]);
+    useEffect(() => {
+        if (!currentUser) return;
+
+        fetchReports(
+            currentUser,
+            selectedYear,
+            selectedMonth,
+            selectedUser
+        );
+    }, [currentUser, selectedMonth, selectedYear, selectedUser]);
 
     const fetchUsers = async () => {
 
@@ -78,94 +79,60 @@ const ViewUtilizationReport = () => {
         }
     };
 
-    const fetchReports = async (
-        user,
-        year,
-        month,
-        userId = ''
-    ) => {
-
+    const fetchReports = async (user, year, month, userId = "") => {
         try {
+            const params = new URLSearchParams({
+                year,
+                month,
+            });
 
-            let url;
-
-            if (user.role === "admin") {
-
-                url =
-                    `${API_BASE_URL}/daily-reports/?year=${year}&month=${month}`;
-
-                if (userId) {
-                    url += `&user_id=${userId}`;
-                }
-
-            } else {
-
-                url =
-                    `${API_BASE_URL}/users/${user.id}/reports/?year=${year}&month=${month}`;
-
+            if (user.role === "admin" && userId) {
+                params.append("user_id", userId);
             }
 
+            const url =
+                user.role === "admin"
+                    ? `${API_BASE_URL}/daily-reports/?${params}`
+                    : `${API_BASE_URL}/users/${user.id}/reports/?${params}`;
 
             const response = await fetch(url);
 
-            const data = await response.json();
-
-            setDailyReports(data);
-
-
-        } catch (error) {
-
-            console.error(
-                "Error fetching reports:",
-                error
-            );
-
-        }
-
-    };
-
-
-    const months = Array.from({ length: 12 }, (_, i) => {
-        const date = new Date();
-        date.setMonth(i);
-
-        return {
-            value: i + 1,
-            label: date.toLocaleString('default', {
-                month: 'long'
-            })
-        };
-    });
-
-    const groupedReports = Object.values(
-        dailyReports.reduce((acc, report) => {
-
-            const key = report.date;
-
-            if (!acc[key]) {
-                acc[key] = {
-                    ...report,
-                    working_minutes:
-                        Number(report.number_of_tasks) *
-                        Number(report.time_spent || 0),
-
-                    meeting_minutes:
-                        Number(report.meeting_minutes || 0)
-                };
-            } else {
-
-                acc[key].working_minutes +=
-                    Number(report.number_of_tasks) *
-                    Number(report.time_spent || 0);
-
-                acc[key].meeting_minutes +=
-                    Number(report.meeting_minutes || 0);
+            if (!response.ok) {
+                throw new Error("Failed to fetch reports");
             }
 
-            return acc;
+            setDailyReports(await response.json());
+        } catch (error) {
+            console.error("Error fetching reports:", error);
+        }
+    };
 
-        }, {})
-    ).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const groupedReports = useMemo(() => {
+        return Object.values(
+            dailyReports.reduce((acc, report) => {
+                const key = report.date;
+
+                if (!acc[key]) {
+                    acc[key] = {
+                        ...report,
+                        working_minutes:
+                            Number(report.number_of_tasks) *
+                            Number(report.time_spent || 0),
+                        meeting_minutes: Number(report.meeting_minutes || 0),
+                    };
+                } else {
+                    acc[key].working_minutes +=
+                        Number(report.number_of_tasks) *
+                        Number(report.time_spent || 0);
+
+                    acc[key].meeting_minutes +=
+                        Number(report.meeting_minutes || 0);
+                }
+
+                return acc;
+            }, {})
+        ).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }, [dailyReports]);
 
     const addWeekendRows = (reports) => {
         const weekendRows = [];
@@ -219,8 +186,10 @@ const ViewUtilizationReport = () => {
         });
     };
 
-    const displayReports = addWeekendRows(groupedReports);
-    const totalRequiredHours = 7.5;
+    const displayReports = useMemo(
+        () => addWeekendRows(groupedReports),
+        [groupedReports, selectedMonth, selectedYear]
+    );
 
     // Only actual working days (exclude weekends, holidays, PTO)
     const workedDays = displayReports.filter(report => {
@@ -278,9 +247,7 @@ const ViewUtilizationReport = () => {
                                 <select
                                     className="form-select w-auto"
                                     value={selectedUser}
-                                    onChange={(e) =>
-                                        setSelectedUser(e.target.value)
-                                    }
+                                    onChange={e => setSelectedUser(e.target.value)}
                                 >
 
                                     <option value="">
@@ -289,10 +256,7 @@ const ViewUtilizationReport = () => {
 
                                     {users.map(user => (
 
-                                        <option
-                                            key={user.id}
-                                            value={user.id}
-                                        >
+                                        <option key={user.id} value={user.id}>
                                             {user.first_name} {user.last_name}
                                         </option>
 
@@ -302,9 +266,7 @@ const ViewUtilizationReport = () => {
 
                             )}
                             <select className="form-select w-auto" value={selectedMonth}
-                                onChange={(e) =>
-                                    setSelectedMonth(Number(e.target.value))
-                                }
+                                onChange={e => setSelectedMonth(Number(e.target.value))}
                             >
                                 {months.map((month) => (
                                     <option key={month.value} value={month.value}>
@@ -314,9 +276,7 @@ const ViewUtilizationReport = () => {
                             </select>
 
                             <select className="form-select w-auto" value={selectedYear}
-                                onChange={(e) =>
-                                    setSelectedYear(Number(e.target.value))
-                                }
+                                onChange={e => setSelectedYear(Number(e.target.value))}
                             >
                                 {Array.from({ length: 4 }, (_, i) => 2025 + i).map(year => (
                                     <option key={year} value={year}>
@@ -418,8 +378,7 @@ const ViewUtilizationReport = () => {
                                                     ? (breakHours / totalRequiredHours) * 100
                                                     : 0;
                                             return (
-                                                <tr
-                                                    key={`${report.date}-${index}`}
+                                                <tr key={`${report.date}-${index}`}
                                                     className={
                                                         report.isWeekend
                                                             ? "table-warning middle"
@@ -438,7 +397,6 @@ const ViewUtilizationReport = () => {
                                                             )}-${String(date.getFullYear()).slice(-2)}`
                                                         }
                                                     </td>
-
                                                     <td>
                                                         {showDate &&
                                                             date.toLocaleDateString(
@@ -447,43 +405,33 @@ const ViewUtilizationReport = () => {
                                                             )
                                                         }
                                                     </td>
-
                                                     <td>
                                                         {report.isWeekend ? 'Weekend' : ''}
                                                     </td>
-
                                                     <td>
                                                         {isHoliday ? 'Holiday' : ''}
                                                     </td>
-
                                                     <td> </td>
                                                     <td>
                                                         {!isSpecialDay ? report.working_minutes ?? '' : ''}
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? workingHours : ''}
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? meetingHours : ''}
                                                     </td>
-
                                                     <td></td>
-
                                                     <td>
                                                         {!isSpecialDay ? totalHoursNoBreak : ''}
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? totalRequiredHours.toFixed(2) : ''}
                                                     </td>
                                                     <td></td>
-
                                                     <td>
                                                         {!isSpecialDay ? productiveHours.toFixed(2) : ''}
                                                     </td>
@@ -492,11 +440,9 @@ const ViewUtilizationReport = () => {
                                                             !isSpecialDay ? ((productiveHours / 7.5) * 100).toFixed(2) + '%' : ''
                                                         }
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? (breakHours > 0 ? breakHours.toFixed(2) : 0) : ''}
                                                     </td>
-
                                                     <td>
                                                         {!isSpecialDay ? breakPercentage.toFixed(2) : ''}
                                                     </td>

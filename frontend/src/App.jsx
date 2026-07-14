@@ -3,12 +3,15 @@ import './App.css'
 
 import Initial from './pages/initial';
 import Login from './pages/login';
+import Logout from './pages/logout';
 import Layout from './components/Layout';
 import Dashboard from './pages/dashboard';
 import NewData from './pages/new_data';
 import DailyReport from './pages/daily_report';
 import ViewReport from './pages/view_report';
 import ViewUtilizationReport from './pages/view_utilization_report';
+import ManageAccounts from './pages/manage_accounts';
+import NotFound from './pages/404';
 
 function App() {
   return (
@@ -31,9 +34,12 @@ function AppContent() {
           <Route path="/daily_report" element={<DailyReport />} />
           <Route path="/view_report" element={<ViewReport />} />
           <Route path="/view_utilization_report" element={<ViewUtilizationReport />} />
+          <Route path="/manage_accounts" element={<ManageAccounts />} />
         </Route>
         <Route path="/" element={<Initial />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/logout" element={<Logout />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   );

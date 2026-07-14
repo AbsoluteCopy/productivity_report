@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import DataTable from 'react-data-table-component';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const DailyReport = () => {
@@ -114,6 +115,93 @@ const DailyReport = () => {
             });
         }
     };
+    const columns = [
+        ...(isAdmin
+            ? [
+                {
+                    name: 'User',
+                    selector: row => row.user_name,
+                    sortable: true,
+                },
+            ]
+            : []),
+
+        {
+            name: 'Date',
+            selector: row => row.date,
+            sortable: true,
+        },
+
+        {
+            name: 'Category',
+            selector: row => row.task_category,
+            sortable: true,
+        },
+
+        {
+            name: 'Task List',
+            selector: row => row.task_list?.join(", "),
+            wrap: true,
+        },
+
+        {
+            name: 'Task Count',
+            selector: row =>
+                row.task_category !== 'Holiday' &&
+                    row.task_category !== 'PTO'
+                    ? row.number_of_tasks
+                    : '',
+            sortable: true,
+        },
+
+        {
+            name: 'Time Spent',
+            selector: row =>
+                row.task_category !== 'Holiday' &&
+                    row.task_category !== 'PTO'
+                    ? row.time_spent
+                    : '',
+            sortable: true,
+        },
+
+        {
+            name: 'Options',
+            cell: row => (
+                <div className="btn-group">
+                    <button className="btn btn-primary btn-sm"
+                        onClick={() => handleView(row.id)}
+                    >
+                        View
+                    </button>
+
+                    <button className="btn btn-info btn-sm"
+                        onClick={() => handleEdit(row.id)}
+                    >
+                        Edit
+                    </button>
+
+                    <button className="btn btn-danger btn-sm"
+                        onClick={() => handleDelete(row.id)}
+                    >
+                        Delete
+                    </button>
+                </div>
+            ),
+        },
+    ];
+    const customStyles = {
+        headCells: {
+            style: {
+                fontWeight: "bold",
+                backgroundColor: "#f8f9fa",
+            },
+        },
+        cells: {
+            style: {
+                fontSize: "14px",
+            },
+        },
+    };
     return (
         <div className="mt-4 px-4">
             <div className="row">
@@ -140,66 +228,14 @@ const DailyReport = () => {
                                             </div>
                                         </div>
                                     ) : dailyReports.length > 0 ? (
-                                        <table className='table table-sm table-bordered table-striped'>
-                                            <thead>
-                                                <tr>
-                                                    {isAdmin && <th>User</th>}
-                                                    <th>Date</th>
-                                                    <th>Category</th>
-                                                    <th>Task List</th>
-                                                    <th>Task Count</th>
-                                                    <th>Time Spent</th>
-                                                    <th>Options</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {dailyReports.map((report) => (
-                                                    <tr className='middle' key={report.id}>
-                                                        {isAdmin && <td>{report.user_name}</td>}
-                                                        <td>{report.date}</td>
-                                                        <td>{report.task_category}</td>
-                                                        <td>{report.task_list.join(", ")}</td>
-                                                        {report.task_category !== 'Holiday' && report.task_category !== 'PTO' ? (
-                                                            <td>{report.number_of_tasks}</td>
-                                                        ) : (
-                                                            <td></td>
-                                                        )}
-                                                        {report.task_category !== 'Holiday' && report.task_category !== 'PTO' ? (
-                                                            <td>{report.time_spent}</td>
-                                                        ) : (
-                                                            <td></td>
-                                                        )}
-                                                        <td>
-                                                            <div className="btn-group" role="group">
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-primary btn-sm"
-                                                                    onClick={() => handleView(report.id)}
-                                                                >
-                                                                    View
-                                                                </button>
-
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-info btn-sm"
-                                                                    onClick={() => handleEdit(report.id)}
-                                                                >
-                                                                    Edit
-                                                                </button>
-
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-danger btn-sm"
-                                                                    onClick={() => handleDelete(report.id)}
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                        <DataTable
+                                            columns={columns}
+                                            data={dailyReports}
+                                            customStyles={customStyles}
+                                            pagination
+                                            striped
+                                            responsive
+                                        />
                                     ) : (
                                         <div className="text-center py-4">
                                             <p>No daily reports found</p>
@@ -222,14 +258,20 @@ const DailyReport = () => {
                                 <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
                             </div>
                             <div className="modal-body">
-                                <div className="mb-3">
-                                    <strong>Date:</strong> {selectedReport.date}
+                                <div className="row">
+                                    <div className="col-md-6">
+                                        <div className="mb-3">
+                                            <strong>Date:</strong> {selectedReport.date}
+                                        </div>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <div className="mb-3">
+                                            <strong>Category:</strong> {selectedReport.task_category}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="mb-3">
-                                    <strong>Category:</strong> {selectedReport.task_category}
-                                </div>
-                                <div className="mb-3">
-                                    <strong>Task List:</strong>
+                                    <strong>{selectedReport.task_category === 'Holiday' || selectedReport.task_category === 'PTO' ? 'Notes' : 'Task List'}:</strong>
                                     <ul className="mt-2 mb-0">
                                         {selectedReport.task_list && selectedReport.task_list.map((task, index) => (
                                             <li key={index}>{task}</li>
@@ -252,7 +294,7 @@ const DailyReport = () => {
                                     </>
                                 )}
                                 <div className="mb-3">
-                                    <strong>Work Type:</strong> {selectedReport.work_type}
+                                    <strong>Type:</strong> {selectedReport.work_type}
                                 </div>
                             </div>
                             <div className="modal-footer">
