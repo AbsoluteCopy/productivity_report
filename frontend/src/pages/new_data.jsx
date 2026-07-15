@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const categoryOptions = [
@@ -9,7 +11,10 @@ const categoryOptions = [
     'Check Deposits to Cash Receipts & UAP',
     'Checked & Cleared 2025 ePay Transactions',
     'Process Offset on Accounting from Matt/UW Team',
-    'Meeting'
+    'Meeting',
+    'Onboarding',
+    'Training',
+    'Others',
 ];
 
 const NewData = () => {
@@ -17,6 +22,7 @@ const NewData = () => {
     const navigate = useNavigate();
     const editId = searchParams.get('edit');
     const [isEditMode, setIsEditMode] = useState(false);
+    const [hasTimeSpent, setHasTimeSpent] = useState(false);
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         work_type: 'Working'
@@ -86,6 +92,12 @@ const NewData = () => {
         ));
     };
 
+    const handleOtherCategoryChange = (id, value) => {
+        setCategories(prev => prev.map(cat =>
+            cat.id === id ? { ...cat, otherCategory: value } : cat
+        ));
+    };
+
     const handleTaskKeyDown = (e, id) => {
         if (e.key === 'Enter' && e.target.value.trim()) {
             e.preventDefault();
@@ -140,11 +152,33 @@ const NewData = () => {
         }
     };
 
+    const resetForm = () => {
+        const user = JSON.parse(localStorage.getItem('user'));
+
+        setFormData({
+            date: new Date().toISOString().split('T')[0],
+            work_type: 'Working',
+            holiday_name: '',
+            user_id: user?.id
+        });
+
+        setCategories([
+            {
+                id: 1,
+                category: '',
+                tasks: [],
+                currentTask: '',
+                timeSpent: '15',
+                meetingCount: 0
+            }
+        ]);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Handle PTO and Holiday submissions
-        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday') {
+        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday' || formData.work_type === 'Others') {
             const report = {
                 user: formData.user_id,
                 date: formData.date,
@@ -169,19 +203,28 @@ const NewData = () => {
                 });
 
                 if (response.ok) {
-                    alert(`${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`);
+                    Swal.fire({
+                        title: 'Success',
+                        text: `${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`,
+                        icon: 'success',
+                    });
                     if (!isEditMode) {
-                        setFormData({
-                            date: new Date().toISOString().split('T')[0],
-                            work_type: 'Working'
-                        });
+                        resetForm();
                     }
                 } else {
-                    alert(`Error ${isEditMode ? 'updating' : 'submitting'} report`);
+                    Swal.fire({
+                        title: 'Error',
+                        text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
+                        icon: 'error',
+                    });
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert(`Error ${isEditMode ? 'updating' : 'submitting'} report`);
+                Swal.fire({
+                    title: 'Error',
+                    text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
+                    icon: 'error',
+                });
             }
             return;
         }
@@ -199,9 +242,15 @@ const NewData = () => {
                 meeting_count: cat.category === 'Meeting' ? (cat.meetingCount || 0) : 0,
                 work_type: 'Working'
             }));
-
-        if (reports.length === 0) {
-            alert('Please add at least one category with tasks');
+        if (
+            reports.length === 0 &&
+            categories[0].category !== 'Others'
+        ) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Please add at least one category with tasks',
+                icon: 'error',
+            });
             return;
         }
 
@@ -218,9 +267,17 @@ const NewData = () => {
                 });
 
                 if (response.ok) {
-                    alert('Daily report updated successfully!');
+                    Swal.fire({
+                        title: 'Success',
+                        text: 'Daily report updated successfully!',
+                        icon: 'success',
+                    });
                 } else {
-                    alert('Error updating report');
+                    Swal.fire({
+                        title: 'Error',
+                        text: 'Error updating report',
+                        icon: 'error',
+                    });
                 }
             } else {
                 // Create new reports
@@ -238,28 +295,25 @@ const NewData = () => {
 
                 if (responses.every(r => r.ok)) {
                     Swal.fire({
+                        title: 'Success',
+                        text: 'All daily reports submitted successfully!',
                         icon: 'success',
-                        title: 'All daily reports submitted successfully!'
                     });
-                    setFormData({
-                        date: new Date().toISOString().split('T')[0],
-                        work_type: 'Working'
-                    });
-                    setCategories([
-                        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0 }
-                    ]);
+                    resetForm();
                 } else {
                     Swal.fire({
+                        title: 'Error',
+                        text: 'Error submitting some reports',
                         icon: 'error',
-                        title: 'Error submitting some reports'
                     });
                 }
             }
         } catch (error) {
             console.error('Error:', error);
             Swal.fire({
+                title: 'Error',
+                text: `Error ${isEditMode ? 'updating' : 'submitting'} reports`,
                 icon: 'error',
-                title: `Error ${isEditMode ? 'updating' : 'submitting'} reports`
             });
         }
     };
@@ -351,8 +405,7 @@ const NewData = () => {
                                                             Category {index + 1}
                                                         </h5>
                                                         {categories.length > 1 && (
-                                                            <button
-                                                                type="button"
+                                                            <button type="button"
                                                                 className="btn btn-sm btn-outline-danger"
                                                                 onClick={() => removeCategory(cat.id)}
                                                             >
@@ -366,8 +419,7 @@ const NewData = () => {
                                                             <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                 Task Category *
                                                             </label>
-                                                            <select
-                                                                value={cat.category}
+                                                            <select value={cat.category}
                                                                 onChange={(e) => handleCategoryChange(cat.id, e.target.value)}
                                                                 required
                                                                 className="form-select"
@@ -378,16 +430,46 @@ const NewData = () => {
                                                                 ))}
                                                             </select>
                                                         </div>
+                                                        {cat.category === 'Others' && (
+                                                            <div className="col-6">
+                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                    Other Category
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={cat.otherCategory}
+                                                                    onChange={(e) => handleOtherCategoryChange(cat.id, e.target.value)}
+                                                                    className="form-control"
+                                                                    placeholder="Enter other category"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        {cat.category === 'Others' && (
+                                                            <div className="col-6">
+                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                    No Time Spent
+                                                                </label>
+                                                                <br />
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={hasTimeSpent}
+                                                                    onChange={(e) => setHasTimeSpent(e.target.checked)}
+                                                                    className="form-check-input"
+                                                                />
+                                                            </div>
+                                                        )}
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                     Time Spent (Minutes)
                                                                 </label>
-                                                                <select
-                                                                    value={cat.timeSpent}
+                                                                <select value={cat.timeSpent}
                                                                     onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
                                                                     className="form-select"
+                                                                    disabled={hasTimeSpent}
                                                                 >
+                                                                    <option value="">Select</option>
+                                                                    <option value="0">0</option>
                                                                     <option value="15">15</option>
                                                                     <option value="30">30</option>
                                                                     <option value="45">45</option>

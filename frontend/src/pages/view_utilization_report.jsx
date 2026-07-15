@@ -267,7 +267,7 @@ const ViewUtilizationReport = () => {
                             >
                                 {months.map((month) => (
                                     <option key={month.value} value={month.value}>
-                                        {month.label}{selectedYear}
+                                        {month.label}
                                     </option>
                                 ))}
                             </select>
