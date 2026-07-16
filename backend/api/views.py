@@ -169,12 +169,6 @@ class DailyReportDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if not self.has_permission(request, report):
-            return Response(
-                {"error": "Permission denied"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         serializer = DailyReportSerializer(
             report,
             data=request.data,
@@ -215,12 +209,6 @@ class DailyReportDetailView(APIView):
             return Response(
                 {"error": "Daily report not found"},
                 status=status.HTTP_404_NOT_FOUND
-            )
-
-        if not self.has_permission(request, report):
-            return Response(
-                {"error": "Permission denied"},
-                status=status.HTTP_403_FORBIDDEN
             )
 
         report.delete()

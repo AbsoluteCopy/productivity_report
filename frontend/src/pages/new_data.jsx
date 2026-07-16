@@ -12,8 +12,6 @@ const categoryOptions = [
     'Checked & Cleared 2025 ePay Transactions',
     'Process Offset on Accounting from Matt/UW Team',
     'Meeting',
-    'Onboarding',
-    'Training',
     'Others',
 ];
 
@@ -28,7 +26,7 @@ const NewData = () => {
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
-        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '' }
+        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '', sub_category: '' }
     ]);
 
     useEffect(() => {
@@ -65,6 +63,7 @@ const NewData = () => {
                         {
                             id: 1,
                             category: data.task_category,
+                            sub_category: data.sub_category || '',
                             tasks: data.task_list || [],
                             currentTask: '',
                             timeSpent: data.time_spent?.toString() || '15',
@@ -89,12 +88,6 @@ const NewData = () => {
     const handleCategoryChange = (id, value) => {
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, category: value } : cat
-        ));
-    };
-
-    const handleOtherCategoryChange = (id, value) => {
-        setCategories(prev => prev.map(cat =>
-            cat.id === id ? { ...cat, otherCategory: value } : cat
         ));
     };
 
@@ -139,10 +132,16 @@ const NewData = () => {
         ));
     };
 
+    const handleSubCategoryChange = (id, value) => {
+        setCategories(prev => prev.map(cat =>
+            cat.id === id ? { ...cat, sub_category: value } : cat
+        ));
+    };
+
     const addCategory = () => {
         setCategories(prev => [
             ...prev,
-            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0 }
+            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0, sub_category: '' }
         ]);
     };
 
@@ -155,6 +154,7 @@ const NewData = () => {
     const resetForm = () => {
         const user = JSON.parse(localStorage.getItem('user'));
 
+        setHasTimeSpent(false);
         setFormData({
             date: new Date().toISOString().split('T')[0],
             work_type: 'Working',
@@ -169,7 +169,8 @@ const NewData = () => {
                 tasks: [],
                 currentTask: '',
                 timeSpent: '15',
-                meetingCount: 0
+                meetingCount: 0,
+                sub_category: ''
             }
         ]);
     };
@@ -178,16 +179,17 @@ const NewData = () => {
         e.preventDefault();
 
         // Handle PTO and Holiday submissions
-        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday' || formData.work_type === 'Others') {
+        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday') {
             const report = {
                 user: formData.user_id,
                 date: formData.date,
                 task_category: formData.work_type,
                 task_list: formData.work_type === 'Holiday' ? [formData.holiday_name] : ['PTO'],
-                number_of_tasks: 1,
+                number_of_tasks: 0,
                 time_spent: 0,
                 meeting_count: 0,
-                work_type: formData.work_type
+                work_type: formData.work_type,
+                sub_category: formData.sub_category
             };
 
             try {
@@ -231,21 +233,30 @@ const NewData = () => {
 
         // Handle Working submissions
         const reports = categories
-            .filter(cat => cat.category && cat.tasks.length > 0)
+            .filter(cat =>
+                cat.category &&
+                (cat.tasks.length > 0 || cat.category === 'Others')
+            )
             .map(cat => ({
                 user: formData.user_id,
                 date: formData.date,
                 task_category: cat.category,
-                task_list: cat.tasks,
-                number_of_tasks: cat.tasks.length,
-                time_spent: cat.timeSpent,
-                meeting_count: cat.category === 'Meeting' ? (cat.meetingCount || 0) : 0,
-                work_type: 'Working'
+                task_list: cat.category === 'Others' && cat.tasks.length === 0
+                    ? ['']
+                    : cat.tasks,
+                number_of_tasks: cat.category === 'Others'
+                    ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
+                    : cat.tasks.length,
+                time_spent: hasTimeSpent && cat.category === 'Others'
+                    ? 0
+                    : cat.timeSpent,
+                meeting_count: cat.category === 'Meeting'
+                    ? (cat.meetingCount || 0)
+                    : 0,
+                work_type: 'Working',
+                sub_category: cat.sub_category
             }));
-        if (
-            reports.length === 0 &&
-            categories[0].category !== 'Others'
-        ) {
+        if (reports.length === 0) {
             Swal.fire({
                 title: 'Error',
                 text: 'Please add at least one category with tasks',
@@ -437,8 +448,9 @@ const NewData = () => {
                                                                 </label>
                                                                 <input
                                                                     type="text"
-                                                                    value={cat.otherCategory}
-                                                                    onChange={(e) => handleOtherCategoryChange(cat.id, e.target.value)}
+                                                                    name='sub_category'
+                                                                    value={cat.sub_category}
+                                                                    onChange={(e) => handleSubCategoryChange(cat.id, e.target.value)}
                                                                     className="form-control"
                                                                     placeholder="Enter other category"
                                                                 />

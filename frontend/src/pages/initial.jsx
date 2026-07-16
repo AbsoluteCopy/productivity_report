@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import "../css/initial.css";
 
 const Initial = () => {
     const navigate = useNavigate();
@@ -18,70 +19,17 @@ const Initial = () => {
     };
 
     return (
-        <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                position: "relative",
-                overflow: "hidden",
-                padding: "20px",
-                background:
-                    "linear-gradient(135deg, #065d48 0%, #0b8a6f 100%)",
-            }}
-        >
+        <div className="initial-page">
             {/* Decorative Background Circles */}
-            <div
-                style={{
-                    position: "absolute",
-                    width: "350px",
-                    height: "350px",
-                    background: "rgba(255,255,255,0.08)",
-                    borderRadius: "50%",
-                    top: "-120px",
-                    right: "-120px",
-                }}
-            />
+            <div className="initial-glow"></div>
 
-            <div
-                style={{
-                    position: "absolute",
-                    width: "250px",
-                    height: "250px",
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: "50%",
-                    bottom: "-80px",
-                    left: "-80px",
-                }}
-            />
+            <div className="initial-blob one"></div>
+            <div className="initial-blob two"></div>
 
             {/* Main Card */}
-            <div
-                style={{
-                    background: "rgba(255,255,255,0.08)",
-                    backdropFilter: "blur(12px)",
-                    WebkitBackdropFilter: "blur(12px)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    borderRadius: "24px",
-                    padding: "60px 50px",
-                    maxWidth: "550px",
-                    width: "100%",
-                    textAlign: "center",
-                    color: "#ffffff",
-                    boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
-                    animation: "fadeIn 0.8s ease",
-                }}
-            >
+            <div className="initial-card">
                 {/* Icon */}
-                <div
-                    style={{
-                        fontSize: "70px",
-                        marginBottom: "20px",
-                    }}
-                >
-                    📊
-                </div>
+                <div className="initial-icon">📊</div>
 
                 {/* Title */}
                 <h1
@@ -109,34 +57,13 @@ const Initial = () => {
                 </p>
 
                 {/* Button */}
-                <button
-                    style={buttonStyle}
-                    onClick={() => navigate("/login")}
-                    onMouseOver={(e) => {
-                        e.currentTarget.style.transform = "translateY(-4px)";
-                        e.currentTarget.style.boxShadow =
-                            "0 15px 35px rgba(0,0,0,0.25)";
-                    }}
-                    onMouseOut={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.boxShadow =
-                            "0 8px 20px rgba(0,0,0,0.15)";
-                    }}
-                >
+                <button className="initial-btn" onClick={() => navigate("/login")}>
                     Login →
                 </button>
             </div>
 
             {/* Footer */}
-            <div
-                style={{
-                    position: "absolute",
-                    bottom: "20px",
-                    color: "rgba(255,255,255,0.7)",
-                    fontSize: "14px",
-                    textAlign: "center",
-                }}
-            >
+            <div className="initial-footer">
                 © {new Date().getFullYear()} Productivity Report System
             </div>
 

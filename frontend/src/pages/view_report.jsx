@@ -13,34 +13,38 @@ const ViewReport = () => {
     const [selectedUser, setSelectedUser] = useState('');
 
     const [dailyReports, setDailyReports] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [expandedRows, setExpandedRows] = useState({});
     const [isAdmin, setIsAdmin] = useState(false);
     const [users, setUsers] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const userData = localStorage.getItem('user');
+        const user = JSON.parse(localStorage.getItem("user"));
 
-        if (userData) {
-            const parsedUser = JSON.parse(userData);
+        if (!user) return;
 
-            const admin = parsedUser.role === "admin";
+        setCurrentUser(user);
+        setIsAdmin(user.role === "admin");
+    }, []);
 
-            setIsAdmin(admin);
-
-            if (admin) {
-                fetchUsers();
-            }
-
-            fetchReports(
-                parsedUser,
-                selectedYear,
-                selectedMonth,
-                selectedUser
-            );
+    useEffect(() => {
+        if (isAdmin) {
+            fetchUsers();
         }
+    }, [isAdmin]);
 
-    }, [selectedMonth, selectedYear, selectedUser]);
+    useEffect(() => {
+        if (!currentUser) return;
+
+        fetchReports(
+            currentUser,
+            selectedYear,
+            selectedMonth,
+            selectedUser
+        );
+    }, [currentUser, selectedYear, selectedMonth, selectedUser]);
+
 
     const toggleTaskList = (key) => {
         setExpandedRows(prev => ({
@@ -63,18 +67,21 @@ const ViewReport = () => {
         }
     };
     const fetchReports = async (user, year, month, userId = '') => {
+        setLoading(true);
         try {
             let url;
 
             if (user.role === 'admin') {
-                // Admin gets all reports
                 url = `${API_BASE_URL}/daily-reports/?year=${year}&month=${month}${userId ? `&user_id=${userId}` : ''}`;
             } else {
-                // Normal user gets own reports
                 url = `${API_BASE_URL}/users/${user.id}/reports/?year=${year}&month=${month}`;
             }
 
             const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch reports");
+            }
 
             const data = await response.json();
 
@@ -87,7 +94,6 @@ const ViewReport = () => {
             setLoading(false);
         }
     };
-
 
     const months = Array.from({ length: 12 }, (_, i) => {
         const date = new Date();
@@ -125,14 +131,12 @@ const ViewReport = () => {
         }, {})
     ).sort((a, b) => {
 
-        // Sort by date first
         const dateCompare = new Date(a.date) - new Date(b.date);
 
         if (dateCompare !== 0) {
             return dateCompare;
         }
 
-        // If same date, sort by task category
         return a.task_category.localeCompare(b.task_category);
 
     });
@@ -145,7 +149,6 @@ const ViewReport = () => {
             0
         ).getDate();
 
-
         for (let day = 1; day <= daysInMonth; day++) {
 
             const date = new Date(
@@ -156,17 +159,14 @@ const ViewReport = () => {
 
             const dayOfWeek = date.getDay();
 
-            // Saturday = 6, Sunday = 0
             if (dayOfWeek === 0 || dayOfWeek === 6) {
 
                 const dateString =
                     `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-
                 const exists = reports.some(
                     report => report.date === dateString
                 );
-
 
                 if (!exists) {
                     weekendRows.push({
@@ -293,7 +293,6 @@ const ViewReport = () => {
             0
         );
 
-
         return {
             task,
             totalTasks,
@@ -314,9 +313,7 @@ const ViewReport = () => {
 
                         <div className="d-flex align-items-center gap-2">
                             {isAdmin && (
-                                <select
-                                    className="form-select w-auto"
-                                    value={selectedUser}
+                                <select className="form-select w-auto" value={selectedUser}
                                     onChange={(e) =>
                                         setSelectedUser(e.target.value)
                                     }
@@ -360,52 +357,38 @@ const ViewReport = () => {
 
                     <ul className="nav nav-tabs mt-3" id="reportTabs" role="tablist">
                         <li className="nav-item" role="presentation">
-                            <button
-                                className="nav-link active"
-                                id="daily-tab"
-                                data-bs-toggle="tab"
-                                data-bs-target="#daily-report"
-                                type="button"
-                                role="tab"
-                            >
+                            <button className="nav-link active" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-report" type="button" role="tab" aria-selected>{''}
                                 Daily Report
                             </button>
                         </li>
 
                         <li className="nav-item" role="presentation">
-                            <button
-                                className="nav-link"
-                                id="summary-tab"
-                                data-bs-toggle="tab"
-                                data-bs-target="#summary-report"
-                                type="button"
-                                role="tab"
-                            >
+                            <button className="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-report" type="button" role="tab">
                                 Summary of Task
                             </button>
                         </li>
                     </ul>
 
-
                     <div className="tab-content" id="reportTabsContent">
-
-                        {/* Daily Report Tab */}
-                        <div
-                            className="tab-pane fade show active"
-                            id="daily-report"
-                            role="tabpanel"
-                        >
-
-                            <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
+                        <div className="tab-pane fade show active" id="daily-report" role="tabpanel">
+                            {loading ? (
+                                <div className="text-center py-5">
+                                    <div className="spinner-border text-primary" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p className="mt-2">Loading reports...</p>
+                                </div>
+                            ) : (
+                                <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Day</th>
-                                        <th>Task</th>
-                                        <th># of Task</th>
-                                        <th>Time Spent(mins)</th>
-                                        <th>Working Hours(mins)</th>
-                                        <th>Meeting Trainings(mins)</th>
+                                        <th className='main-background text-white py-2'>Date</th>
+                                        <th className='main-background text-white py-2'>Day</th>
+                                        <th className='main-background text-white py-2'>Task</th>
+                                        <th className='main-background text-white py-2'># of Task</th>
+                                        <th className='main-background text-white py-2'>Time Spent(mins)</th>
+                                        <th className='main-background text-white py-2'>Working Hours(mins)</th>
+                                        <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
                                     </tr>
                                 </thead>
 
@@ -414,10 +397,7 @@ const ViewReport = () => {
                                         displayReports.map((report, index) => {
                                             if (report.isTotal) {
                                                 return (
-                                                    <tr
-                                                        key={report.id}
-                                                        className="fw-bold"
-                                                    >
+                                                    <tr key={report.id} className="fw-bold">
                                                         <td></td>
                                                         <td></td>
                                                         <td></td>
@@ -438,7 +418,7 @@ const ViewReport = () => {
                                                 report.task_category === 'Holiday' ||
                                                 report.task_category === 'PTO';
                                             return (
-                                                <tr key={`${report.date}-${report.task_category}-${index}`} className={`
+                                                <tr key={`${report.date}-${report.task_category}-${report.time_spent}`} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
                                                             ${isLeave ? "table-info" : ""}
                                                             middle
@@ -462,17 +442,17 @@ const ViewReport = () => {
                                                     </td>
                                                     <td>
                                                         <div>
-                                                            {report.task_category}
+                                                            {report.task_category === 'Others' ? report.sub_category : report.task_category}
                                                             {report.task_category === 'Holiday' && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
                                                         </div>
 
                                                         {!report.isWeekend &&
                                                             !isLeave &&
                                                             report.task_list &&
-                                                            report.task_list.length > 0 && (
+                                                            report.task_list.length > 0 &&
+                                                            report.number_of_tasks > 0 && (
                                                                 <>
-                                                                    <button
-                                                                        type="button"
+                                                                    <button type="button"
                                                                         className="btn btn-sm btn-outline-success mt-2"
                                                                         onClick={() =>
                                                                             toggleTaskList(
@@ -505,12 +485,12 @@ const ViewReport = () => {
                                                         }
                                                     </td>
 
-                                                    <td>{isLeave ? '' : report.number_of_tasks}</td>
+                                                    <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
 
-                                                    <td>{isLeave ? '' : report.time_spent}</td>
+                                                    <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
 
                                                     <td>
-                                                        {isLeave
+                                                        {isLeave || report.number_of_tasks === 0
                                                             ? ''
                                                             : report.number_of_tasks && report.time_spent
                                                                 ? report.number_of_tasks * report.time_spent
@@ -518,7 +498,7 @@ const ViewReport = () => {
                                                         }
                                                     </td>
 
-                                                    <td>{isLeave ? '' : report.meeting_count}</td>
+                                                    <td>{isLeave || report.number_of_tasks === 0 ? '' : report.meeting_count}</td>
 
                                                 </tr>
                                             );
@@ -526,9 +506,8 @@ const ViewReport = () => {
                                     }
                                 </tbody>
                             </table>
-
+                            )}
                         </div>
-
 
                         <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="p-3">
@@ -536,40 +515,26 @@ const ViewReport = () => {
 
                                     <thead>
                                         <tr>
-                                            <th>List of Task</th>
-                                            <th>Total # of Task Done</th>
-                                            <th>Total Time Spent (mins)</th>
+                                            <th className='main-background text-white py-2'>List of Task</th>
+                                            <th className='main-background text-white py-2'>Total # of Task Done</th>
+                                            <th className='main-background text-white py-2'>Total Time Spent (mins)</th>
                                         </tr>
                                     </thead>
 
-
                                     <tbody>
-
                                         {summaryReports.map((item, index) => (
 
                                             <tr key={index}>
-
-                                                <td>
-                                                    {item.task}
-                                                </td>
-
-                                                <td>
-                                                    {item.totalTasks}
-                                                </td>
-
-                                                <td>
-                                                    {item.totalTime}
-                                                </td>
-
+                                                <td>{item.task}</td>
+                                                <td>{item.totalTasks}</td>
+                                                <td>{item.totalTime}</td>
                                             </tr>
 
                                         ))}
 
                                         <tr className="fw-bold table-secondary">
 
-                                            <td>
-                                                Total
-                                            </td>
+                                            <td> Total </td>
 
                                             <td>
                                                 {

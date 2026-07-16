@@ -1,0 +1,319 @@
+/* ===========================
+   Main Background
+=========================== */
+
+.initial-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+
+    background: linear-gradient(
+        -45deg,
+        #065d48,
+        #0b8a6f,
+        #12a37e,
+        #047857
+    );
+
+    background-size: 400% 400%;
+    animation: gradientMove 15s ease infinite;
+}
+
+
+/* ===========================
+   Floating Background Shapes
+=========================== */
+
+.initial-blob {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,.08);
+    filter: blur(3px);
+}
+
+
+.initial-blob.one {
+    width: 380px;
+    height: 380px;
+    top: -150px;
+    right: -150px;
+
+    animation: floatOne 12s infinite ease-in-out;
+}
+
+
+.initial-blob.two {
+    width: 280px;
+    height: 280px;
+    bottom: -100px;
+    left: -100px;
+
+    animation: floatTwo 15s infinite ease-in-out;
+}
+
+
+.initial-glow {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+
+    background: rgba(255,255,255,.08);
+    border-radius: 50%;
+
+    filter: blur(120px);
+
+    animation: glowMove 18s infinite ease-in-out;
+}
+
+
+/* ===========================
+   Card
+=========================== */
+
+.initial-card {
+
+    position: relative;
+    z-index: 2;
+
+    background: rgba(255,255,255,.1);
+
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    border:
+        1px solid rgba(255,255,255,.2);
+
+    border-radius: 24px;
+
+    padding: 60px 50px;
+
+    max-width:550px;
+    width:100%;
+
+    text-align:center;
+
+    color:white;
+
+    box-shadow:
+        0 25px 60px rgba(0,0,0,.25);
+
+
+    animation:
+        cardEnter 1s ease,
+        cardFloat 6s infinite ease-in-out;
+}
+
+
+/* ===========================
+   Icon
+=========================== */
+
+.initial-icon {
+
+    font-size:70px;
+
+    margin-bottom:20px;
+
+    display:inline-block;
+
+    animation:
+        iconFloat 3s infinite ease-in-out;
+}
+
+
+/* ===========================
+   Button
+=========================== */
+
+.initial-btn {
+
+    background:white;
+
+    color:#065d48;
+
+    border:none;
+
+    padding:
+        16px 42px;
+
+    font-size:1rem;
+
+    font-weight:700;
+
+    border-radius:50px;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+
+    box-shadow:
+        0 8px 20px rgba(0,0,0,.15);
+}
+
+
+.initial-btn:hover {
+
+    transform:
+        translateY(-5px)
+        scale(1.05);
+
+
+    box-shadow:
+        0 18px 40px rgba(0,0,0,.3);
+}
+
+
+/* ===========================
+   Footer
+=========================== */
+
+.initial-footer {
+
+    position:absolute;
+
+    bottom:20px;
+
+    color:
+        rgba(255,255,255,.7);
+
+    font-size:14px;
+
+    text-align:center;
+
+}
+
+
+/* ===========================
+   Animations
+=========================== */
+
+
+@keyframes gradientMove {
+
+    0% {
+        background-position:0% 50%;
+    }
+
+    50% {
+        background-position:100% 50%;
+    }
+
+    100% {
+        background-position:0% 50%;
+    }
+}
+
+
+
+@keyframes floatOne {
+
+    0%,100% {
+        transform:
+            translate(0,0)
+            scale(1);
+    }
+
+    50% {
+        transform:
+            translate(-40px,50px)
+            scale(1.15);
+    }
+}
+
+
+
+@keyframes floatTwo {
+
+    0%,100% {
+        transform:
+            translate(0,0);
+    }
+
+    50% {
+        transform:
+            translate(50px,-40px);
+    }
+}
+
+
+
+@keyframes glowMove {
+
+    0%,100% {
+        transform:
+            translate(-100px,-50px);
+    }
+
+    50% {
+        transform:
+            translate(100px,80px);
+    }
+}
+
+
+
+@keyframes cardEnter {
+
+    from {
+        opacity:0;
+        transform:
+            translateY(40px)
+            scale(.95);
+    }
+
+    to {
+        opacity:1;
+        transform:
+            translateY(0)
+            scale(1);
+    }
+}
+
+
+
+@keyframes cardFloat {
+
+    0%,100% {
+        transform:translateY(0);
+    }
+
+    50% {
+        transform:translateY(-10px);
+    }
+}
+
+
+
+@keyframes iconFloat {
+
+    0%,100% {
+        transform:translateY(0);
+    }
+
+    50% {
+        transform:translateY(-15px);
+    }
+}
+
+
+
+@media(max-width:600px){
+
+    .initial-card {
+
+        padding:
+            40px 25px;
+    }
+
+
+    .initial-card h1 {
+
+        font-size:2.2rem;
+    }
+
+}

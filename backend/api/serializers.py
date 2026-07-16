@@ -35,7 +35,7 @@ class DailyReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyReport
         fields = ['id', 'user', 'user_name', 'date', 'task_category', 'task_list', 
-                  'number_of_tasks', 'time_spent', 'meeting_count', 'work_type', 'created_at', 'updated_at']
+                  'number_of_tasks', 'time_spent', 'meeting_count', 'work_type', 'created_at', 'updated_at', 'sub_category']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_user_name(self, obj):

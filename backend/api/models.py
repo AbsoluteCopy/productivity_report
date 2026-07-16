@@ -33,6 +33,7 @@ class DailyReport(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     work_type = models.CharField(max_length=100, null=True, blank=True)
+    sub_category = models.CharField(max_length=100, null=True, blank=True)
 
 
     def __str__(self):

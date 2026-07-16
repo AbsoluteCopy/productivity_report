@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import "../css/login.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -41,101 +42,17 @@ const Login = () => {
         }
     };
 
-    const inputStyle = {
-        width: "100%",
-        boxSizing: "border-box",
-        padding: "13px 15px",
-        border: "1px solid #d9d9d9",
-        borderRadius: "10px",
-        fontSize: "15px",
-        outline: "none",
-        transition: "all .2s ease",
-        background: "#fff",
-    };
-
     return (
-        <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                position: "relative",
-                overflow: "hidden",
-                background: "linear-gradient(135deg, #055d47, #0a8a69)",
-                padding: "20px",
-                fontFamily: "Arial, sans-serif",
-            }}
-        >
-            {/* Background Circles */}
-            <div
-                style={{
-                    position: "absolute",
-                    width: "300px",
-                    height: "300px",
-                    borderRadius: "50%",
-                    background: "rgba(255,255,255,0.12)",
-                    top: "-120px",
-                    left: "-100px",
-                }}
-            />
+        <div className="login-page">
+            <div className="glow"></div>
 
-            <div
-                style={{
-                    position: "absolute",
-                    width: "380px",
-                    height: "380px",
-                    borderRadius: "50%",
-                    background: "rgba(255,255,255,0.08)",
-                    bottom: "-180px",
-                    right: "-150px",
-                }}
-            />
-
-            <div
-                style={{
-                    position: "absolute",
-                    width: "130px",
-                    height: "130px",
-                    borderRadius: "50%",
-                    background: "rgba(255,255,255,0.1)",
-                    top: "15%",
-                    right: "10%",
-                }}
-            />
-
-            <div
-                style={{
-                    position: "absolute",
-                    width: "80px",
-                    height: "80px",
-                    borderRadius: "50%",
-                    background: "rgba(255,255,255,0.08)",
-                    bottom: "25%",
-                    left: "10%",
-                }}
-            />
-            <div
-                style={{
-                    position: "relative",
-                    zIndex: 1,
-                    backgroundColor: "#fff",
-                    width: "100%",
-                    maxWidth: "430px",
-                    padding: "40px",
-                    borderRadius: "18px",
-                    border: "1px solid rgba(0,0,0,.05)",
-                    boxShadow: "0 15px 40px rgba(0,0,0,.18)",
-                    boxSizing: "border-box",
-                }}
-            >
+            <div className="blob blob1"></div>
+            <div className="blob blob2"></div>
+            <div className="blob blob3"></div>
+            <div className="blob blob4"></div>
+            <div className="login-card">
                 {/* Logo */}
-                <div
-                    style={{
-                        textAlign: "center",
-                        marginBottom: "30px",
-                    }}
-                >
+                <div>
                     <img
                         src="/images/NeitClem Sticker.png"
                         alt="Logo"
@@ -144,26 +61,14 @@ const Login = () => {
                             height: "90px",
                             objectFit: "contain",
                         }}
+                        className="logo"
                     />
 
-                    <h2
-                        style={{
-                            color: "#065d48",
-                            marginTop: "15px",
-                            marginBottom: "8px",
-                            fontWeight: "700",
-                        }}
-                    >
+                    <h2 className="login-title">
                         Productivity Report
                     </h2>
 
-                    <p
-                        style={{
-                            color: "#666",
-                            margin: 0,
-                            fontSize: "14px",
-                        }}
-                    >
+                    <p className="login-subtitle">
                         Sign in to continue
                     </p>
                 </div>
@@ -204,16 +109,7 @@ const Login = () => {
                             value={email}
                             required
                             onChange={(e) => setEmail(e.target.value)}
-                            style={inputStyle}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = "#065d48";
-                                e.target.style.boxShadow =
-                                    "0 0 0 3px rgba(6,93,72,.15)";
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = "#d9d9d9";
-                                e.target.style.boxShadow = "none";
-                            }}
+                            className="login-input"
                         />
                     </div>
 
@@ -237,18 +133,9 @@ const Login = () => {
                                 value={password}
                                 required
                                 onChange={(e) => setPassword(e.target.value)}
+                                className="login-input"
                                 style={{
-                                    ...inputStyle,
                                     paddingRight: "48px",
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = "#065d48";
-                                    e.target.style.boxShadow =
-                                        "0 0 0 3px rgba(6,93,72,.15)";
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = "#d9d9d9";
-                                    e.target.style.boxShadow = "none";
                                 }}
                             />
 
@@ -304,37 +191,7 @@ const Login = () => {
                     </div>
 
                     {/* Login Button */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        style={{
-                            width: "100%",
-                            padding: "14px",
-                            border: "none",
-                            borderRadius: "10px",
-                            background: loading ? "#999" : "#065d48",
-                            color: "#fff",
-                            fontSize: "16px",
-                            fontWeight: "600",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            transition: "all .2s ease",
-                        }}
-                        onMouseOver={(e) => {
-                            if (!loading) {
-                                e.target.style.background = "#0a7a5e";
-                                e.target.style.transform = "translateY(-2px)";
-                                e.target.style.boxShadow =
-                                    "0 6px 18px rgba(6,93,72,.25)";
-                            }
-                        }}
-                        onMouseOut={(e) => {
-                            if (!loading) {
-                                e.target.style.background = "#065d48";
-                                e.target.style.transform = "translateY(0)";
-                                e.target.style.boxShadow = "none";
-                            }
-                        }}
-                    >
+                    <button type="submit" disabled={loading} className="login-btn">
                         {loading ? "Signing in..." : "Sign In"}
                     </button>
                 </form>
