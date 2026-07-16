@@ -151,7 +151,10 @@ const DailyReport = () => {
 
         {
             name: 'Category',
-            selector: row => row.task_category,
+            selector: row =>
+                row.task_category === 'Others'
+                    ? `${row.task_category} - ${row.sub_category}`
+                    : row.task_category,
             sortable: true,
         },
 
@@ -166,7 +169,7 @@ const DailyReport = () => {
             selector: row =>
                 row.task_category !== 'Holiday' &&
                     row.task_category !== 'PTO'
-                    ? row.number_of_tasks
+                    ? (row.number_of_tasks !== 0 ? row.number_of_tasks : '')
                     : '',
             sortable: true,
         },
@@ -176,7 +179,7 @@ const DailyReport = () => {
             selector: row =>
                 row.task_category !== 'Holiday' &&
                     row.task_category !== 'PTO'
-                    ? row.time_spent
+                    ? (row.time_spent !== 0 ? row.time_spent : '')
                     : '',
             sortable: true,
         },
@@ -278,56 +281,161 @@ const DailyReport = () => {
             </div>
 
             {showModal && selectedReport && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Report Details</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+                <div
+                    className="modal fade show"
+                    style={{
+                        display: "block",
+                        backgroundColor: "rgba(0,0,0,.6)",
+                    }}
+                    tabIndex="-1"
+                >
+                    <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                        <div className="modal-content border-0 shadow-lg">
+
+                            <div className="modal-header main-background text-white">
+                                <h5 className="modal-title fw-bold">
+                                    Report Details
+                                </h5>
+
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowModal(false)}
+                                />
                             </div>
-                            <div className="modal-body">
-                                <div className="row">
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <strong>Date:</strong> {selectedReport.date}
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <strong>Category:</strong> {selectedReport.task_category}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mb-3">
-                                    <strong>{selectedReport.task_category === 'Holiday' || selectedReport.task_category === 'PTO' ? 'Notes' : 'Task List'}:</strong>
-                                    <ul className="mt-2 mb-0">
-                                        {selectedReport.task_list && selectedReport.task_list.map((task, index) => (
-                                            <li key={index}>{task}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                                {selectedReport.task_category !== 'Holiday' && selectedReport.task_category !== 'PTO' && (
-                                    <>
-                                        <div className="mb-3">
-                                            <strong>Number of Tasks:</strong> {selectedReport.number_of_tasks}
-                                        </div>
-                                        <div className="mb-3">
-                                            <strong>Time Spent (minutes):</strong> {selectedReport.time_spent}
-                                        </div>
-                                        {selectedReport.meeting_count > 0 && (
-                                            <div className="mb-3">
-                                                <strong>Meeting Count:</strong> {selectedReport.meeting_count}
+
+                            <div className="modal-body bg-light">
+                                {/* Header Information */}
+                                <div className="card border-0 shadow-sm mb-3">
+                                    <div className="card-body">
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <small className="text-muted d-block">Date</small>
+                                                <div className="fw-semibold">{selectedReport.date}</div>
                                             </div>
-                                        )}
-                                    </>
-                                )}
-                                <div className="mb-3">
-                                    <strong>Type:</strong> {selectedReport.work_type}
+
+                                            <div className="col-md-6">
+                                                <small className="text-muted d-block">Category</small>
+                                                <span className="badge bg-primary fs-6">
+                                                    {selectedReport.task_category}
+                                                </span>
+                                            </div>
+
+                                            {selectedReport.task_category === "Others" && (
+                                                <div className="col-md-6">
+                                                    <small className="text-muted d-block">Sub Category</small>
+                                                    <div className="fw-semibold">
+                                                        {selectedReport.sub_category}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="col-md-6">
+                                                <small className="text-muted d-block">Work Type</small>
+                                                <span className="badge bg-success fs-6">
+                                                    {selectedReport.work_type}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
+                                {/* Statistics */}
+                                {selectedReport.task_category !== "Holiday" &&
+                                    selectedReport.task_category !== "PTO" &&
+                                    (
+                                        selectedReport.number_of_tasks > 0 ||
+                                        selectedReport.time_spent > 0 ||
+                                        selectedReport.meeting_count > 0
+                                    ) && (
+                                        <div className="row g-3 mb-3">
+
+                                            {selectedReport.number_of_tasks > 0 && (
+                                                <div className="col-md-4">
+                                                    <div className="card text-center border-primary shadow-sm h-100">
+                                                        <div className="card-body">
+                                                            <h3 className="text-primary mb-1">
+                                                                {selectedReport.number_of_tasks}
+                                                            </h3>
+                                                            <small className="text-muted">
+                                                                Tasks Completed
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {selectedReport.time_spent > 0 && (
+                                                <div className="col-md-4">
+                                                    <div className="card text-center border-success shadow-sm h-100">
+                                                        <div className="card-body">
+                                                            <h3 className="text-success mb-1">
+                                                                {selectedReport.time_spent}
+                                                            </h3>
+                                                            <small className="text-muted">
+                                                                Minutes Spent
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {selectedReport.meeting_count > 0 && (
+                                                <div className="col-md-4">
+                                                    <div className="card text-center border-warning shadow-sm h-100">
+                                                        <div className="card-body">
+                                                            <h3 className="text-warning mb-1">
+                                                                {selectedReport.meeting_count}
+                                                            </h3>
+                                                            <small className="text-muted">
+                                                                Meetings
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                        </div>
+                                    )}
+
+                                {/* Task List */}
+                                {selectedReport.task_category !== "Holiday" &&
+                                    selectedReport.task_category !== "PTO" &&
+                                    selectedReport.task_list?.length > 0 && (
+                                        <div className="card shadow-sm border-0">
+                                            <div className="card-header bg-white">
+                                                <h6 className="mb-0 fw-bold">
+                                                    Task List
+                                                </h6>
+                                            </div>
+
+                                            <div className="card-body p-0">
+                                                <ul className="list-group list-group-flush">
+                                                    {selectedReport.task_list.map((task, index) => (
+                                                        <li
+                                                            key={index}
+                                                            className="list-group-item d-flex align-items-center"
+                                                        >
+                                                            <span className="badge bg-secondary me-3">
+                                                                {index + 1}
+                                                            </span>
+                                                            {task}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
                             </div>
                             <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Close</button>
+                                <button
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setShowModal(false)}
+                                >
+                                    Close
+                                </button>
                             </div>
+
                         </div>
                     </div>
                 </div>

@@ -77,12 +77,45 @@ const NewData = () => {
         }
     };
 
+    const isWeekend = (dateString) => {
+        // Parse as a calendar date
+        const date = new Date(`${dateString}T12:00:00`);
+
+        const weekday = new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: "America/Anchorage",
+        }).format(date);
+
+        return weekday === "Sat" || weekday === "Sun";
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+
+        if (name === 'date' && isWeekend(value)) {
+            Swal.fire({
+                title: 'Weekend Warning',
+                text: 'The selected date is a weekend. Do you want to continue?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, continue',
+                cancelButtonText: 'No, change date',
+                confirmButtonColor: '#065d48',
+                cancelButtonColor: '#d33',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value
+                    }));
+                }
+            });
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        }
     };
 
     const handleCategoryChange = (id, value) => {
