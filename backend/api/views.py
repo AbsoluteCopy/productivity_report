@@ -231,9 +231,13 @@ class UserDailyReportsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, user_id):
-        reports = DailyReport.objects.filter(
-            user_id=user_id
-        )
+        if request.user.role != "admin" and request.user.id != user_id:
+            return Response(
+                {"error": "Permission denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        reports = DailyReport.objects.filter(user_id=user_id)
 
         year = request.GET.get("year")
         month = request.GET.get("month")
