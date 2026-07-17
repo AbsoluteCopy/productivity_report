@@ -1,14 +1,22 @@
 from django.shortcuts import render
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
+from django.contrib.auth.hashers import check_password
+from django.conf import settings
+import jwt
+import datetime
+
 from .models import User, DailyReport
 from .serializers import UserSerializer, DailyReportSerializer
-import hashlib
+from .permissions import IsAdmin
+
 
 # Create your views here.
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def home(request):
     return Response({
         "message": "Django backend is connected!"
@@ -16,6 +24,7 @@ def home(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def login(request):
     email = request.data.get('email')
     password = request.data.get('password')
@@ -28,13 +37,19 @@ def login(request):
     
     try:
         user = User.objects.get(email=email)
-        # Hash the provided password and compare
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        if user.password == hashed_password:
+        if check_password(password, user.password):
             serializer = UserSerializer(user)
+            
+            # Generate JWT token
+            token = jwt.encode({
+                'user_id': user.id,
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+            }, settings.SECRET_KEY, algorithm='HS256')
+            
             return Response({
                 "message": "Login successful",
-                "user": serializer.data
+                "user": serializer.data,
+                "token": token
             }, status=status.HTTP_200_OK)
         else:
             return Response(
@@ -49,6 +64,8 @@ def login(request):
 
 
 class UserListView(APIView):
+    permission_classes = [IsAdmin]
+
     def get(self, request):
         users = User.objects.all()
         serializer = UserSerializer(users, many=True)
@@ -63,6 +80,8 @@ class UserListView(APIView):
 
 
 class UserDetailView(APIView):
+    permission_classes = [IsAdmin]
+
     def get_object(self, pk):
         try:
             return User.objects.get(pk=pk)
@@ -95,8 +114,9 @@ class UserDetailView(APIView):
 
 
 class DailyReportListView(APIView):
-    def get(self, request):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request):
         reports = DailyReport.objects.all()
 
         year = request.GET.get("year")
@@ -136,6 +156,7 @@ class DailyReportListView(APIView):
 
 
 class DailyReportDetailView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
@@ -143,9 +164,7 @@ class DailyReportDetailView(APIView):
         except DailyReport.DoesNotExist:
             return None
 
-
     def get(self, request, pk):
-
         report = self.get_object(pk)
 
         if not report:
@@ -155,12 +174,9 @@ class DailyReportDetailView(APIView):
             )
 
         serializer = DailyReportSerializer(report)
-
         return Response(serializer.data)
 
-
     def put(self, request, pk):
-
         report = self.get_object(pk)
 
         if not report:
@@ -185,24 +201,11 @@ class DailyReportDetailView(APIView):
         )
         
     def has_permission(self, request, report):
-
-        user_id = request.GET.get("user_id")
-
-        if not user_id:
-            return False
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return False
-
-        if user.role == "admin":
+        if request.user.role == "admin":
             return True
-
-        return report.user_id == user.id
+        return report.user_id == request.user.id
 
     def delete(self, request, pk):
-
         report = self.get_object(pk)
 
         if not report:
@@ -211,8 +214,13 @@ class DailyReportDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        report.delete()
+        if not self.has_permission(request, report):
+            return Response(
+                {"error": "Permission denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
+        report.delete()
         return Response(
             {"message": "Daily report deleted successfully"},
             status=status.HTTP_204_NO_CONTENT
@@ -220,9 +228,9 @@ class DailyReportDetailView(APIView):
 
 
 class UserDailyReportsView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, user_id):
-
         reports = DailyReport.objects.filter(
             user_id=user_id
         )

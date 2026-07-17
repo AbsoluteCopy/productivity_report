@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import User, DailyReport
-import hashlib
+from django.contrib.auth.hashers import make_password
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -17,14 +17,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        validated_data['password'] = hashlib.sha256(password.encode()).hexdigest()
+        validated_data['password'] = make_password(password)
         return User.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
 
         if password:
-            instance.password = hashlib.sha256(password.encode()).hexdigest()
+            instance.password = make_password(password)
 
         return super().update(instance, validated_data)
 

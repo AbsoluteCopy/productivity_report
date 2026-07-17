@@ -32,7 +32,11 @@ const ManageAccounts = () => {
             setUsers(res.data);
         } catch (err) {
             console.error(err);
-            alert(err.response?.data?.detail || "Something went wrong.");
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || "Something went wrong.",
+            });
         }
     };
 
@@ -44,18 +48,21 @@ const ManageAccounts = () => {
     };
 
     const handleSubmit = async () => {
-        if (
-            !formData.id_number ||
-            !formData.first_name ||
-            !formData.last_name ||
-            !formData.email
-        ) {
-            alert("Please fill in all required fields.");
+        if (!formData.id_number || !formData.first_name || !formData.last_name || !formData.email || !formData.role) {
+            Swal.fire({
+                icon: "warning",
+                title: "Incomplete Form",
+                text: "Please fill in all required fields.",
+            });
             return;
         }
 
         if (!editingId && !formData.password) {
-            alert("Password is required.");
+            Swal.fire({
+                icon: "warning",
+                title: "Password Required",
+                text: "Password is required for new accounts.",
+            });
             return;
         }
         setLoading(true);
@@ -73,11 +80,26 @@ const ManageAccounts = () => {
             }
 
             fetchUsers();
+            
+            Swal.fire({
+                icon: "success",
+                title: "Success",
+                text: editingId ? "Account updated successfully!" : "Account created successfully!",
+                toast: true,
+                position: "top-end",
+                showConfirmButton: false,
+                timer: 3000
+            });
+            
             setFormData(emptyUser);
             setEditingId(null);
         } catch (err) {
             console.error(err);
-            alert(err.response?.data?.detail || "Something went wrong.");
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || "Something went wrong.",
+            });
         } finally {
             setLoading(false);
         }
