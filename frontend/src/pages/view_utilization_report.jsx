@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -17,10 +18,19 @@ const ViewUtilizationReport = () => {
     const WORK_DAY_HOURS = 8.5;
     const MINUTES_PER_HOUR = 60;
     const isAdmin = currentUser?.role === "admin";
-    const name = currentUser
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : "";
-    const employeeCode = currentUser?.id_number ?? "";
+
+    // Derive selected user directly from the already-loaded users array — no extra state needed
+    const selectedUserObj = selectedUser ? users.find(u => String(u.id) === String(selectedUser)) : null;
+
+    const name = selectedUserObj
+        ? `${selectedUserObj.first_name} ${selectedUserObj.last_name}`
+        : isAdmin
+            ? 'All Users'
+            : currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : '';
+
+    const employeeCode = selectedUserObj
+        ? (selectedUserObj.id_number || '')
+        : isAdmin ? 'ALL' : (currentUser?.id_number || '');
     const months = useMemo(
         () =>
             Array.from({ length: 12 }, (_, i) => ({
@@ -57,56 +67,32 @@ const ViewUtilizationReport = () => {
     }, [currentUser, selectedMonth, selectedYear, selectedUser]);
 
     const fetchUsers = async () => {
-
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/users/`
-            );
-
-            const data = await response.json();
-
-            const employees = data.filter(
-                user => user.role === "employee"
-            );
-
-            setUsers(employees);
-
+            const res = await axios.get(`${API_BASE_URL}/users/`);
+            setUsers(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
-
-            console.error(
-                "Error fetching users:",
-                error
-            );
-
+            console.error("Error fetching users:", error);
         }
     };
 
     const fetchReports = async (user, year, month, userId = "") => {
         setLoading(true);
         try {
-            const params = new URLSearchParams({
-                year,
-                month,
-            });
+            const params = new URLSearchParams({ year, month });
 
             if (user.role === "admin" && userId) {
                 params.append("user_id", userId);
             }
 
-            const url =
-                user.role === "admin"
-                    ? `${API_BASE_URL}/daily-reports/?${params}`
-                    : `${API_BASE_URL}/users/${user.id}/reports/?${params}`;
+            const url = user.role === "admin"
+                ? `${API_BASE_URL}/daily-reports/?${params}`
+                : `${API_BASE_URL}/users/${user.id}/reports/?${params}`;
 
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                throw new Error("Failed to fetch reports");
-            }
-
-            setDailyReports(await response.json());
+            const res = await axios.get(url);
+            setDailyReports(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Error fetching reports:", error);
+            setDailyReports([]);
         } finally {
             setLoading(false);
         }
@@ -228,56 +214,114 @@ const ViewUtilizationReport = () => {
         );
     }).length;
     return (
-        <div className="px-4 mt-4">
-            <div className="card shadow-sm">
-                <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between gap-3 p-3 bg-light rounded shadow-sm">
+        <div className="container-fluid px-4 mt-4 mb-5">
+            <div className="d-flex align-items-center justify-content-between mb-4">
+                <div>
+                    <h2 className="fw-bold mb-1" style={{ color: '#08060d', letterSpacing: '-0.5px' }}>
+                        <i className="bi bi-graph-up-arrow me-2" style={{ color: '#055d47' }}></i>
+                        Utilization Report
+                    </h2>
+                    <p className="text-muted mb-0">Analyze productivity, attendance, and time allocation.</p>
+                </div>
 
-                        <h3 className="mb-0">
-                            Employee Utilization Report
-                        </h3>
-
-                        <div className="d-flex align-items-center gap-2">
-                            {isAdmin && (
-
-                                <select className="form-select w-auto" value={selectedUser}
-                                    onChange={e => setSelectedUser(e.target.value)}
-                                >
-                                    <option value="">
-                                        All Users
-                                    </option>
-
-                                    {users.map(user => (
-
-                                        <option key={user.id} value={user.id}>
-                                            {user.first_name} {user.last_name}
-                                        </option>
-
-                                    ))}
-                                </select>
-
-                            )}
-                            <select className="form-select w-auto" value={selectedMonth}
-                                onChange={e => setSelectedMonth(Number(e.target.value))}
+                <div className="d-flex align-items-center gap-3 bg-white p-3 rounded-4 shadow-sm">
+                    {isAdmin && (
+                        <div className="d-flex align-items-center">
+                            <i className="bi bi-person-badge text-muted me-2"></i>
+                            <select className="form-select border-0 bg-light rounded-3" value={selectedUser}
+                                onChange={e => setSelectedUser(e.target.value)}
                             >
-                                {months.map((month) => (
-                                    <option key={month.value} value={month.value}>
-                                        {month.label}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <select className="form-select w-auto" value={selectedYear}
-                                onChange={e => setSelectedYear(Number(e.target.value))}
-                            >
-                                {Array.from({ length: 4 }, (_, i) => 2025 + i).map(year => (
-                                    <option key={year} value={year}>
-                                        {year}
+                                <option value="">All Users</option>
+                                {users.map(user => (
+                                    <option key={user.id} value={user.id}>
+                                        {user.first_name} {user.last_name}
                                     </option>
                                 ))}
                             </select>
                         </div>
+                    )}
+                    
+                    <div className="d-flex align-items-center border-start ps-3">
+                        <i className="bi bi-calendar2-month text-muted me-2"></i>
+                        <select className="form-select border-0 bg-light rounded-3" value={selectedMonth}
+                            onChange={e => setSelectedMonth(Number(e.target.value))}
+                        >
+                            {months.map((month) => (
+                                <option key={month.value} value={month.value}>{month.label}</option>
+                            ))}
+                        </select>
                     </div>
+
+                    <div className="d-flex align-items-center border-start ps-3">
+                        <i className="bi bi-calendar-event text-muted me-2"></i>
+                        <select className="form-select border-0 bg-light rounded-3" value={selectedYear}
+                            onChange={e => setSelectedYear(Number(e.target.value))}
+                        >
+                            {Array.from({ length: 4 }, (_, i) => 2025 + i).map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Stat Cards */}
+            {!loading && (
+                <div className="row g-4 mb-4">
+                    <div className="col-md-3">
+                        <div className="card border-0 rounded-4 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
+                            <div className="card-body p-4 d-flex flex-column justify-content-center">
+                                <h6 className="opacity-75 fw-semibold mb-2 text-uppercase" style={{ letterSpacing: '1px' }}>Avg. Productivity</h6>
+                                <h2 className="fw-bold mb-0 display-6">{Math.round(averageProductivity)}%</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="col-md-3">
+                        <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
+                            <div className="card-body p-4">
+                                <div className="d-flex align-items-center mb-2">
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                        <i className="bi bi-clock-history fs-5"></i>
+                                    </div>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Productive Hours</h6>
+                                </div>
+                                <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{totalProductiveHours.toFixed(2)} <span className="fs-6 text-muted fw-normal">hrs</span></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="col-md-3">
+                        <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
+                            <div className="card-body p-4">
+                                <div className="d-flex align-items-center mb-2">
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                        <i className="bi bi-calendar-check fs-5"></i>
+                                    </div>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Days Worked</h6>
+                                </div>
+                                <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{daysWorked} <span className="fs-6 text-muted fw-normal">days</span></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="col-md-3">
+                        <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
+                            <div className="card-body p-4">
+                                <div className="d-flex align-items-center mb-2">
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(220, 53, 69, 0.1)', color: '#dc3545' }}>
+                                        <i className="bi bi-cup-hot fs-5"></i>
+                                    </div>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Holidays / PTO</h6>
+                                </div>
+                                <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{holidaysOrPTOs} <span className="fs-6 text-muted fw-normal">days</span></h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div className="card-body p-0">
+
+
                     <div className="row">
                         <div className="col-12">
                             {loading ? (
@@ -288,45 +332,41 @@ const ViewUtilizationReport = () => {
                                     <p className="mt-2">Loading reports...</p>
                                 </div>
                             ) : (
-                                <table className="table table-bordered table-hover table-sm mt-3 font-12">
-                                    <thead>
-                                        <tr className='middle'>
-                                            <th className='main-background text-white' colSpan={3}>Employee Name</th>
-                                            <th colSpan={3}>{name ? name.toUpperCase() : 'N/A'}</th>
+                                <div className="table-responsive">
+                                <table className="table table-hover table-sm mb-0 font-12 align-middle">
+                                    <thead style={{ backgroundColor: '#f8f9fa' }}>
+                                        <tr className='middle border-bottom'>
+                                            <th className='text-muted fw-semibold py-3 ps-4' colSpan={3}>EMPLOYEE NAME</th>
+                                            <th className='fw-bold text-dark py-3' colSpan={3}>{name ? name.toUpperCase() : 'N/A'}</th>
                                             <th>&nbsp;</th>
-                                            <th className='main-background text-white' colSpan={2}>Employee Code</th>
-                                            <th colSpan={2}>{employeeCode || 'N/A'}</th>
+                                            <th className='text-muted fw-semibold py-3' colSpan={2}>EMPLOYEE CODE</th>
+                                            <th className='fw-bold text-dark py-3' colSpan={2}>{employeeCode || 'N/A'}</th>
                                             <th>&nbsp;</th>
-                                            <th className='main-background text-white' colSpan={2}>Month</th>
-                                            <th colSpan={2}>{new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase()}</th>
-                                            <th>&nbsp;</th>
-                                            <th className='main-background text-white'>Year</th>
-                                            <th>{selectedYear}</th>
+                                            <th className='text-muted fw-semibold py-3' colSpan={2}>PERIOD</th>
+                                            <th className='fw-bold text-dark py-3' colSpan={4}>
+                                                {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase()} {selectedYear}
+                                            </th>
                                         </tr>
-                                        <tr className='middle'>
-                                            <th>Date</th>
-                                            <th>Day</th>
-                                            <th>Week Offs</th>
-                                            <th>Holidays</th>
-                                            <th></th>
-                                            <th>Working Hours
-                                                <br />(mins)</th>
-                                            <th>Meeting/Trainings
-                                                <br />(mins)</th>
-                                            <th>Working Hours
-                                                <br />(hrs)</th>
-                                            <th>Meeting/Trainings
-                                                <br />(hrs)</th>
-                                            <th></th>
-                                            <th>Total Hours w/o Break</th>
-                                            <th>Total Hours</th>
-                                            <th></th>
-                                            <th>Productive Hours</th>
-                                            <th>Productive Hours %</th>
-                                            <th>Break Hours</th>
-                                            <th>Break Hours %</th>
-                                            <th>Over/Down time</th>
-                                            <th>Over/Down time %</th>
+                                        <tr className='middle text-muted' style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                            <th className="ps-4 py-2 border-0">Date</th>
+                                            <th className="py-2 border-0">Day</th>
+                                            <th className="py-2 border-0">Status</th>
+                                            <th className="py-2 border-0"></th>
+                                            <th className="py-2 border-0"></th>
+                                            <th className="py-2 border-0 text-center">Work<br />(mins)</th>
+                                            <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
+                                            <th className="py-2 border-0 text-center">Work<br />(hrs)</th>
+                                            <th className="py-2 border-0 text-center">Meetings<br />(hrs)</th>
+                                            <th className="py-2 border-0"></th>
+                                            <th className="py-2 border-0 text-center">Req. Hrs<br />w/o Break</th>
+                                            <th className="py-2 border-0 text-center">Req. Hrs<br />Total</th>
+                                            <th className="py-2 border-0"></th>
+                                            <th className="py-2 border-0 text-center">Prod.<br />Hrs</th>
+                                            <th className="py-2 border-0 text-center">Prod.<br />%</th>
+                                            <th className="py-2 border-0 text-center">Break<br />Hrs</th>
+                                            <th className="py-2 border-0 text-center">Break<br />%</th>
+                                            <th className="py-2 border-0 text-center">Var.<br />Hrs</th>
+                                            <th className="py-2 border-0 text-center pe-4">Var.<br />%</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -389,7 +429,7 @@ const ViewUtilizationReport = () => {
                                                                         : "middle"
                                                         }
                                                     >
-                                                        <td className='fitcell'>
+                                                        <td className='fitcell ps-4 fw-medium text-dark'>
                                                             {showDate &&
                                                                 `${date.getDate()}-${date.toLocaleString(
                                                                     'en-US',
@@ -397,89 +437,80 @@ const ViewUtilizationReport = () => {
                                                                 )}-${String(date.getFullYear()).slice(-2)}`
                                                             }
                                                         </td>
-                                                        <td>
+                                                        <td className="text-muted">
                                                             {showDate &&
                                                                 date.toLocaleDateString(
                                                                     'en-US',
-                                                                    { weekday: 'long' }
+                                                                    { weekday: 'short' }
                                                                 )
                                                             }
                                                         </td>
                                                         <td>
-                                                            {report.isWeekend ? 'Weekend' : ''}
+                                                            {report.isWeekend ? <span className="badge bg-warning text-dark">Weekend</span> : ''}
+                                                            {isHoliday ? <span className="badge bg-danger">Holiday</span> : ''}
+                                                            {isPTO ? <span className="badge bg-info">PTO</span> : ''}
                                                         </td>
-                                                        <td>
-                                                            {isHoliday ? 'Holiday' : ''}
-                                                        </td>
-                                                        <td> </td>
-                                                        <td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td className="text-center">
                                                             {!isSpecialDay ? report.working_minutes ?? '' : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center">
                                                             {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center fw-medium">
                                                             {!isSpecialDay ? workingHours.toFixed(2) : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center fw-medium">
                                                             {!isSpecialDay ? meetingHours.toFixed(2) : ''}
                                                         </td>
                                                         <td></td>
-                                                        <td>
+                                                        <td className="text-center text-muted">
                                                             {!isSpecialDay ? totalHoursNoBreak : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center text-muted">
                                                             {!isSpecialDay ? totalRequiredHours : ''}
                                                         </td>
                                                         <td></td>
-                                                        <td>
+                                                        <td className="text-center fw-bold" style={{ color: '#055d47' }}>
                                                             {!isSpecialDay ? productiveHours.toFixed(2) : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center fw-bold">
                                                             {
-                                                                !isSpecialDay ? Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100) + '%' : ''
+                                                                !isSpecialDay ? (
+                                                                    <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
+                                                                        {Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%
+                                                                    </span>
+                                                                ) : ''
                                                             }
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center text-muted">
                                                             {!isSpecialDay ? (breakHours > 0 ? breakHours : 0) : ''}
                                                         </td>
-                                                        <td>
+                                                        <td className="text-center text-muted">
                                                             {!isSpecialDay ? (Math.round(breakPercentage * 100) / 100).toFixed(0) + '%' : ''}
                                                         </td>
-                                                        <td>
-                                                            {!isSpecialDay ? (totalHoursNoBreak - productiveHours).toFixed(2) : ''}
+                                                        <td className="text-center">
+                                                            {!isSpecialDay ? (
+                                                                <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
+                                                                    {(productiveHours - totalHoursNoBreak).toFixed(2)}
+                                                                </span>
+                                                            ) : ''}
                                                         </td>
 
-                                                        <td>
-                                                            {!isSpecialDay ? (Math.round(((totalHoursNoBreak - productiveHours) / totalHoursNoBreak) * 100)) + '%' : ''}
+                                                        <td className="text-center pe-4">
+                                                            {!isSpecialDay ? (
+                                                                <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
+                                                                    {(Math.round(((productiveHours - totalHoursNoBreak) / totalHoursNoBreak) * 100))} <i className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? "bi bi-arrow-up-short" : "bi bi-arrow-down-short"}></i>
+                                                                </span>
+                                                            ) : ''}
                                                         </td>
                                                     </tr>
                                                 );
                                             })
                                         }
-                                        <tr className="fw-bold middle">
-                                            <td className='main-background text-white' colSpan={3}>Average Productivity %</td>
-                                            <td colSpan={2}>
-                                                {Math.round(averageProductivity)}%
-                                            </td>
-                                            <td>&nbsp;</td>
-                                            <td className='main-background text-white' colSpan={2}>Total Productive Hours</td>
-                                            <td colSpan={2}>
-                                                {totalProductiveHours.toFixed(2)}
-                                            </td>
-                                            <td>&nbsp;</td>
-                                            <td className='main-background text-white fitcell' colSpan={2}>Days Worked</td>
-                                            <td>
-                                                {daysWorked}
-                                            </td>
-                                            <td>&nbsp;</td>
-                                            <td className='main-background text-white' colSpan={3}>Holidays / PTOs / Onboarding</td>
-                                            <td>
-                                                {holidaysOrPTOs}
-                                            </td>
-                                        </tr>
-                                    </tbody>
                                 </table>
+                                </div>
                             )}
                         </div>
                     </div>

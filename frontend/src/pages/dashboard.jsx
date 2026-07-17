@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const Home = () => {
@@ -29,10 +30,12 @@ const Home = () => {
     const fetchRecentReports = async (userId) => {
         try {
             const response = await fetch(`${API_BASE_URL}/users/${userId}/reports/`);
-            const data = await response.json();
-            // Get last 3 reports
-            const lastThree = data.slice(0, 3);
-            setRecentReports(lastThree);
+            if (response.ok) {
+                const data = await response.json();
+                // Get last 3 reports
+                const lastThree = data.slice(0, 3);
+                setRecentReports(lastThree);
+            }
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -60,75 +63,93 @@ const Home = () => {
     const { date, time } = formatDateTime(currentTime);
 
     return (
-        <div className="container mt-4">
-            <div className="row">
+        <div className="container mt-5">
+            <div className="row mb-5">
                 {/* Welcome Message */}
-                <div className="col-12 mb-4">
-                    <h2 className="fw-bold" style={{ color: '#065d48' }}>
-                        Welcome, {user ? `${user.first_name} ${user.last_name}` : 'User'}!
-                    </h2>
-                    <p className="text-muted">Here's your productivity overview</p>
+                <div className="col-12">
+                    <div className="p-4 rounded-4 shadow-sm" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
+                        <h2 className="fw-bold mb-1">
+                            Welcome back, {user ? `${user.first_name}` : 'User'}!
+                        </h2>
+                        <p className="mb-0 opacity-75">Ready to track your productivity today?</p>
+                    </div>
                 </div>
+            </div>
 
+            <div className="row g-4">
                 {/* Current Time Card */}
-                <div className="col-md-4 mb-4">
-                    <div className="card shadow-sm h-100">
-                        <div className="card-body text-center">
-                            <h5 className="card-title mb-3" style={{ color: '#065d48' }}>
-                                <i className="bi bi-clock me-2"></i>Current Time
-                            </h5>
-                            <div className="display-4 fw-bold mb-2" style={{ color: '#065d48' }}>
+                <div className="col-md-5 col-lg-4">
+                    <div className="card shadow-sm h-100 border-0 rounded-4 overflow-hidden" style={{ transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-5px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                        <div className="card-body text-center p-5 d-flex flex-column justify-content-center">
+                            <div className="mb-3">
+                                <i className="bi bi-clock-history" style={{ fontSize: '3rem', color: '#055d47' }}></i>
+                            </div>
+                            <div className="display-5 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
                                 {time}
                             </div>
-                            <p className="text-muted mb-0">{date}</p>
+                            <p className="text-muted fw-medium mb-0">{date}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Recent Reports Card */}
-                <div className="col-md-8 mb-4">
-                    <div className="card shadow-sm h-100">
-                        <div className="card-body">
-                            <h5 className="card-title mb-3" style={{ color: '#065d48' }}>
-                                <i className="bi bi-file-earmark-text me-2"></i>Recent Daily Reports
+                <div className="col-md-7 col-lg-8">
+                    <div className="card shadow-sm h-100 border-0 rounded-4">
+                        <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                            <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                                <i className="bi bi-journal-text me-2"></i>Recent Reports
                             </h5>
+                            <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                                <i className="bi bi-plus-lg me-1"></i> New
+                            </Link>
+                        </div>
+                        <div className="card-body p-4">
                             {loading ? (
-                                <div className="text-center py-4">
+                                <div className="text-center py-5">
                                     <div className="spinner-border text-success" role="status">
                                         <span className="visually-hidden">Loading...</span>
                                     </div>
                                 </div>
                             ) : recentReports.length > 0 ? (
-                                <div className="list-group list-group-flush">
+                                <div className="list-group list-group-flush gap-2">
                                     {recentReports.map((report) => (
-                                        <div key={report.id} className="list-group-item d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <h6 className="mb-1">{report.task_category}</h6>
-                                                <small className="text-muted">
-                                                    {new Date(report.date).toLocaleDateString('en-US', { 
-                                                        month: 'short', 
-                                                        day: 'numeric', 
-                                                        year: 'numeric' 
-                                                    })}
-                                                </small>
+                                        <div key={report.id} className="list-group-item border rounded-3 p-3 d-flex justify-content-between align-items-center" style={{ transition: 'all 0.2s' }}>
+                                            <div className="d-flex align-items-center">
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                                    <i className="bi bi-check2-all fs-5"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 className="mb-1 fw-bold text-dark">{report.task_category}</h6>
+                                                    <small className="text-muted fw-medium">
+                                                        <i className="bi bi-calendar3 me-1"></i>
+                                                        {new Date(report.date).toLocaleDateString('en-US', { 
+                                                            month: 'short', 
+                                                            day: 'numeric', 
+                                                            year: 'numeric' 
+                                                        })}
+                                                    </small>
+                                                </div>
                                             </div>
-                                            <div className="text-end">
-                                                <span className="badge bg-success rounded-pill me-2">
+                                            <div className="text-end d-flex flex-column gap-1">
+                                                <span className="badge rounded-pill" style={{ backgroundColor: '#2F8F83', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
                                                     {report.number_of_tasks} tasks
                                                 </span>
-                                                <span className="badge bg-info rounded-pill">
-                                                    {report.time_spent}h
+                                                <span className="badge rounded-pill" style={{ backgroundColor: '#6c757d', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
+                                                    <i className="bi bi-hourglass-split me-1"></i>{report.time_spent}m
                                                 </span>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-4">
-                                    <p className="text-muted mb-0">No recent reports found</p>
-                                    <a href="/new_data" className="btn btn-sm btn-outline-success mt-2">
+                                <div className="text-center py-5">
+                                    <div className="mb-3">
+                                        <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                                    </div>
+                                    <h6 className="text-muted fw-medium mb-3">No recent reports found</h6>
+                                    <Link to="/new_data" className="btn btn-primary rounded-pill px-4 py-2 fw-semibold">
                                         Create your first report
-                                    </a>
+                                    </Link>
                                 </div>
                             )}
                         </div>

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 function Navbar() {
 
     const [userName, setUserName] = useState("");
     const [isAdmin, setIsAdmin] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
 
@@ -21,15 +24,21 @@ function Navbar() {
 
     }, []);
 
+    const handleLogout = (e) => {
+        e.preventDefault();
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        navigate("/login");
+    };
+
 
     return (
         <nav className="navbar navbar-expand-lg navbar-dark main-background shadow">
             <div className="container">
 
-                <a className="navbar-brand fw-bold" href="/dashboard">
-                    <i className="bi bi-bootstrap-fill me-2"></i>
+                <Link className="navbar-brand fw-bold" to="/dashboard">
                     Productivity Report
-                </a>
+                </Link>
 
                 <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span className="navbar-toggler-icon"></span>
@@ -38,28 +47,28 @@ function Navbar() {
                 <div className="collapse navbar-collapse" id="navbarNav">
                     <ul className="navbar-nav ms-4">
                         <li className="nav-item">
-                            <a className="nav-link active" href="/dashboard">
+                            <Link className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`} to="/dashboard">
                                 Home
-                            </a>
+                            </Link>
                         </li>
 
                         <li className="nav-item">
-                            <a className="nav-link" href="/daily_report">
+                            <Link className={`nav-link ${location.pathname === '/daily_report' ? 'active' : ''}`} to="/daily_report">
                                 Daily Report
-                            </a>
+                            </Link>
                         </li>
 
                         {isAdmin && (
                             <>
                                 <li className="nav-item">
-                                    <a className="nav-link" href="/view_utilization_report">
+                                    <Link className={`nav-link ${location.pathname === '/view_utilization_report' ? 'active' : ''}`} to="/view_utilization_report">
                                         Utilization Report
-                                    </a>
+                                    </Link>
                                 </li>
                                 <li className="nav-item">
-                                    <a className="nav-link" href="/manage_accounts">
+                                    <Link className={`nav-link ${location.pathname === '/manage_accounts' ? 'active' : ''}`} to="/manage_accounts">
                                         Manage Accounts
-                                    </a>
+                                    </Link>
                                 </li>
                             </>
                         )}
@@ -74,10 +83,10 @@ function Navbar() {
 
                             <ul className="dropdown-menu dropdown-menu-end shadow">
                                 <li>
-                                    <a className="dropdown-item text-danger" href="/logout">
+                                    <button className="dropdown-item text-danger" onClick={handleLogout}>
                                         <i className="bi bi-box-arrow-right me-2"></i>
                                         Logout
-                                    </a>
+                                    </button>
                                 </li>
                             </ul>
                         </li>
