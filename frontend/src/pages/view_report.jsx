@@ -1,5 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+import * as XLSX from 'xlsx';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -236,7 +259,8 @@ const ViewReport = () => {
 
             const isLeave =
                 report.task_category === 'Holiday' ||
-                report.task_category === 'PTO';
+                report.task_category === 'PTO' ||
+                report.task_category === 'Company Event';
 
             if (!report.isWeekend && !isLeave) {
                 dailyWorkingHours +=
@@ -261,45 +285,189 @@ const ViewReport = () => {
     const displayReports = addDailyTotalRows(
         addWeekendRows(groupedReports)
     );
-    const summaryTaskList = [
-        "Accounting Unapplied Payments",
-        "Accounting Cash Receipts",
-        "Checked/Reviewed Accounting Posted Payments",
-        "Check Deposits to Cash Receipts & UAP",
-        "Checked & Cleared 2025 ePay Transactions",
-        "Process Offset on Accounting from Matt/UW Team"
+    const categoryColors = [
+        'rgba(5, 93, 71, 0.8)',
+        'rgba(47, 143, 131, 0.8)',
+        'rgba(52, 152, 219, 0.8)',
+        'rgba(155, 89, 182, 0.8)',
+        'rgba(230, 126, 34, 0.8)',
+        'rgba(231, 76, 60, 0.8)',
+        'rgba(241, 196, 15, 0.8)',
+        'rgba(26, 188, 156, 0.8)',
     ];
 
+    const standardCategories = [
+        'Accounting Unapplied Payments',
+        'Accounting Cash Receipts',
+        'Checked/Reviewed Accounting Posted Payments',
+        'Check Deposits to Cash Receipts & UAP',
+        'Checked & Cleared 2025 ePay Transactions',
+        'Process Offset on Accounting from Matt/UW Team',
+        'Meeting',
+        'Others'
+    ];
 
-    const summaryReports = summaryTaskList.map(task => {
+    const initialCategoryMap = standardCategories.reduce((acc, cat) => {
+        acc[cat] = { tasks: 0, minutes: 0 };
+        return acc;
+    }, {});
 
-        const taskReports = groupedReports.filter(
-            report => report.task_category === task
-        );
+    const categoryMap = groupedReports.reduce((acc, report) => {
+        const cat = report.task_category === 'Other' ? 'Others' : (report.task_category || 'Others');
+        if (cat === 'Weekend' || cat === 'Daily Total' || cat === 'PTO' || cat === 'Holiday' || cat === 'Company Event') return acc;
+        if (!acc[cat]) acc[cat] = { tasks: 0, minutes: 0 };
+        
+        if (cat === 'Meeting') {
+            acc[cat].tasks += Number(report.meeting_count || 0);
+            acc[cat].minutes += Number(report.time_spent || 0);
+        } else {
+            acc[cat].tasks += Number(report.number_of_tasks || 0);
+            acc[cat].minutes += Number(report.time_spent || 0) * Number(report.number_of_tasks || 0);
+        }
+        return acc;
+    }, initialCategoryMap);
 
-        const totalTasks = taskReports.reduce(
-            (sum, report) =>
-                sum + Number(report.number_of_tasks || 0),
-            0
-        );
+    const summaryReports = Object.keys(categoryMap).map(task => ({
+        task,
+        totalTasks: categoryMap[task].tasks,
+        totalTime: categoryMap[task].minutes
+    })).sort((a, b) => b.totalTime - a.totalTime); // Sort by time spent descending
 
-        const totalTime = taskReports.reduce(
-            (sum, report) =>
-                sum +
-                (
-                    Number(report.number_of_tasks || 0) *
-                    Number(report.time_spent || 0)
-                ),
-            0
-        );
+    const taskChartLabels = [];
+    const taskChartCounts = [];
+    const taskChartColors = [];
 
-        return {
-            task,
-            totalTasks,
-            totalTime
-        };
+    const timeChartLabels = [];
+    const timeChartMinutes = [];
+    const timeChartColors = [];
 
+    Object.keys(categoryMap).forEach((c, i) => {
+        const color = categoryColors[i % categoryColors.length];
+        
+        if (categoryMap[c].tasks > 0) {
+            taskChartLabels.push(c);
+            taskChartCounts.push(categoryMap[c].tasks);
+            taskChartColors.push(color);
+        }
+        
+        if (categoryMap[c].minutes > 0) {
+            timeChartLabels.push(c);
+            timeChartMinutes.push(categoryMap[c].minutes);
+            timeChartColors.push(color);
+        }
     });
+
+    const tasksPieChartData = {
+        labels: taskChartLabels,
+        datasets: [{
+            data: taskChartCounts,
+            backgroundColor: taskChartColors,
+            borderWidth: 2,
+            borderColor: '#fff',
+        }]
+    };
+
+    const tasksPieChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { font: { family: 'Inter', size: 12 }, padding: 16 }
+            },
+            tooltip: {
+                callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} tasks` },
+                backgroundColor: '#08060d',
+                padding: 10,
+                cornerRadius: 8,
+            }
+        }
+    };
+
+    const pieChartData = {
+        labels: timeChartLabels,
+        datasets: [{
+            data: timeChartMinutes,
+            backgroundColor: timeChartColors,
+            borderWidth: 2,
+            borderColor: '#fff',
+        }]
+    };
+
+    const exportDailyReport = () => {
+        const personName = (() => {
+            if (selectedUser) {
+                const u = users.find(u => String(u.id) === String(selectedUser));
+                return u ? `${u.first_name}_${u.last_name}` : 'User';
+            }
+            return currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : 'User';
+        })();
+
+        const monthName = new Date(`${selectedYear}-${String(selectedMonth).padStart(2,'0')}-01`)
+            .toLocaleString('default', { month: 'short' });
+
+        // Build rows matching the Daily Report table format from screenshot
+        const rows = [];
+        displayReports.forEach(report => {
+            const isWeekend = report.isWeekend;
+            const isLeave = report.task_category === 'Holiday' || report.task_category === 'PTO' || report.task_category === 'Company Event';
+            const isDailyTotal = report.task_category === 'Daily Total';
+            const [year, month, day] = report.date.split('-');
+            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+            const dateLabel = `${day}-${dateObj.toLocaleString('en-US', { month: 'short' })}-${String(year).slice(-2)}`;
+            const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+            if (isWeekend) {
+                rows.push({ Date: dateLabel, Day: dayLabel, Task: 'Weekend', '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': '', 'Meeting Trainings(mins)': '' });
+                return;
+            }
+            if (isLeave) {
+                const leaveLabel = report.task_category + (report.task_list?.[0] ? ` - ${report.task_list[0]}` : '');
+                rows.push({ Date: dateLabel, Day: dayLabel, Task: leaveLabel, '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': '', 'Meeting Trainings(mins)': '' });
+                return;
+            }
+            if (isDailyTotal) {
+                rows.push({ Date: '', Day: '', Task: '', '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': report.dailyWorkingHours ?? '', 'Meeting Trainings(mins)': report.dailyMeetings ?? '' });
+                return;
+            }
+            const taskName = report.task_category === 'Others' ? (report.sub_category || 'Others') : report.task_category;
+            const workingHours = (Number(report.number_of_tasks || 0) * Number(report.time_spent || 0));
+            rows.push({
+                Date: dateLabel,
+                Day: dayLabel,
+                Task: taskName,
+                '# of Task': report.number_of_tasks ?? '',
+                'Time Spent(mins)': report.time_spent ?? '',
+                'Working Hours(mins)': workingHours || '',
+                'Meeting Trainings(mins)': report.meeting_count || ''
+            });
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Daily Report');
+        XLSX.writeFile(wb, `Daily_Report_${personName}_${monthName}_${selectedYear}.xlsx`);
+    };
+
+    const pieChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { font: { family: 'Inter', size: 12 }, padding: 16 }
+            },
+            tooltip: {
+                callbacks: {
+                    label: (ctx) => ` ${ctx.label}: ${ctx.parsed} mins`
+                },
+                backgroundColor: '#08060d',
+                padding: 10,
+                cornerRadius: 8,
+            }
+        }
+    };
+
     return (
         <div className="px-4 mt-4">
             <div className="card shadow-sm">
@@ -371,6 +539,11 @@ const ViewReport = () => {
 
                     <div className="tab-content" id="reportTabsContent">
                         <div className="tab-pane fade show active" id="daily-report" role="tabpanel">
+                            <div className="d-flex justify-content-end mt-3 me-2">
+                                <button onClick={exportDailyReport} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
+                                    ⬇ Export to Excel
+                                </button>
+                            </div>
                             {loading ? (
                                 <div className="text-center py-5">
                                     <div className="spinner-border text-primary" role="status">
@@ -416,7 +589,8 @@ const ViewReport = () => {
                                                 previousReport.date !== report.date;
                                             const isLeave =
                                                 report.task_category === 'Holiday' ||
-                                                report.task_category === 'PTO';
+                                                report.task_category === 'PTO' ||
+                                                report.task_category === 'Company Event';
                                             return (
                                                 <tr key={`${report.date}-${report.task_category}-${report.time_spent}`} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
@@ -443,7 +617,7 @@ const ViewReport = () => {
                                                     <td>
                                                         <div>
                                                             {report.task_category === 'Others' ? report.sub_category : report.task_category}
-                                                            {report.task_category === 'Holiday' && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
+                                                            {(report.task_category === 'Holiday' || report.task_category === 'Company Event') && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
                                                         </div>
 
                                                         {!report.isWeekend &&
@@ -511,6 +685,42 @@ const ViewReport = () => {
 
                         <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="p-3">
+                                {/* Charts Section */}
+                                {(taskChartLabels.length > 0 || timeChartLabels.length > 0) && (
+                                    <div className="row g-4 mb-4">
+                                        <div className="col-md-6">
+                                            <div className="card shadow-sm border-0 rounded-4 h-100" style={{ backgroundColor: '#fdfdfd' }}>
+                                                <div className="card-body p-4">
+                                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                                        <h6 className="fw-bold mb-0" style={{ color: '#08060d' }}>Total Tasks by Category</h6>
+                                                        <span className="badge" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '12px' }}>
+                                                            {taskChartCounts.reduce((a, b) => a + b, 0)} total tasks
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ height: '280px' }}>
+                                                        <Pie data={tasksPieChartData} options={tasksPieChartOptions} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-6">
+                                            <div className="card shadow-sm border-0 rounded-4 h-100" style={{ backgroundColor: '#fdfdfd' }}>
+                                                <div className="card-body p-4">
+                                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                                        <h6 className="fw-bold mb-0" style={{ color: '#08060d' }}>Time Spent by Category</h6>
+                                                        <span className="badge" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '12px' }}>
+                                                            {timeChartMinutes.reduce((a, b) => a + b, 0)} total mins
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ height: '280px' }}>
+                                                        <Pie data={pieChartData} options={pieChartOptions} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <table className="table table-bordered table-striped table-hover table-sm font-12">
 
                                     <thead>

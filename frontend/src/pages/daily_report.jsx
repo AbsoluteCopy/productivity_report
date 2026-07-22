@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Swal from 'sweetalert2';
 import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
@@ -47,9 +48,8 @@ const DailyReport = () => {
 
     const fetchAllReports = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/daily-reports/`);
-            const data = await response.json();
-            setDailyReports(data);
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/`);
+            setDailyReports(response.data);
         } catch (error) {
             console.error(error);
         } finally {
@@ -59,9 +59,8 @@ const DailyReport = () => {
 
     const fetchRecentReports = async (userId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/users/${userId}/reports/`);
-            const data = await response.json();
-            setDailyReports(data);
+            const response = await axios.get(`${API_BASE_URL}/users/${userId}/reports/`);
+            setDailyReports(response.data);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -71,9 +70,8 @@ const DailyReport = () => {
 
     const handleView = async (id) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`);
-            const data = await response.json();
-            setSelectedReport(data);
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`);
+            setSelectedReport(response.data);
             setShowModal(true);
         } catch (error) {
             console.error('Error fetching report:', error);
@@ -103,13 +101,7 @@ const DailyReport = () => {
         if (!result.isConfirmed) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/daily-reports/${id}/`, {
-                method: "DELETE",
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to delete report");
-            }
+            await axios.delete(`${API_BASE_URL}/daily-reports/${id}/`);
 
             setDailyReports((prev) =>
                 prev.filter((report) => report.id !== id)
@@ -168,7 +160,8 @@ const DailyReport = () => {
             name: 'Task Count',
             selector: row =>
                 row.task_category !== 'Holiday' &&
-                    row.task_category !== 'PTO'
+                row.task_category !== 'PTO' &&
+                row.task_category !== 'Company Event'
                     ? (row.number_of_tasks !== 0 ? row.number_of_tasks : '')
                     : '',
             sortable: true,
@@ -178,7 +171,8 @@ const DailyReport = () => {
             name: 'Time Spent',
             selector: row =>
                 row.task_category !== 'Holiday' &&
-                    row.task_category !== 'PTO'
+                row.task_category !== 'PTO' &&
+                row.task_category !== 'Company Event'
                     ? (row.time_spent !== 0 ? row.time_spent : '')
                     : '',
             sortable: true,
@@ -343,6 +337,7 @@ const DailyReport = () => {
                                 {/* Statistics */}
                                 {selectedReport.task_category !== "Holiday" &&
                                     selectedReport.task_category !== "PTO" &&
+                                    selectedReport.task_category !== "Company Event" &&
                                     (
                                         selectedReport.number_of_tasks > 0 ||
                                         selectedReport.time_spent > 0 ||
@@ -401,6 +396,7 @@ const DailyReport = () => {
                                 {/* Task List */}
                                 {selectedReport.task_category !== "Holiday" &&
                                     selectedReport.task_category !== "PTO" &&
+                                    selectedReport.task_category !== "Company Event" &&
                                     selectedReport.task_list?.length > 0 && (
                                         <div className="card shadow-sm border-0">
                                             <div className="card-header bg-white">
