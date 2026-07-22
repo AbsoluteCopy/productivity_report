@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -213,6 +214,99 @@ const ViewUtilizationReport = () => {
             report.task_category === 'PTO'
         );
     }).length;
+
+    const exportUtilizationReport = () => {
+        const REQUIRED_PRODUCTIVE_HOURS = 7.5;
+        const WORK_DAY_HOURS = 8.5;
+        const MINUTES_PER_HOUR = 60;
+
+        const personName = selectedUserObj
+            ? `${selectedUserObj.first_name}_${selectedUserObj.last_name}`
+            : currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : 'User';
+
+        const monthName = new Date(selectedYear, selectedMonth - 1, 1)
+            .toLocaleString('default', { month: 'short' });
+
+        // Title / header info rows
+        const titleRows = [
+            ['EMPLOYEE UTILIZATION REPORT'],
+            [],
+            ['Employee Name', name || '', '', 'Employee Code', employeeCode || '', '', 'Month', new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase(), '', 'Year', selectedYear],
+            [],
+            [
+                'Date', 'Day', 'Week Offs', 'Holidays',
+                'Working Hours (mins)', 'Meetings/Training (mins)',
+                'Working Hours (hrs)', 'Meetings/Training (hrs)',
+                'Total Hours w/o Break', 'Total Hours',
+                'Productive Hours', 'Productive Hours %',
+                'Break Hours', 'Break Hours %',
+                'Over/Down time', 'Over/Downtime %'
+            ]
+        ];
+
+        const dataRows = displayReports.map(report => {
+            const [year, month, day] = report.date.split('-');
+            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+            const dateLabel = `${day}-${dateObj.toLocaleString('en-US', { month: 'short' })}-${String(year).slice(-2)}`;
+            const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+            const isHoliday = report.task_category === 'Holiday';
+            const isPTO = report.task_category === 'PTO';
+            const isWeekend = report.isWeekend;
+            const isSpecialDay = isWeekend || isHoliday || isPTO;
+
+            const workingMins = Number(report.working_minutes || 0);
+            const meetingMins = Number(report.meeting_minutes || 0);
+            const workingHrs = Number((workingMins / MINUTES_PER_HOUR).toFixed(2));
+            const meetingHrs = Number((meetingMins / MINUTES_PER_HOUR).toFixed(2));
+            const productiveHours = isSpecialDay ? '' : workingHrs + meetingHrs;
+            const breakHours = isSpecialDay ? '' : 1;
+            const totalHoursNoBreak = isSpecialDay ? '' : REQUIRED_PRODUCTIVE_HOURS;
+            const totalHours = isSpecialDay ? '' : WORK_DAY_HOURS;
+            const prodPct = isSpecialDay ? '' : `${Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
+            const breakPct = isSpecialDay ? '' : `${Math.round((1 / WORK_DAY_HOURS) * 100)}%`;
+            const overDownTime = isSpecialDay ? '' : Number((productiveHours - REQUIRED_PRODUCTIVE_HOURS).toFixed(2));
+            const overDownPct = isSpecialDay ? '' : `${Math.round(((productiveHours - REQUIRED_PRODUCTIVE_HOURS) / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
+
+            return [
+                dateLabel,
+                dayLabel,
+                isWeekend ? 'Weekend' : '',
+                isHoliday ? (report.task_list?.[0] || 'Holiday') : isPTO ? 'PTO' : '',
+                isSpecialDay ? '' : workingMins,
+                isSpecialDay ? '' : meetingMins,
+                isSpecialDay ? '' : workingHrs,
+                isSpecialDay ? '' : meetingHrs,
+                totalHoursNoBreak,
+                totalHours,
+                productiveHours,
+                prodPct,
+                breakHours,
+                breakPct,
+                overDownTime,
+                overDownPct
+            ];
+        });
+
+        // Footer summary row
+        const footerRow = [
+            `Average Productivity %`, `${Math.round(averageProductivity)}%`,
+            '', '',
+            `Total Productive Hours`, totalProductiveHours.toFixed(2),
+            '', '', '',
+            `Days Worked`, daysWorked,
+            '', '', '',
+            `Holidays or PTOs`, holidaysOrPTOs
+        ];
+
+        const allRows = [...titleRows, ...dataRows, [], footerRow];
+
+        const ws = XLSX.utils.aoa_to_sheet(allRows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Utilization Report');
+        XLSX.writeFile(wb, `Utilization_Report_${personName}_${monthName}_${selectedYear}.xlsx`);
+    };
+
     return (
         <div className="container-fluid px-4 mt-4 mb-5">
             <div className="d-flex align-items-center justify-content-between mb-4">
@@ -261,6 +355,11 @@ const ViewUtilizationReport = () => {
                                 <option key={year} value={year}>{year}</option>
                             ))}
                         </select>
+                    </div>
+                    <div className="d-flex align-items-center border-start ps-3">
+                        <button onClick={exportUtilizationReport} className="btn btn-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '7px 16px', whiteSpace: 'nowrap' }}>
+                            ⬇ Export to Excel
+                        </button>
                     </div>
                 </div>
             </div>
@@ -509,6 +608,7 @@ const ViewUtilizationReport = () => {
                                                 );
                                             })
                                         }
+                                    </tbody>
                                 </table>
                                 </div>
                             )}

@@ -18,6 +18,10 @@ class User(models.Model):
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.id_number})"
 
+    @property
+    def is_authenticated(self):
+        return True
+
     class Meta:
         db_table = 'users'
 

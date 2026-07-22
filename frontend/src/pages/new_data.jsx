@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Swal from 'sweetalert2';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -48,15 +49,15 @@ const NewData = () => {
         try {
             const user = JSON.parse(localStorage.getItem("user"));
 
-            fetch(
-                `${API_BASE_URL}/daily-reports/${id}/?user_id=${user.id}`
-            ).then(response => response.json()).then(data => {
-                setFormData({
-                    date: data.date,
-                    work_type: data.work_type,
-                    user_id: data.user,
-                    holiday_name: data.task_category === 'Holiday' ? data.task_list[0] : ''
-                });
+            axios.get(`${API_BASE_URL}/daily-reports/${id}/?user_id=${user.id}`)
+                .then(response => {
+                    const data = response.data;
+                    setFormData({
+                        date: data.date,
+                        work_type: data.work_type,
+                        user_id: data.user,
+                        holiday_name: (data.task_category === 'Holiday' || data.task_category === 'Company Event') ? data.task_list[0] : ''
+                    });
 
                 if (data.work_type === 'Working') {
                     setCategories([
@@ -66,7 +67,7 @@ const NewData = () => {
                             sub_category: data.sub_category || '',
                             tasks: data.task_list || [],
                             currentTask: '',
-                            timeSpent: data.time_spent?.toString() || '15',
+                            timeSpent: data.time_spent ? Number(data.time_spent) : 15,
                             meetingCount: data.meeting_count || 0
                         }
                     ]);
@@ -211,13 +212,13 @@ const NewData = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Handle PTO and Holiday submissions
-        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday') {
+        // Handle PTO, Holiday, and Company Event submissions
+        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday' || formData.work_type === 'Company Event') {
             const report = {
                 user: formData.user_id,
                 date: formData.date,
                 task_category: formData.work_type,
-                task_list: formData.work_type === 'Holiday' ? [formData.holiday_name] : ['PTO'],
+                task_list: formData.work_type === 'PTO' ? ['PTO'] : [formData.holiday_name],
                 number_of_tasks: 0,
                 time_spent: 0,
                 meeting_count: 0,
@@ -227,31 +228,17 @@ const NewData = () => {
 
             try {
                 const url = isEditMode ? `${API_BASE_URL}/daily-reports/${editId}/` : `${API_BASE_URL}/daily-reports/`;
-                const method = isEditMode ? 'PUT' : 'POST';
+                const request = isEditMode ? axios.put : axios.post;
 
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(report)
+                await request(url, report);
+
+                Swal.fire({
+                    title: 'Success',
+                    text: `${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`,
+                    icon: 'success',
                 });
-
-                if (response.ok) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: `${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`,
-                        icon: 'success',
-                    });
-                    if (!isEditMode) {
-                        resetForm();
-                    }
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
-                        icon: 'error',
-                    });
+                if (!isEditMode) {
+                    resetForm();
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -282,7 +269,7 @@ const NewData = () => {
                     : cat.tasks.length,
                 time_spent: hasTimeSpent && cat.category === 'Others'
                     ? 0
-                    : cat.timeSpent,
+                    : parseInt(cat.timeSpent, 10) || 0,
                 meeting_count: cat.category === 'Meeting'
                     ? (cat.meetingCount || 0)
                     : 0,
@@ -300,57 +287,38 @@ const NewData = () => {
 
         try {
             if (isEditMode) {
-                // Update single report
-                const report = reports[0];
-                const response = await fetch(`${API_BASE_URL}/daily-reports/${editId}/`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(report)
-                });
+                // Update the original report with the first category
+                await axios.put(`${API_BASE_URL}/daily-reports/${editId}/`, reports[0]);
 
-                if (response.ok) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: 'Daily report updated successfully!',
-                        icon: 'success',
-                    });
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Error updating report',
-                        icon: 'error',
-                    });
+                // If the user added extra categories, POST them as new reports
+                if (reports.length > 1) {
+                    const newReports = reports.slice(1).map(report =>
+                        axios.post(`${API_BASE_URL}/daily-reports/`, report)
+                    );
+                    await Promise.all(newReports);
                 }
+
+                await Swal.fire({
+                    title: 'Success',
+                    text: 'Daily report updated successfully!',
+                    icon: 'success',
+                });
+                // Navigate back so the list refreshes and user can't re-submit
+                navigate('/daily_report');
             } else {
                 // Create new reports
                 const promises = reports.map(report =>
-                    fetch(`${API_BASE_URL}/daily-reports/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(report)
-                    })
+                    axios.post(`${API_BASE_URL}/daily-reports/`, report)
                 );
 
-                const responses = await Promise.all(promises);
+                await Promise.all(promises);
 
-                if (responses.every(r => r.ok)) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: 'All daily reports submitted successfully!',
-                        icon: 'success',
-                    });
-                    resetForm();
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Error submitting some reports',
-                        icon: 'error',
-                    });
-                }
+                await Swal.fire({
+                    title: 'Success',
+                    text: 'All daily reports submitted successfully!',
+                    icon: 'success',
+                });
+                resetForm();
             }
         } catch (error) {
             console.error('Error:', error);
@@ -416,14 +384,18 @@ const NewData = () => {
                                                 <input className="form-check-input" type="radio" name="work_type" id="holiday" value="Holiday" checked={formData.work_type === "Holiday"} onChange={handleChange} required />
                                                 <label className="form-check-label" htmlFor="holiday">Holiday</label>
                                             </div>
+                                            <div className="form-check form-check-inline">
+                                                <input className="form-check-input" type="radio" name="work_type" id="company_event" value="Company Event" checked={formData.work_type === "Company Event"} onChange={handleChange} required />
+                                                <label className="form-check-label" htmlFor="company_event">Company Event</label>
+                                            </div>
                                         </div>
                                     </div>
-                                    {formData.work_type === "Holiday" && (
+                                    {(formData.work_type === "Holiday" || formData.work_type === "Company Event") && (
                                         <div className="col-12">
                                             <div className="col-12">
                                                 <div className="mb-3">
                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                        Holiday Name *
+                                                        {formData.work_type === "Company Event" ? "Event Name *" : "Holiday Name *"}
                                                     </label>
                                                     <input
                                                         type="text"
@@ -525,19 +497,34 @@ const NewData = () => {
                                                             </div>
                                                         )}
                                                         {cat.category === 'Meeting' && (
-                                                            <div className="mb-3 col-lg-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes)
-                                                                </label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={cat.meetingCount}
-                                                                    onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
-                                                                    min="0"
-                                                                    placeholder="0"
-                                                                    className="form-control"
-                                                                />
-                                                            </div>
+                                                            <>
+                                                                <div className="mb-3 col-lg-3">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Time Spent (Minutes)
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.timeSpent}
+                                                                        onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                        min="0"
+                                                                        placeholder="0"
+                                                                        className="form-control"
+                                                                    />
+                                                                </div>
+                                                                <div className="mb-3 col-lg-3">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        No. of Meetings
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.meetingCount}
+                                                                        onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
+                                                                        min="0"
+                                                                        placeholder="0"
+                                                                        className="form-control"
+                                                                    />
+                                                                </div>
+                                                            </>
                                                         )}
                                                         <div className="mb-3 col-lg-8">
                                                             <label className="form-label fw-semibold" style={{ color: '#065d48' }}>

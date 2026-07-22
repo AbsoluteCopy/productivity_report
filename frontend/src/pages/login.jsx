@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/login.css";
 
@@ -12,6 +12,12 @@ const Login = () => {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Clear any stuck/invalid tokens from previous sessions/databases
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -55,11 +61,12 @@ const Login = () => {
                 {/* Logo */}
                 <div>
                     <img
-                        src="/images/NeitClem Sticker.png"
+                        src="/images/gratus_logo.jpg"
                         alt="Logo"
                         style={{
-                            width: "90px",
-                            height: "90px",
+                            width: "250px",
+                            height: "auto",
+                            marginBottom: "15px",
                             objectFit: "contain",
                         }}
                         className="logo"
