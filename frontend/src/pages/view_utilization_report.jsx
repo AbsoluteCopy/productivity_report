@@ -70,7 +70,11 @@ const ViewUtilizationReport = () => {
     const fetchUsers = async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/users/`);
-            setUsers(Array.isArray(res.data) ? res.data : []);
+            if (Array.isArray(res.data)) {
+                setUsers(res.data.filter(u => u.role === 'employee'));
+            } else {
+                setUsers([]);
+            }
         } catch (error) {
             console.error("Error fetching users:", error);
         }
@@ -265,8 +269,8 @@ const ViewUtilizationReport = () => {
             const totalHours = isSpecialDay ? '' : WORK_DAY_HOURS;
             const prodPct = isSpecialDay ? '' : `${Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
             const breakPct = isSpecialDay ? '' : `${Math.round((1 / WORK_DAY_HOURS) * 100)}%`;
-            const overDownTime = isSpecialDay ? '' : Number((productiveHours - REQUIRED_PRODUCTIVE_HOURS).toFixed(2));
-            const overDownPct = isSpecialDay ? '' : `${Math.round(((productiveHours - REQUIRED_PRODUCTIVE_HOURS) / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
+            const overDownTime = isSpecialDay ? '' : Number((REQUIRED_PRODUCTIVE_HOURS - productiveHours).toFixed(2));
+            const overDownPct = isSpecialDay ? '' : `${Math.round(((REQUIRED_PRODUCTIVE_HOURS - productiveHours) / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
 
             return [
                 dateLabel,
@@ -464,8 +468,8 @@ const ViewUtilizationReport = () => {
                                             <th className="py-2 border-0 text-center">Prod.<br />%</th>
                                             <th className="py-2 border-0 text-center">Break<br />Hrs</th>
                                             <th className="py-2 border-0 text-center">Break<br />%</th>
-                                            <th className="py-2 border-0 text-center">Var.<br />Hrs</th>
-                                            <th className="py-2 border-0 text-center pe-4">Var.<br />%</th>
+                                            <th className="py-2 border-0 text-center text-nowrap">Var. Hrs</th>
+                                            <th className="py-2 border-0 text-center text-nowrap pe-4">Var. %</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -592,7 +596,7 @@ const ViewUtilizationReport = () => {
                                                         <td className="text-center">
                                                             {!isSpecialDay ? (
                                                                 <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
-                                                                    {(productiveHours - totalHoursNoBreak).toFixed(2)}
+                                                                    {(totalHoursNoBreak - productiveHours).toFixed(2)}
                                                                 </span>
                                                             ) : ''}
                                                         </td>
@@ -600,7 +604,7 @@ const ViewUtilizationReport = () => {
                                                         <td className="text-center pe-4">
                                                             {!isSpecialDay ? (
                                                                 <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
-                                                                    {(Math.round(((productiveHours - totalHoursNoBreak) / totalHoursNoBreak) * 100))} <i className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? "bi bi-arrow-up-short" : "bi bi-arrow-down-short"}></i>
+                                                                    {Math.round(((totalHoursNoBreak - productiveHours) / totalHoursNoBreak) * 100)}% <i className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? "bi bi-arrow-up-short" : "bi bi-arrow-down-short"}></i>
                                                                 </span>
                                                             ) : ''}
                                                         </td>
@@ -609,6 +613,21 @@ const ViewUtilizationReport = () => {
                                             })
                                         }
                                     </tbody>
+                                    <tfoot style={{ backgroundColor: '#4a6b5d', color: 'white' }}>
+                                        <tr className="align-middle text-center" style={{ height: '50px' }}>
+                                            <td colSpan={5} className="text-end pe-3 fw-bold">Average Productivity %</td>
+                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{Math.round(averageProductivity)}%</td>
+                                            
+                                            <td colSpan={3} className="text-end pe-3 fw-bold">Total Productive Hours</td>
+                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{totalProductiveHours.toFixed(2)}</td>
+
+                                            <td colSpan={2} className="text-end pe-3 fw-bold">Days Worked</td>
+                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{daysWorked}</td>
+
+                                            <td colSpan={2} className="text-end pe-3 fw-bold">Holidays or PTOs</td>
+                                            <td colSpan={1} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{holidaysOrPTOs}</td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                                 </div>
                             )}
