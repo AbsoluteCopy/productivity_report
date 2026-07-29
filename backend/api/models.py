@@ -14,6 +14,7 @@ class User(models.Model):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='employee')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    task_list = models.JSONField(default=list)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.id_number})"
@@ -46,3 +47,16 @@ class DailyReport(models.Model):
     class Meta:
         db_table = 'daily_reports'
         ordering = ['-date']
+
+
+class TaskCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=10, choices=[('active', 'Active'), ('inactive', 'Inactive')], default='active')
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'task_categories'

@@ -21,10 +21,29 @@ const ManageAccounts = () => {
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(false);
+    const [taskCategories, setTaskCategories] = useState([]);
+    const [showTaskModal, setShowTaskModal] = useState(false);
+    const [selectedCategories, setSelectedCategories] = useState([]);
+    const [currentUserId, setCurrentUserId] = useState(null);
 
     useEffect(() => {
         fetchUsers();
+        fetchTaskCategories();
     }, []);
+
+    const fetchTaskCategories = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/task-categories/`);
+            setTaskCategories(res.data);
+        } catch (err) {
+            console.error(err);
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || "Failed to fetch task categories.",
+            });
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -144,6 +163,51 @@ const ManageAccounts = () => {
         });
     };
 
+    const manageTask = (userId) => {
+        const user = users.find(u => u.id === userId);
+        if (user) {
+            setCurrentUserId(userId);
+            setSelectedCategories(user.task_list || []);
+            setShowTaskModal(true);
+        }
+    };
+
+    const saveTaskCategories = async () => {
+        try {
+            await axios.put(`${API_URL}${currentUserId}/`, {
+                task_list: selectedCategories
+            });
+            fetchUsers();
+            setShowTaskModal(false);
+            Swal.fire({
+                icon: "success",
+                title: "Success",
+                text: "Task categories saved successfully!",
+                toast: true,
+                position: "top-end",
+                showConfirmButton: false,
+                timer: 3000
+            });
+        } catch (err) {
+            console.error(err);
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || "Something went wrong.",
+            });
+        }
+    };
+
+    const handleCategoryToggle = (categoryId) => {
+        setSelectedCategories(prev => {
+            if (prev.includes(categoryId)) {
+                return prev.filter(id => id !== categoryId);
+            } else {
+                return [...prev, categoryId];
+            }
+        });
+    };
+
     const columns = [
         {
             name: "ID Number",
@@ -178,6 +242,12 @@ const ManageAccounts = () => {
             name: "Actions",
             cell: row => (
                 <>
+                    <button
+                        className="btn btn-info btn-sm me-2"
+                        onClick={() => manageTask(row.id)}
+                    >
+                        Manage Task
+                    </button>
                     <button
                         className="btn btn-primary btn-sm me-2"
                         data-bs-toggle="modal"
@@ -366,6 +436,68 @@ const ManageAccounts = () => {
 
                     </div>
 
+                </div>
+            </div>
+
+            {/* Task Category Modal */}
+            <div
+                className={`modal fade ${showTaskModal ? 'show' : ''}`}
+                style={{ display: showTaskModal ? 'block' : 'none' }}
+                tabIndex="-1"
+            >
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h5 className="modal-title">Manage Task Categories</h5>
+                            <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setShowTaskModal(false)}
+                            ></button>
+                        </div>
+                        <div className="modal-body">
+                            {taskCategories.length === 0 ? (
+                                <p className="text-muted">No task categories available.</p>
+                            ) : (
+                                <div className="list-group">
+                                    {taskCategories.map(category => (
+                                        <div key={category.id} className="list-group-item">
+                                            <div className="form-check">
+                                                <input
+                                                    className="form-check-input"
+                                                    type="checkbox"
+                                                    id={`category-${category.id}`}
+                                                    checked={selectedCategories.includes(category.id)}
+                                                    onChange={() => handleCategoryToggle(category.id)}
+                                                />
+                                                <label
+                                                    className="form-check-label"
+                                                    htmlFor={`category-${category.id}`}
+                                                >
+                                                    {category.name}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setShowTaskModal(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={saveTaskCategories}
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

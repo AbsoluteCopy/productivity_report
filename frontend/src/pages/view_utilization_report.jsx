@@ -81,6 +81,9 @@ const ViewUtilizationReport = () => {
     };
 
     const fetchReports = async (user, year, month, userId = "") => {
+        if (userId === '') {
+            return;
+        }
         setLoading(true);
         try {
             const params = new URLSearchParams({ year, month });
@@ -327,9 +330,12 @@ const ViewUtilizationReport = () => {
                         <div className="d-flex align-items-center">
                             <i className="bi bi-person-badge text-muted me-2"></i>
                             <select className="form-select border-0 bg-light rounded-3" value={selectedUser}
-                                onChange={e => setSelectedUser(e.target.value)}
+                                onChange={e => {
+                                    setDailyReports([]);
+                                    setSelectedUser(e.target.value);
+                                }}
                             >
-                                <option value="">All Users</option>
+                                <option value="">Select</option>
                                 {users.map(user => (
                                     <option key={user.id} value={user.id}>
                                         {user.first_name} {user.last_name}
@@ -338,7 +344,7 @@ const ViewUtilizationReport = () => {
                             </select>
                         </div>
                     )}
-                    
+
                     <div className="d-flex align-items-center border-start ps-3">
                         <i className="bi bi-calendar2-month text-muted me-2"></i>
                         <select className="form-select border-0 bg-light rounded-3" value={selectedMonth}
@@ -434,201 +440,205 @@ const ViewUtilizationReport = () => {
                                     </div>
                                     <p className="mt-2">Loading reports...</p>
                                 </div>
+                            ) : dailyReports.length === 0 ? (
+                                <div className="text-center py-5">
+                                    <p className="text-muted">No reports available for this period.</p>
+                                </div>
                             ) : (
                                 <div className="table-responsive">
-                                <table className="table table-hover table-sm mb-0 font-12 align-middle">
-                                    <thead style={{ backgroundColor: '#f8f9fa' }}>
-                                        <tr className='middle border-bottom'>
-                                            <th className='text-muted fw-semibold py-3 ps-4' colSpan={3}>EMPLOYEE NAME</th>
-                                            <th className='fw-bold text-dark py-3' colSpan={3}>{name ? name.toUpperCase() : 'N/A'}</th>
-                                            <th>&nbsp;</th>
-                                            <th className='text-muted fw-semibold py-3' colSpan={2}>EMPLOYEE CODE</th>
-                                            <th className='fw-bold text-dark py-3' colSpan={2}>{employeeCode || 'N/A'}</th>
-                                            <th>&nbsp;</th>
-                                            <th className='text-muted fw-semibold py-3' colSpan={2}>PERIOD</th>
-                                            <th className='fw-bold text-dark py-3' colSpan={4}>
-                                                {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase()} {selectedYear}
-                                            </th>
-                                        </tr>
-                                        <tr className='middle text-muted' style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                                            <th className="ps-4 py-2 border-0">Date</th>
-                                            <th className="py-2 border-0">Day</th>
-                                            <th className="py-2 border-0">Status</th>
-                                            <th className="py-2 border-0"></th>
-                                            <th className="py-2 border-0"></th>
-                                            <th className="py-2 border-0 text-center">Work<br />(mins)</th>
-                                            <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
-                                            <th className="py-2 border-0 text-center">Work<br />(hrs)</th>
-                                            <th className="py-2 border-0 text-center">Meetings<br />(hrs)</th>
-                                            <th className="py-2 border-0"></th>
-                                            <th className="py-2 border-0 text-center">Req. Hrs<br />w/o Break</th>
-                                            <th className="py-2 border-0 text-center">Req. Hrs<br />Total</th>
-                                            <th className="py-2 border-0"></th>
-                                            <th className="py-2 border-0 text-center">Prod.<br />Hrs</th>
-                                            <th className="py-2 border-0 text-center">Prod.<br />%</th>
-                                            <th className="py-2 border-0 text-center">Break<br />Hrs</th>
-                                            <th className="py-2 border-0 text-center">Break<br />%</th>
-                                            <th className="py-2 border-0 text-center text-nowrap">Var. Hrs</th>
-                                            <th className="py-2 border-0 text-center text-nowrap pe-4">Var. %</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {
-                                            displayReports.map((report, index) => {
+                                    <table className="table table-hover table-sm mb-0 font-12 align-middle">
+                                        <thead style={{ backgroundColor: '#f8f9fa' }}>
+                                            <tr className='middle border-bottom'>
+                                                <th className='text-muted fw-semibold py-3 ps-4' colSpan={3}>EMPLOYEE NAME</th>
+                                                <th className='fw-bold text-dark py-3' colSpan={3}>{name ? name.toUpperCase() : 'N/A'}</th>
+                                                <th>&nbsp;</th>
+                                                <th className='text-muted fw-semibold py-3' colSpan={2}>EMPLOYEE CODE</th>
+                                                <th className='fw-bold text-dark py-3' colSpan={2}>{employeeCode || 'N/A'}</th>
+                                                <th>&nbsp;</th>
+                                                <th className='text-muted fw-semibold py-3' colSpan={2}>PERIOD</th>
+                                                <th className='fw-bold text-dark py-3' colSpan={4}>
+                                                    {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase()} {selectedYear}
+                                                </th>
+                                            </tr>
+                                            <tr className='middle text-muted' style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                                <th className="ps-4 py-2 border-0">Date</th>
+                                                <th className="py-2 border-0">Day</th>
+                                                <th className="py-2 border-0">Status</th>
+                                                <th className="py-2 border-0"></th>
+                                                <th className="py-2 border-0"></th>
+                                                <th className="py-2 border-0 text-center">Work<br />(mins)</th>
+                                                <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
+                                                <th className="py-2 border-0 text-center">Work<br />(hrs)</th>
+                                                <th className="py-2 border-0 text-center">Meetings<br />(hrs)</th>
+                                                <th className="py-2 border-0"></th>
+                                                <th className="py-2 border-0 text-center">Req. Hrs<br />w/o Break</th>
+                                                <th className="py-2 border-0 text-center">Req. Hrs<br />Total</th>
+                                                <th className="py-2 border-0"></th>
+                                                <th className="py-2 border-0 text-center">Prod.<br />Hrs</th>
+                                                <th className="py-2 border-0 text-center">Prod.<br />%</th>
+                                                <th className="py-2 border-0 text-center">Break<br />Hrs</th>
+                                                <th className="py-2 border-0 text-center">Break<br />%</th>
+                                                <th className="py-2 border-0 text-center text-nowrap">Var. Hrs</th>
+                                                <th className="py-2 border-0 text-center text-nowrap pe-4">Var. %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {
+                                                displayReports.map((report, index) => {
 
-                                                const [year, month, day] = report.date.split('-');
+                                                    const [year, month, day] = report.date.split('-');
 
-                                                const date = new Date(
-                                                    year,
-                                                    month - 1,
-                                                    day
-                                                );
-                                                const isHoliday = report.task_category === 'Holiday';
-                                                const isPTO = report.task_category === 'PTO';
-                                                const isSpecialDay = report.isWeekend || isHoliday || isPTO;
-                                                const previousReport = displayReports[index - 1];
+                                                    const date = new Date(
+                                                        year,
+                                                        month - 1,
+                                                        day
+                                                    );
+                                                    const isHoliday = report.task_category === 'Holiday';
+                                                    const isPTO = report.task_category === 'PTO';
+                                                    const isSpecialDay = report.isWeekend || isHoliday || isPTO;
+                                                    const previousReport = displayReports[index - 1];
 
-                                                const showDate =
-                                                    !previousReport ||
-                                                    previousReport.date !== report.date;
+                                                    const showDate =
+                                                        !previousReport ||
+                                                        previousReport.date !== report.date;
 
-                                                const workingHours =
-                                                    report.working_minutes
-                                                        ? Number((report.working_minutes / MINUTES_PER_HOUR).toFixed(2))
-                                                        : 0;
+                                                    const workingHours =
+                                                        report.working_minutes
+                                                            ? Number((report.working_minutes / MINUTES_PER_HOUR).toFixed(2))
+                                                            : 0;
 
-                                                const meetingHours =
-                                                    report.meeting_minutes
-                                                        ? Number((report.meeting_minutes / MINUTES_PER_HOUR).toFixed(2))
-                                                        : 0;
-                                                const totalRequiredHours = WORK_DAY_HOURS;
-                                                const productiveHours = isSpecialDay
-                                                    ? 0
-                                                    : workingHours + meetingHours;
+                                                    const meetingHours =
+                                                        report.meeting_minutes
+                                                            ? Number((report.meeting_minutes / MINUTES_PER_HOUR).toFixed(2))
+                                                            : 0;
+                                                    const totalRequiredHours = WORK_DAY_HOURS;
+                                                    const productiveHours = isSpecialDay
+                                                        ? 0
+                                                        : workingHours + meetingHours;
 
-                                                const breakHours = isSpecialDay
-                                                    ? 0
-                                                    : 1;
+                                                    const breakHours = isSpecialDay
+                                                        ? 0
+                                                        : 1;
 
-                                                const overDownTime = isSpecialDay
-                                                    ? 0
-                                                    : productiveHours - REQUIRED_PRODUCTIVE_HOURS;
-                                                const totalHoursNoBreak = isSpecialDay ? '' : REQUIRED_PRODUCTIVE_HOURS;
-                                                const overTime = overDownTime > 0 ? overDownTime : 0;
-                                                const downTime = overDownTime < 0 ? Math.abs(overDownTime) : 0;
-                                                const breakPercentage =
-                                                    breakHours > 0
-                                                        ? (breakHours / totalRequiredHours) * 100
-                                                        : 0;
-                                                return (
-                                                    <tr key={`${report.date}-${index}`}
-                                                        className={
-                                                            report.isWeekend
-                                                                ? "table-warning middle"
-                                                                : isHoliday
-                                                                    ? "table-danger middle"
-                                                                    : isPTO
-                                                                        ? "table-info middle"
-                                                                        : "middle"
-                                                        }
-                                                    >
-                                                        <td className='fitcell ps-4 fw-medium text-dark'>
-                                                            {showDate &&
-                                                                `${date.getDate()}-${date.toLocaleString(
-                                                                    'en-US',
-                                                                    { month: 'short' }
-                                                                )}-${String(date.getFullYear()).slice(-2)}`
+                                                    const overDownTime = isSpecialDay
+                                                        ? 0
+                                                        : productiveHours - REQUIRED_PRODUCTIVE_HOURS;
+                                                    const totalHoursNoBreak = isSpecialDay ? '' : REQUIRED_PRODUCTIVE_HOURS;
+                                                    const overTime = overDownTime > 0 ? overDownTime : 0;
+                                                    const downTime = overDownTime < 0 ? Math.abs(overDownTime) : 0;
+                                                    const breakPercentage =
+                                                        breakHours > 0
+                                                            ? (breakHours / totalRequiredHours) * 100
+                                                            : 0;
+                                                    return (
+                                                        <tr key={`${report.date}-${index}`}
+                                                            className={
+                                                                report.isWeekend
+                                                                    ? "table-warning middle"
+                                                                    : isHoliday
+                                                                        ? "table-danger middle"
+                                                                        : isPTO
+                                                                            ? "table-info middle"
+                                                                            : "middle"
                                                             }
-                                                        </td>
-                                                        <td className="text-muted">
-                                                            {showDate &&
-                                                                date.toLocaleDateString(
-                                                                    'en-US',
-                                                                    { weekday: 'short' }
-                                                                )
-                                                            }
-                                                        </td>
-                                                        <td>
-                                                            {report.isWeekend ? <span className="badge bg-warning text-dark">Weekend</span> : ''}
-                                                            {isHoliday ? <span className="badge bg-danger">Holiday</span> : ''}
-                                                            {isPTO ? <span className="badge bg-info">PTO</span> : ''}
-                                                        </td>
-                                                        <td></td>
-                                                        <td></td>
-                                                        <td className="text-center">
-                                                            {!isSpecialDay ? report.working_minutes ?? '' : ''}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
-                                                        </td>
-                                                        <td className="text-center fw-medium">
-                                                            {!isSpecialDay ? workingHours.toFixed(2) : ''}
-                                                        </td>
-                                                        <td className="text-center fw-medium">
-                                                            {!isSpecialDay ? meetingHours.toFixed(2) : ''}
-                                                        </td>
-                                                        <td></td>
-                                                        <td className="text-center text-muted">
-                                                            {!isSpecialDay ? totalHoursNoBreak : ''}
-                                                        </td>
-                                                        <td className="text-center text-muted">
-                                                            {!isSpecialDay ? totalRequiredHours : ''}
-                                                        </td>
-                                                        <td></td>
-                                                        <td className="text-center fw-bold" style={{ color: '#055d47' }}>
-                                                            {!isSpecialDay ? productiveHours.toFixed(2) : ''}
-                                                        </td>
-                                                        <td className="text-center fw-bold">
-                                                            {
-                                                                !isSpecialDay ? (
+                                                        >
+                                                            <td className='fitcell ps-4 fw-medium text-dark'>
+                                                                {showDate &&
+                                                                    `${date.getDate()}-${date.toLocaleString(
+                                                                        'en-US',
+                                                                        { month: 'short' }
+                                                                    )}-${String(date.getFullYear()).slice(-2)}`
+                                                                }
+                                                            </td>
+                                                            <td className="text-muted">
+                                                                {showDate &&
+                                                                    date.toLocaleDateString(
+                                                                        'en-US',
+                                                                        { weekday: 'short' }
+                                                                    )
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                {report.isWeekend ? <span className="badge bg-warning text-dark">Weekend</span> : ''}
+                                                                {isHoliday ? <span className="badge bg-danger">Holiday</span> : ''}
+                                                                {isPTO ? <span className="badge bg-info">PTO</span> : ''}
+                                                            </td>
+                                                            <td></td>
+                                                            <td></td>
+                                                            <td className="text-center">
+                                                                {!isSpecialDay ? report.working_minutes ?? '' : ''}
+                                                            </td>
+                                                            <td className="text-center">
+                                                                {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
+                                                            </td>
+                                                            <td className="text-center fw-medium">
+                                                                {!isSpecialDay ? workingHours.toFixed(2) : ''}
+                                                            </td>
+                                                            <td className="text-center fw-medium">
+                                                                {!isSpecialDay ? meetingHours.toFixed(2) : ''}
+                                                            </td>
+                                                            <td></td>
+                                                            <td className="text-center text-muted">
+                                                                {!isSpecialDay ? totalHoursNoBreak : ''}
+                                                            </td>
+                                                            <td className="text-center text-muted">
+                                                                {!isSpecialDay ? totalRequiredHours : ''}
+                                                            </td>
+                                                            <td></td>
+                                                            <td className="text-center fw-bold" style={{ color: '#055d47' }}>
+                                                                {!isSpecialDay ? productiveHours.toFixed(2) : ''}
+                                                            </td>
+                                                            <td className="text-center fw-bold">
+                                                                {
+                                                                    !isSpecialDay ? (
+                                                                        <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
+                                                                            {Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%
+                                                                        </span>
+                                                                    ) : ''
+                                                                }
+                                                            </td>
+                                                            <td className="text-center text-muted">
+                                                                {!isSpecialDay ? (breakHours > 0 ? breakHours : 0) : ''}
+                                                            </td>
+                                                            <td className="text-center text-muted">
+                                                                {!isSpecialDay ? (Math.round(breakPercentage * 100) / 100).toFixed(0) + '%' : ''}
+                                                            </td>
+                                                            <td className="text-center">
+                                                                {!isSpecialDay ? (
                                                                     <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
-                                                                        {Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%
+                                                                        {(totalHoursNoBreak - productiveHours).toFixed(2)}
                                                                     </span>
-                                                                ) : ''
-                                                            }
-                                                        </td>
-                                                        <td className="text-center text-muted">
-                                                            {!isSpecialDay ? (breakHours > 0 ? breakHours : 0) : ''}
-                                                        </td>
-                                                        <td className="text-center text-muted">
-                                                            {!isSpecialDay ? (Math.round(breakPercentage * 100) / 100).toFixed(0) + '%' : ''}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            {!isSpecialDay ? (
-                                                                <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success' : 'text-danger'}>
-                                                                    {(totalHoursNoBreak - productiveHours).toFixed(2)}
-                                                                </span>
-                                                            ) : ''}
-                                                        </td>
+                                                                ) : ''}
+                                                            </td>
 
-                                                        <td className="text-center pe-4">
-                                                            {!isSpecialDay ? (
-                                                                <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
-                                                                    {Math.round(((totalHoursNoBreak - productiveHours) / totalHoursNoBreak) * 100)}% <i className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? "bi bi-arrow-up-short" : "bi bi-arrow-down-short"}></i>
-                                                                </span>
-                                                            ) : ''}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
-                                        }
-                                    </tbody>
-                                    <tfoot style={{ backgroundColor: '#4a6b5d', color: 'white' }}>
-                                        <tr className="align-middle text-center" style={{ height: '50px' }}>
-                                            <td colSpan={5} className="text-end pe-3 fw-bold">Average Productivity %</td>
-                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{Math.round(averageProductivity)}%</td>
-                                            
-                                            <td colSpan={3} className="text-end pe-3 fw-bold">Total Productive Hours</td>
-                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{totalProductiveHours.toFixed(2)}</td>
+                                                            <td className="text-center pe-4">
+                                                                {!isSpecialDay ? (
+                                                                    <span className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
+                                                                        {Math.round(((totalHoursNoBreak - productiveHours) / totalHoursNoBreak) * 100)}% <i className={productiveHours >= REQUIRED_PRODUCTIVE_HOURS ? "bi bi-arrow-up-short" : "bi bi-arrow-down-short"}></i>
+                                                                    </span>
+                                                                ) : ''}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            }
+                                        </tbody>
+                                        <tfoot style={{ backgroundColor: '#4a6b5d', color: 'white' }}>
+                                            <tr className="align-middle text-center" style={{ height: '50px' }}>
+                                                <td colSpan={5} className="text-end pe-3 fw-bold">Average Productivity %</td>
+                                                <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{Math.round(averageProductivity)}%</td>
 
-                                            <td colSpan={2} className="text-end pe-3 fw-bold">Days Worked</td>
-                                            <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{daysWorked}</td>
+                                                <td colSpan={3} className="text-end pe-3 fw-bold">Total Productive Hours</td>
+                                                <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{totalProductiveHours.toFixed(2)}</td>
 
-                                            <td colSpan={2} className="text-end pe-3 fw-bold">Holidays or PTOs</td>
-                                            <td colSpan={1} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{holidaysOrPTOs}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                                                <td colSpan={2} className="text-end pe-3 fw-bold">Days Worked</td>
+                                                <td colSpan={2} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{daysWorked}</td>
+
+                                                <td colSpan={2} className="text-end pe-3 fw-bold">Holidays or PTOs</td>
+                                                <td colSpan={1} className="bg-white text-danger fw-bold fs-6 border-start border-end border-2 border-dark">{holidaysOrPTOs}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
                                 </div>
                             )}
                         </div>

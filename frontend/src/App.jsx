@@ -12,6 +12,7 @@ import DailyReport from './pages/daily_report';
 import ViewReport from './pages/view_report';
 import ViewUtilizationReport from './pages/view_utilization_report';
 import ManageAccounts from './pages/manage_accounts';
+import ManageTaskCategory from './pages/manage_task_category';
 import NotFound from './pages/404';
 
 function App() {
@@ -37,6 +38,7 @@ function AppContent() {
             <Route path="/view_report" element={<ViewReport />} />
             <Route path="/view_utilization_report" element={<ViewUtilizationReport />} />
             <Route path="/manage_accounts" element={<ManageAccounts />} />
+            <Route path="/manage_task_category" element={<ManageTaskCategory />} />
           </Route>
         </Route>
         <Route path="/" element={<Initial />} />

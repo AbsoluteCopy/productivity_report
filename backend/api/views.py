@@ -9,8 +9,8 @@ from django.conf import settings
 import jwt
 import datetime
 
-from .models import User, DailyReport
-from .serializers import UserSerializer, DailyReportSerializer
+from .models import User, DailyReport, TaskCategory
+from .serializers import UserSerializer, DailyReportSerializer, TaskCategorySerializer
 from .permissions import IsAdmin
 
 
@@ -111,6 +111,34 @@ class UserDetailView(APIView):
             user.delete()
             return Response({"message": "User deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_id = request.user.id if hasattr(request, 'user') and request.user else None
+        if not user_id:
+            # Try to get user_id from JWT token
+            token = request.META.get('HTTP_AUTHORIZATION', '').replace('Bearer ', '')
+            if token:
+                try:
+                    import jwt
+                    from django.conf import settings
+                    decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+                    user_id = decoded.get('user_id')
+                except:
+                    pass
+        
+        if user_id:
+            try:
+                user = User.objects.get(pk=user_id)
+                serializer = UserSerializer(user)
+                return Response(serializer.data)
+            except User.DoesNotExist:
+                return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class DailyReportListView(APIView):
@@ -251,3 +279,53 @@ class UserDailyReportsView(APIView):
         )
 
         return Response(serializer.data)
+
+
+class TaskCategoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        categories = TaskCategory.objects.all()
+        serializer = TaskCategorySerializer(categories, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = TaskCategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TaskCategoryDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return TaskCategory.objects.get(pk=pk)
+        except TaskCategory.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        category = self.get_object(pk)
+        if category:
+            serializer = TaskCategorySerializer(category)
+            return Response(serializer.data)
+        return Response({"error": "Task category not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        category = self.get_object(pk)
+        if category:
+            serializer = TaskCategorySerializer(category, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Task category not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        category = self.get_object(pk)
+        if category:
+            category.delete()
+            return Response({"message": "Task category deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"error": "Task category not found"}, status=status.HTTP_404_NOT_FOUND)

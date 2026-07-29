@@ -27,8 +27,9 @@ const NewData = () => {
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
-        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '', sub_category: '' }
+        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
     ]);
+    const [taskCategories, setTaskCategories] = useState([]);
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
@@ -45,6 +46,43 @@ const NewData = () => {
         }
     }, [editId]);
 
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user) return;
+
+            // Fetch current user data to get their task_list
+            const userRes = await axios.get(`${API_BASE_URL}/users/me/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            const userTaskList = userRes.data.task_list || [];
+
+            // Fetch all task categories
+            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`);
+            const allCategories = categoriesRes.data;
+
+            // Filter categories to only include those in user's task_list
+            const filteredCategories = allCategories.filter(category =>
+                userTaskList.includes(category.id)
+            );
+
+            setTaskCategories(filteredCategories);
+        } catch (err) {
+            console.error(err);
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || "Something went wrong.",
+            });
+        }
+    };
+
     const fetchReportForEdit = async (id) => {
         try {
             const user = JSON.parse(localStorage.getItem("user"));
@@ -59,20 +97,20 @@ const NewData = () => {
                         holiday_name: (data.task_category === 'Holiday' || data.task_category === 'Company Event') ? data.task_list[0] : ''
                     });
 
-                if (data.work_type === 'Working') {
-                    setCategories([
-                        {
-                            id: 1,
-                            category: data.task_category,
-                            sub_category: data.sub_category || '',
-                            tasks: data.task_list || [],
-                            currentTask: '',
-                            timeSpent: data.time_spent ? Number(data.time_spent) : 15,
-                            meetingCount: data.meeting_count || 0
-                        }
-                    ]);
-                }
-            });
+                    if (data.work_type === 'Working') {
+                        setCategories([
+                            {
+                                id: 1,
+                                category: data.task_category,
+                                sub_category: data.sub_category || '',
+                                tasks: data.task_list || [],
+                                currentTask: '',
+                                timeSpent: data.time_spent ? Number(data.time_spent) : 15,
+                                meetingCount: data.meeting_count || 0
+                            }
+                        ]);
+                    }
+                });
         } catch (error) {
             console.error('Error fetching report:', error);
         }
@@ -160,6 +198,12 @@ const NewData = () => {
         ));
     };
 
+    const handleMeetingTitleChange = (id, value) => {
+        setCategories(prev => prev.map(cat =>
+            cat.id === id ? { ...cat, meetingTitle: value } : cat
+        ));
+    };
+
     const handleMeetingCountChange = (id, value) => {
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, meetingCount: parseInt(value) || 0 } : cat
@@ -175,7 +219,7 @@ const NewData = () => {
     const addCategory = () => {
         setCategories(prev => [
             ...prev,
-            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0, sub_category: '' }
+            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0, sub_category: '', meetingTitle: '' }
         ]);
     };
 
@@ -204,7 +248,8 @@ const NewData = () => {
                 currentTask: '',
                 timeSpent: '15',
                 meetingCount: 0,
-                sub_category: ''
+                sub_category: '',
+                meetingTitle: ''
             }
         ]);
     };
@@ -252,21 +297,30 @@ const NewData = () => {
         }
 
         // Handle Working submissions
+        console.log(categories);
         const reports = categories
             .filter(cat =>
                 cat.category &&
-                (cat.tasks.length > 0 || cat.category === 'Others')
+                (
+                    cat.tasks.length > 0 ||
+                    cat.category === 'Others' ||
+                    (cat.category === 'Meeting' && cat.meetingTitle.trim() !== '')
+                )
             )
             .map(cat => ({
                 user: formData.user_id,
                 date: formData.date,
                 task_category: cat.category,
-                task_list: cat.category === 'Others' && cat.tasks.length === 0
-                    ? ['']
-                    : cat.tasks,
-                number_of_tasks: cat.category === 'Others'
-                    ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
-                    : cat.tasks.length,
+                task_list: cat.category === 'Meeting'
+                    ? [cat.meetingTitle]
+                    : (cat.category === 'Others' && cat.tasks.length === 0
+                        ? ['']
+                        : cat.tasks),
+                number_of_tasks: cat.category === 'Meeting'
+                    ? (cat.meetingTitle.trim() ? 1 : 0)
+                    : cat.category === 'Others'
+                        ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
+                        : cat.tasks.length,
                 time_spent: hasTimeSpent && cat.category === 'Others'
                     ? 0
                     : parseInt(cat.timeSpent, 10) || 0,
@@ -277,6 +331,7 @@ const NewData = () => {
                 sub_category: cat.sub_category
             }));
         if (reports.length === 0) {
+            console.log(reports);
             Swal.fire({
                 title: 'Error',
                 text: 'Please add at least one category with tasks',
@@ -441,9 +496,11 @@ const NewData = () => {
                                                                 className="form-select"
                                                             >
                                                                 <option value="" disabled>Select a category</option>
-                                                                {categoryOptions.map(option => (
-                                                                    <option key={option} value={option}>{option}</option>
+                                                                {taskCategories.map(category => (
+                                                                    <option key={category.id} value={category.name}>{category.name}</option>
                                                                 ))}
+                                                                <option value="Meeting">Meeting</option>
+                                                                <option value="Others">Others</option>
                                                             </select>
                                                         </div>
                                                         {cat.category === 'Others' && (
@@ -451,13 +508,9 @@ const NewData = () => {
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                     Other Category
                                                                 </label>
-                                                                <input
-                                                                    type="text"
-                                                                    name='sub_category'
-                                                                    value={cat.sub_category}
+                                                                <input type="text" name='sub_category' value={cat.sub_category}
                                                                     onChange={(e) => handleSubCategoryChange(cat.id, e.target.value)}
-                                                                    className="form-control"
-                                                                    placeholder="Enter other category"
+                                                                    className="form-control" placeholder="Enter other category"
                                                                 />
                                                             </div>
                                                         )}
@@ -498,7 +551,7 @@ const NewData = () => {
                                                         )}
                                                         {cat.category === 'Meeting' && (
                                                             <>
-                                                                <div className="mb-3 col-lg-3">
+                                                                <div className="mb-3 col-lg-6">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Time Spent (Minutes)
                                                                     </label>
@@ -511,7 +564,7 @@ const NewData = () => {
                                                                         className="form-control"
                                                                     />
                                                                 </div>
-                                                                <div className="mb-3 col-lg-3">
+                                                                {/* <div className="mb-3 col-lg-3">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         No. of Meetings
                                                                     </label>
@@ -523,52 +576,69 @@ const NewData = () => {
                                                                         placeholder="0"
                                                                         className="form-control"
                                                                     />
+                                                                </div> */}
+                                                                <div className="mb-3 col-lg-12">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Meeting Title
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={cat.meetingTitle}
+                                                                        onChange={(e) => handleMeetingTitleChange(cat.id, e.target.value)}
+                                                                        placeholder="Enter meeting title"
+                                                                        className="form-control"
+                                                                        name='meeting_title'
+                                                                    />
                                                                 </div>
                                                             </>
                                                         )}
-                                                        <div className="mb-3 col-lg-8">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Task List *
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={cat.currentTask}
-                                                                onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                placeholder="Type task and press Enter to add"
-                                                                className="form-control"
-                                                            />
-                                                            {cat.tasks.length > 0 && (
-                                                                <div className="mt-2">
-                                                                    <ul className="list-group">
-                                                                        {cat.tasks.map((task, taskIndex) => (
-                                                                            <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
-                                                                                {task}
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="btn btn-sm btn-outline-danger"
-                                                                                    onClick={() => removeTask(cat.id, taskIndex)}
-                                                                                >
-                                                                                    ×
-                                                                                </button>
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
+                                                        {cat.category !== 'Meeting' && (
+                                                            <>
+                                                                <div className="mb-3 col-lg-8">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Task List *
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={cat.currentTask}
+                                                                        onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                        onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                        placeholder="Type task and press Enter to add"
+                                                                        className="form-control"
+                                                                    />
+                                                                    {cat.tasks.length > 0 && (
+                                                                        <div className="mt-2">
+                                                                            <ul className="list-group">
+                                                                                {cat.tasks.map((task, taskIndex) => (
+                                                                                    <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
+                                                                                        {task}
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn btn-sm btn-outline-danger"
+                                                                                            onClick={() => removeTask(cat.id, taskIndex)}
+                                                                                        >
+                                                                                            ×
+                                                                                        </button>
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                            )}
-                                                        </div>
 
-                                                        <div className="mb-3 col-lg-4">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Number of Tasks
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                value={cat.tasks.length}
-                                                                readOnly
-                                                                className="form-control"
-                                                            />
-                                                        </div>
+                                                                <div className="mb-3 col-lg-4">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Number of Tasks
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.tasks.length}
+                                                                        readOnly
+                                                                        className="form-control"
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

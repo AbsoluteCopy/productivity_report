@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, DailyReport
+from .models import User, DailyReport, TaskCategory
 from django.contrib.auth.hashers import make_password
 
 
@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'id_number', 'first_name', 'last_name',
-            'email', 'password', 'role', 'created_at', 'updated_at'
+            'email', 'password', 'role', 'created_at', 'updated_at', 'task_list'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
@@ -40,3 +40,10 @@ class DailyReportSerializer(serializers.ModelSerializer):
 
     def get_user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}"
+
+
+class TaskCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskCategory
+        fields = ['id', 'name', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

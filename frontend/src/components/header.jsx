@@ -70,6 +70,11 @@ function Navbar() {
                                         Manage Accounts
                                     </Link>
                                 </li>
+                                <li className="nav-item">
+                                    <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
+                                        Manage Task Category
+                                    </Link>
+                                </li>
                             </>
                         )}
                     </ul>

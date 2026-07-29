@@ -139,6 +139,7 @@ const DailyReport = () => {
             name: 'Date',
             selector: row => row.date,
             sortable: true,
+            sortDirection: 'desc',
         },
 
         {
@@ -185,14 +186,16 @@ const DailyReport = () => {
                     <button className="btn btn-primary btn-sm" onClick={() => handleView(row.id)}>
                         <EyeIcon />
                     </button>
-
-                    <button className="btn btn-info btn-sm" onClick={() => handleEdit(row.id)}>
-                        <PencilIcon />
-                    </button>
-
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(row.id)}>
-                        <TrashIcon />
-                    </button>
+                    {!isAdmin && (
+                        <button className="btn btn-info btn-sm" onClick={() => handleEdit(row.id)}>
+                            <PencilIcon />
+                        </button>
+                    )}
+                    {!isAdmin && (
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(row.id)}>
+                            <TrashIcon />
+                        </button>
+                    )}
                 </div>
             ),
         },
@@ -222,9 +225,11 @@ const DailyReport = () => {
                                 <button type="button" className="btn btn-primary" onClick={() => navigate('/view_report')}>
                                     View Summary
                                 </button>
-                                <button type="button" className="btn btn-primary" onClick={() => navigate('/new_data')}>
-                                    Add Report
-                                </button>
+                                {!isAdmin && (
+                                    <button type="button" className="btn btn-primary" onClick={() => navigate('/new_data')}>
+                                        Add Report
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className="card-body">
@@ -252,6 +257,9 @@ const DailyReport = () => {
                                             responsive
                                             highlightOnHover
                                             fixedHeader
+                                            reorderableColumns
+                                            defaultSortFieldId="date"
+                                            defaultSortAsc={false}
                                             noDataComponent="No daily reports found"
                                             progressPending={loading}
                                             progressComponent={

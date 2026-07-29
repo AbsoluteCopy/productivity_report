@@ -7,6 +7,7 @@ const Home = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [recentReports, setRecentReports] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
         // Get user from localStorage
@@ -15,6 +16,11 @@ const Home = () => {
             const parsedUser = JSON.parse(userData);
             setUser(parsedUser);
             fetchRecentReports(parsedUser.id);
+            if (parsedUser.role === 'admin') {
+                setIsAdmin(true);
+            } else {
+                setIsAdmin(false);
+            }
         }
     }, []);
 
@@ -99,9 +105,11 @@ const Home = () => {
                             <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
                                 <i className="bi bi-journal-text me-2"></i>Recent Reports
                             </h5>
-                            <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
-                                <i className="bi bi-plus-lg me-1"></i> New
-                            </Link>
+                            {!isAdmin && (
+                                <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                                    <i className="bi bi-plus-lg me-1"></i> New
+                                </Link>
+                            )}
                         </div>
                         <div className="card-body p-4">
                             {loading ? (
@@ -147,9 +155,11 @@ const Home = () => {
                                         <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
                                     </div>
                                     <h6 className="text-muted fw-medium mb-3">No recent reports found</h6>
-                                    <Link to="/new_data" className="btn btn-primary rounded-pill px-4 py-2 fw-semibold">
-                                        Create your first report
-                                    </Link>
+                                    {!isAdmin && (
+                                        <Link to="/new_data" className="btn btn-primary rounded-pill px-4 py-2 fw-semibold">
+                                            Create your first report
+                                        </Link>
+                                    )}
                                 </div>
                             )}
                         </div>

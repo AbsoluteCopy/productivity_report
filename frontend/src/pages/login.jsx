@@ -12,11 +12,19 @@ const Login = () => {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
 
     useEffect(() => {
         // Clear any stuck/invalid tokens from previous sessions/databases
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        
+        // Load remembered email if exists
+        const rememberedEmail = localStorage.getItem('rememberedEmail');
+        if (rememberedEmail) {
+            setEmail(rememberedEmail);
+            setRememberMe(true);
+        }
     }, []);
 
     const handleSubmit = async (e) => {
@@ -38,6 +46,14 @@ const Login = () => {
             if (response.ok) {
                 localStorage.setItem("user", JSON.stringify(data.user));
                 localStorage.setItem("token", data.token);
+                
+                // Handle remember me functionality
+                if (rememberMe) {
+                    localStorage.setItem('rememberedEmail', email);
+                } else {
+                    localStorage.removeItem('rememberedEmail');
+                }
+                
                 navigate("/dashboard");
             } else {
                 setError(data.error || "Login failed");
@@ -61,7 +77,7 @@ const Login = () => {
                 {/* Logo */}
                 <div>
                     <img
-                        src="/images/gratus_logo.jpg"
+                        src="/images/gratus.png"
                         alt="Logo"
                         style={{
                             width: "250px",
@@ -196,6 +212,34 @@ const Login = () => {
                                 )}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Remember Me Checkbox */}
+                    <div style={{ marginBottom: "20px", display: "flex", alignItems: "center" }}>
+                        <input
+                            type="checkbox"
+                            id="rememberMe"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            style={{
+                                width: "18px",
+                                height: "18px",
+                                marginRight: "10px",
+                                cursor: "pointer",
+                                accentColor: "#065d48",
+                            }}
+                        />
+                        <label
+                            htmlFor="rememberMe"
+                            style={{
+                                color: "#065d48",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Remember me
+                        </label>
                     </div>
 
                     {/* Login Button */}
