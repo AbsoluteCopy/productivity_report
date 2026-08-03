@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
 
-const API_URL = `${API_BASE_URL}/task-categories/`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_URL = `${API_BASE_URL}/holidays/`;
 
-const EMPTY_CATEGORY = {
+const EMPTY_HOLIDAY = {
     name: "",
-    status: "active",
+    date: "",
     company: "",
 };
 
@@ -27,17 +27,14 @@ const customStyles = {
     },
 };
 
-
-const ManageTaskCategory = () => {
-
-    const [categories, setCategories] = useState([]);
-    const [formData, setFormData] = useState(EMPTY_CATEGORY);
+export default function HolidayManagement() {
+    const [holidays, setHolidays] = useState([]);
+    const [formData, setFormData] = useState(EMPTY_HOLIDAY);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
-
 
     const showError = (err) => {
         Swal.fire({
@@ -50,7 +47,7 @@ const ManageTaskCategory = () => {
         });
     };
 
-    const fetchCategories = useCallback(async () => {
+    const fetchHolidays = async () => {
         setLoading(true);
 
         try {
@@ -60,19 +57,18 @@ const ManageTaskCategory = () => {
             const user = userData ? JSON.parse(userData) : null;
             
             // If HR role, filter by company
-            let filteredCategories = data;
+            let filteredHolidays = data;
             if (user?.role === 'hr' && user?.company) {
-                filteredCategories = data.filter(category => category.company === user.company);
+                filteredHolidays = data.filter(holiday => holiday.company === user.company);
             }
             
-            setCategories(filteredCategories);
+            setHolidays(filteredHolidays);
         } catch (err) {
             showError(err);
         } finally {
             setLoading(false);
         }
-    }, []);
-
+    };
 
     useEffect(() => {
         const userData = localStorage.getItem("user");
@@ -80,9 +76,8 @@ const ManageTaskCategory = () => {
             const user = JSON.parse(userData);
             setCurrentUser(user);
         }
-        fetchCategories();
+        fetchHolidays();
     }, []);
-
 
     const handleChange = (e) => {
         setFormData({
@@ -94,14 +89,15 @@ const ManageTaskCategory = () => {
     const handleSubmit = async () => {
         if (loading) return;
 
-        if (!formData.name.trim()) {
+        if (!formData.name.trim() || !formData.date) {
             Swal.fire({
                 icon: "warning",
                 title: "Incomplete Form",
-                text: "Category name is required.",
+                text: "Holiday name and date are required.",
             });
             return;
         }
+        
         const payload = {
             ...formData,
             name: formData.name.trim(),
@@ -115,41 +111,25 @@ const ManageTaskCategory = () => {
         setSaving(true);
 
         try {
-            const duplicate = categories.some(
-                (category) =>
-                    category.name.toLowerCase() ===
-                    formData.name.trim().toLowerCase() &&
-                    category.id !== editingId
-            );
-
-            if (duplicate) {
-                Swal.fire({
-                    icon: "warning",
-                    title: "Duplicate Category",
-                    text: "A category with this name already exists.",
-                });
-                return;
-            }
-
             if (editingId) {
                 await axios.put(`${API_URL}${editingId}/`, payload);
             } else {
                 await axios.post(API_URL, payload);
             }
 
-            await fetchCategories();
+            await fetchHolidays();
 
             Swal.fire({
                 icon: "success",
                 title: "Success",
-                text: editingId ? "Category updated successfully!" : "Category created successfully!",
+                text: editingId ? "Holiday updated successfully!" : "Holiday created successfully!",
                 toast: true,
                 position: "top-end",
                 showConfirmButton: false,
                 timer: 3000
             });
 
-            setFormData(EMPTY_CATEGORY);
+            setFormData(EMPTY_HOLIDAY);
             setEditingId(null);
 
             // Close modal
@@ -162,16 +142,16 @@ const ManageTaskCategory = () => {
         }
     };
 
-    const editCategory = (category) => {
-        setEditingId(category.id);
+    const editHoliday = (holiday) => {
+        setEditingId(holiday.id);
         setFormData({
-            name: category.name,
-            status: category.status,
-            company: category.company || "",
+            name: holiday.name,
+            date: holiday.date,
+            company: holiday.company || "",
         });
     };
 
-    const deleteCategory = async (id) => {
+    const deleteHoliday = async (id) => {
         Swal.fire({
             title: "Are you sure?",
             text: "You won't be able to revert this!",
@@ -184,11 +164,11 @@ const ManageTaskCategory = () => {
             if (result.isConfirmed) {
                 try {
                     await axios.delete(`${API_URL}${id}/`);
-                    await fetchCategories();
+                    await fetchHolidays();
                     Swal.fire({
                         icon: "success",
                         title: "Deleted!",
-                        text: "Category has been deleted.",
+                        text: "Holiday has been deleted.",
                         toast: true,
                         position: "top-end",
                         showConfirmButton: false,
@@ -203,25 +183,22 @@ const ManageTaskCategory = () => {
 
     const columns = [
         {
-            name: "Task Name",
+            name: "Holiday Name",
             selector: row => row.name,
             sortable: true,
-            wrap: true,      // Allows text to wrap to multiple lines
-            grow: 3,
+            wrap: true,
+            grow: 2,
         },
         {
-            name: "Status",
-            cell: row => (
-                <span className={`badge ${row.status === "active"
-                    ? "bg-success"
-                    : "bg-secondary"
-                    }`}
-                >
-                    {row.status.toUpperCase()}
-                </span>
-            ),
+            name: "Date",
+            selector: row => row.date,
             sortable: true,
         },
+        ...(currentUser?.role !== 'hr' ? [{
+            name: "Company",
+            selector: row => row.company || 'All Companies',
+            sortable: true,
+        }] : []),
         {
             name: "Created At",
             selector: row => new Intl.DateTimeFormat("en-PH", {
@@ -231,20 +208,15 @@ const ManageTaskCategory = () => {
             }).format(new Date(row.created_at)),
             sortable: true,
         },
-        ...(currentUser?.role !== 'hr' ? [{
-            name: "Company",
-            selector: row => row.company || '-',
-            sortable: true,
-        }] : []),
         {
             name: "Actions",
             cell: row => (
                 <>
-                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#categoryModal" onClick={() => editCategory(row)}>
+                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#holidayModal" onClick={() => editHoliday(row)}>
                         <i className="bi bi-pencil"></i>
                     </button>
 
-                    <button className="btn btn-danger btn-sm" onClick={() => deleteCategory(row.id)} >
+                    <button className="btn btn-danger btn-sm" onClick={() => deleteHoliday(row.id)} >
                         <i className="bi bi-trash"></i>
                     </button>
                 </>
@@ -256,64 +228,61 @@ const ManageTaskCategory = () => {
         <div className="container mt-4">
             <div className="card shadow">
                 <div className="card-header main-background text-white d-flex justify-content-between align-items-center">
-                    <h3 className="mb-0">Task Category Management</h3>
-                    <button className="btn btn-success" data-bs-toggle="modal" data-bs-target="#categoryModal" onClick={() => {
+                    <h3 className="mb-0">Holiday Management</h3>
+                    <button className="btn btn-success" data-bs-toggle="modal" data-bs-target="#holidayModal" onClick={() => {
                         setEditingId(null);
-                        setFormData(EMPTY_CATEGORY);
+                        setFormData(EMPTY_HOLIDAY);
                     }}
                     >
-                        <i className="bi bi-plus"></i> Add Category
+                        <i className="bi bi-plus"></i> Add Holiday
                     </button>
                 </div>
 
                 <div className="card-body">
-                    <input type="text" className="form-control mb-3" placeholder="Search category..."
+                    <input type="text" className="form-control mb-3" placeholder="Search holiday..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
 
                     <DataTable
                         columns={columns}
-                        data={categories.filter((category) =>
-                            category.name.toLowerCase().includes(search.toLowerCase())
+                        data={holidays.filter((holiday) =>
+                            holiday.name.toLowerCase().includes(search.toLowerCase())
                         )}
                         pagination
                         highlightOnHover
                         striped
                         responsive
                         persistTableHead
-                        noDataComponent="No categories found."
+                        noDataComponent="No holidays found."
                         customStyles={customStyles}
                         progressPending={loading}
                         progressComponent={
                             <div className="py-3">
-                                Loading categories...
+                                Loading holidays...
                             </div>
                         }
                     />
                 </div>
             </div>
 
-            <div className="modal fade" id="categoryModal" tabIndex="-1">
+            <div className="modal fade" id="holidayModal" tabIndex="-1">
                 <div className="modal-dialog">
                     <div className="modal-content">
                         <div className="modal-header main-background text-white">
                             <h5 className="modal-title">
-                                {editingId ? "Edit Category" : "Add Category"}
+                                {editingId ? "Edit Holiday" : "Add Holiday"}
                             </h5>
                             <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
                         </div>
 
                         <div className="modal-body">
-                            <input className="form-control mb-2" name="name" placeholder="Category Name" value={formData.name} onChange={handleChange} />
+                            <input className="form-control mb-2" name="name" placeholder="Holiday Name" value={formData.name} onChange={handleChange} />
 
-                            <select className="form-select" name="status" value={formData.status} onChange={handleChange}>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            <input className="form-control mb-2" name="date" type="date" value={formData.date} onChange={handleChange} />
 
                             {currentUser?.role !== 'hr' && (
-                                <input className="form-control mb-2 mt-2" name="company" placeholder="Company (optional)" value={formData.company} onChange={handleChange} />
+                                <input className="form-control mb-2" name="company" placeholder="Company (optional)" value={formData.company} onChange={handleChange} />
                             )}
                         </div>
 
@@ -322,8 +291,8 @@ const ManageTaskCategory = () => {
                                 Cancel
                             </button>
 
-                            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-                                {loading
+                            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading || saving}>
+                                {saving
                                     ? "Saving..."
                                     : editingId
                                         ? "Update"
@@ -335,6 +304,4 @@ const ManageTaskCategory = () => {
             </div>
         </div>
     );
-};
-
-export default ManageTaskCategory;
+}

@@ -421,7 +421,7 @@ const NewData = () => {
                                             className="form-control"
                                         />
                                     </div>
-                                    <div className="col-6">
+                                    <div className="col-lg-6 col-sm-12">
                                         <div className="mb-3">
                                             <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                 Option *

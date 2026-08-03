@@ -77,3 +77,47 @@
 img {
   background: transparent!important;
 }
+
+.custom-report-tabs {
+    border-bottom: 1px solid #dee2e6;
+    gap: 20px;
+}
+
+.custom-report-tabs .nav-link {
+    border: none !important;
+    color: #6c757d;
+    font-weight: 600;
+    padding: 12px 4px;
+    position: relative;
+    background: transparent;
+    transition: color 0.25s ease;
+}
+
+.custom-report-tabs .nav-link:hover {
+    color: #0d6efd;
+}
+
+.custom-report-tabs .nav-link.active {
+    color: #0d6efd;
+    background: transparent;
+}
+
+/* Active underline only */
+.custom-report-tabs .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 0;
+    height: 3px;
+    background: #0d6efd;
+    border-radius: 3px;
+    transition: width 0.25s ease;
+}
+
+.custom-report-tabs .nav-link.active::after {
+    width: 100%;
+}
+.nav-tabs .nav-link.active {
+    border-color: transparent;
+}

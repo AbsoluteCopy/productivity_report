@@ -53,8 +53,11 @@ const Login = () => {
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
-                
-                navigate("/dashboard");
+                if (data.user.role === 'viewer') {
+                    navigate("/view_report");
+                } else {
+                    navigate("/dashboard");
+                }
             } else {
                 setError(data.error || "Login failed");
             }

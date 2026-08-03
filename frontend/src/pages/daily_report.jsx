@@ -13,6 +13,7 @@ const DailyReport = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedReport, setSelectedReport] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
     const [search, setSearch] = useState("");
 
     useEffect(() => {
@@ -20,8 +21,9 @@ const DailyReport = () => {
 
         if (userData) {
             const user = JSON.parse(userData);
+            setCurrentUser(user);
 
-            if (user.role === 'admin') {
+            if (user.role === 'admin' || user.role === 'hr') {
                 setIsAdmin(true);
                 fetchAllReports();
             } else {
@@ -59,7 +61,14 @@ const DailyReport = () => {
 
     const fetchRecentReports = async (userId) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/${userId}/reports/`);
+            let response;
+            if (isAdmin) {
+                // Admin and HR can see all reports (filtered by company on backend)
+                response = await axios.get(`${API_BASE_URL}/daily-reports/`);
+            } else {
+                // Employee can only see their own reports
+                response = await axios.get(`${API_BASE_URL}/users/${userId}/reports/`);
+            }
             setDailyReports(response.data);
         } catch (error) {
             console.error('Error fetching reports:', error);
@@ -87,7 +96,7 @@ const DailyReport = () => {
         navigate(`/new_data?edit=${id}`);
     };
 
-    const handleDelete = async (id) => {
+    const handleDeleteReport = async (id) => {
         const result = await Swal.fire({
             title: "Are you sure?",
             text: "You won't be able to revert this!",
@@ -186,13 +195,13 @@ const DailyReport = () => {
                     <button className="btn btn-primary btn-sm" onClick={() => handleView(row.id)}>
                         <EyeIcon />
                     </button>
-                    {!isAdmin && (
+                    {currentUser && currentUser.role !== 'admin' && currentUser.role !== 'hr' && (
                         <button className="btn btn-info btn-sm" onClick={() => handleEdit(row.id)}>
                             <PencilIcon />
                         </button>
                     )}
-                    {!isAdmin && (
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(row.id)}>
+                    {currentUser && currentUser.role !== 'admin' && currentUser.role !== 'hr' && (
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteReport(row.id)}>
                             <TrashIcon />
                         </button>
                     )}
@@ -219,14 +228,14 @@ const DailyReport = () => {
             <div className="row">
                 <div className="col-12">
                     <div className="card shadow-sm">
-                        <div className="card-header d-flex justify-content-between align-items-center">
+                        <div className="card-header main-background text-white d-flex justify-content-between align-items-center">
                             <h5>Daily Report</h5>
                             <div className="d-flex gap-2">
-                                <button type="button" className="btn btn-primary" onClick={() => navigate('/view_report')}>
+                                <button type="button" className="btn btn-secondary" onClick={() => navigate('/view_report')}>
                                     View Summary
                                 </button>
-                                {!isAdmin && (
-                                    <button type="button" className="btn btn-primary" onClick={() => navigate('/new_data')}>
+                                {currentUser && currentUser.role !== 'admin' && currentUser.role !== 'hr' && (
+                                    <button type="button" className="btn btn-secondary" onClick={() => navigate('/new_data')}>
                                         Add Report
                                     </button>
                                 )}

@@ -16,6 +16,20 @@ axios.interceptors.request.use(config => {
     return config;
 });
 
+// Axios Response Interceptor for handling 401 errors
+axios.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response && error.response.status === 401) {
+            // Token expired or invalid - logout user
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
+);
+
 // Global Fetch Interceptor
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -31,7 +45,16 @@ window.fetch = async (...args) => {
             };
         }
     }
-    return originalFetch(resource, config);
+    const response = await originalFetch(resource, config);
+    
+    // Handle 401 errors for API requests
+    if (typeof resource === 'string' && resource.includes('/api/') && response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+    }
+    
+    return response;
 };
 
 createRoot(document.getElementById('root')).render(

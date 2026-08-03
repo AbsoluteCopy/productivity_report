@@ -1,11 +1,28 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API = import.meta.env.VITE_API_BASE_URL;
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
 
+export const getUsers = () =>
+    axios.get(`${API}/users/`);
+
+export const createUser = (data) =>
+    axios.post(`${API}/users/`, data);
+
+export const updateUser = (id, data) =>
+    axios.put(`${API}/users/${id}/`, data);
+
+export const deleteUser = (id) =>
+    axios.delete(`${API}/users/${id}/`);
+
+export const getTaskCategories = () =>
+    axios.get(`${API}/task-categories/`);
+
 const ManageAccounts = () => {
-    const API_URL = `${API_BASE_URL}/users/`;
+
+    const [currentUser, setCurrentUser] = useState(null);
 
     const emptyUser = {
         id_number: "",
@@ -14,6 +31,7 @@ const ManageAccounts = () => {
         email: "",
         password: "",
         role: "employee",
+        company: "",
     };
 
     const [users, setUsers] = useState([]);
@@ -25,16 +43,32 @@ const ManageAccounts = () => {
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
+    const requiredFields = [
+        "id_number",
+        "first_name",
+        "last_name",
+        "email",
+        "role",
+    ];
 
+    const isValid = requiredFields.every(
+        field => formData[field]?.trim()
+    );
+    
     useEffect(() => {
+        const userData = localStorage.getItem("user");
+        if (userData) {
+            const user = JSON.parse(userData);
+            setCurrentUser(user);
+        }
         fetchUsers();
         fetchTaskCategories();
     }, []);
 
     const fetchTaskCategories = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/task-categories/`);
-            setTaskCategories(res.data);
+            const { data } = await getTaskCategories();
+            setTaskCategories(data);
         } catch (err) {
             console.error(err);
             Swal.fire({
@@ -47,8 +81,18 @@ const ManageAccounts = () => {
 
     const fetchUsers = async () => {
         try {
-            const res = await axios.get(API_URL);
-            setUsers(res.data);
+            const { data } = await getUsers();
+            
+            const userData = localStorage.getItem("user");
+            const user = userData ? JSON.parse(userData) : null;
+            
+            // If HR role, filter by company
+            let filteredUsers = data;
+            if (user?.role === 'hr' && user?.company) {
+                filteredUsers = data.filter(u => u.company === user.company);
+            }
+            
+            setUsers(filteredUsers);
         } catch (err) {
             console.error(err);
             Swal.fire({
@@ -67,7 +111,7 @@ const ManageAccounts = () => {
     };
 
     const handleSubmit = async () => {
-        if (!formData.id_number || !formData.first_name || !formData.last_name || !formData.email || !formData.role) {
+        if (!isValid) {
             Swal.fire({
                 icon: "warning",
                 title: "Incomplete Form",
@@ -84,6 +128,20 @@ const ManageAccounts = () => {
             });
             return;
         }
+        
+        const userData = localStorage.getItem("user");
+        const user = userData ? JSON.parse(userData) : null;
+        
+        // HR cannot create admin accounts
+        if (user?.role === 'hr' && formData.role === 'admin') {
+            Swal.fire({
+                icon: "error",
+                title: "Permission Denied",
+                text: "HR users cannot create admin accounts.",
+            });
+            return;
+        }
+        
         setLoading(true);
         try {
             const payload = { ...formData };
@@ -91,15 +149,25 @@ const ManageAccounts = () => {
             if (editingId && !payload.password) {
                 delete payload.password;
             }
+            
+            // If HR role, ensure company is set to their own company
+            if (user?.role === 'hr' && user?.company) {
+                payload.company = user.company;
+            }
+            
+            // If HR and not editing, default role to employee
+            if (user?.role === 'hr' && !editingId) {
+                payload.role = 'employee';
+            }
 
             if (editingId) {
-                await axios.put(`${API_URL}${editingId}/`, payload);
+                await updateUser(editingId, payload);
             } else {
-                await axios.post(API_URL, payload);
+                await createUser(payload);
             }
 
             fetchUsers();
-            
+
             Swal.fire({
                 icon: "success",
                 title: "Success",
@@ -109,7 +177,7 @@ const ManageAccounts = () => {
                 showConfirmButton: false,
                 timer: 3000
             });
-            
+
             setFormData(emptyUser);
             setEditingId(null);
         } catch (err) {
@@ -134,10 +202,11 @@ const ManageAccounts = () => {
             email: user.email,
             password: "",
             role: user.role,
+            company: user.company || "",
         });
     };
 
-    const deleteUser = async (id) => {
+    const handleDeleteUser = async (id) => {
         Swal.fire({
             title: "Are you sure?",
             text: "You won't be able to revert this!",
@@ -149,7 +218,7 @@ const ManageAccounts = () => {
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
-                    await axios.delete(`${API_URL}${id}/`);
+                    await deleteUser(id);
                     fetchUsers();
                 } catch (err) {
                     console.error(err);
@@ -174,7 +243,7 @@ const ManageAccounts = () => {
 
     const saveTaskCategories = async () => {
         try {
-            await axios.put(`${API_URL}${currentUserId}/`, {
+            await updateUser(currentUserId, {
                 task_list: selectedCategories
             });
             fetchUsers();
@@ -230,6 +299,8 @@ const ManageAccounts = () => {
                 <span
                     className={`badge ${row.role === "admin"
                         ? "bg-danger"
+                        : row.role === "hr"
+                        ? "bg-warning"
                         : "bg-primary"
                         }`}
                 >
@@ -238,30 +309,33 @@ const ManageAccounts = () => {
             ),
             sortable: true,
         },
+        ...(currentUser?.role !== 'hr' ? [{
+            name: "Company",
+            selector: row => row.company || '-',
+            sortable: true,
+        }] : []),
         {
             name: "Actions",
             cell: row => (
                 <>
-                    <button
-                        className="btn btn-info btn-sm me-2"
-                        onClick={() => manageTask(row.id)}
-                    >
-                        Manage Task
-                    </button>
-                    <button
-                        className="btn btn-primary btn-sm me-2"
-                        data-bs-toggle="modal"
-                        data-bs-target="#userModal"
+                    {row.role === "employee" && (
+                        <button className="btn btn-info btn-sm me-2"
+                            onClick={() => manageTask(row.id)}
+                        >
+                            <i className="bi bi-list-task"></i> Manage Task
+                </button>
+                    )}
+                    <button className="btn btn-primary btn-sm me-2"
+                        data-bs-toggle="modal" data-bs-target="#userModal"
                         onClick={() => editUser(row)}
                     >
-                        Edit
+                        <i className="bi bi-pen"></i>
                     </button>
 
-                    <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => deleteUser(row.id)}
+                    <button className="btn btn-danger btn-sm"
+                        onClick={() => handleDeleteUser(row.id)}
                     >
-                        Delete
+                        <i className="bi bi-trash"></i>
                     </button>
                 </>
             ),
@@ -274,25 +348,28 @@ const ManageAccounts = () => {
             },
         },
     };
+    const filteredUsers = useMemo(() => {
+        return users.filter(user =>
+            `${user.first_name} ${user.last_name} ${user.id_number} ${user.email}`
+                .toLowerCase()
+                .includes(search.toLowerCase())
+        );
+    }, [users, search]);
 
     return (
         <div className="container mt-4">
-
             <div className="card shadow">
-
-                <div className="card-header d-flex justify-content-between align-items-center">
+                <div className="card-header main-background text-white d-flex justify-content-between align-items-center">
                     <h3 className="mb-0">Account Management</h3>
 
-                    <button
-                        className="btn btn-success"
-                        data-bs-toggle="modal"
-                        data-bs-target="#userModal"
+                    <button className="btn btn-success"
+                        data-bs-toggle="modal" data-bs-target="#userModal"
                         onClick={() => {
                             setEditingId(null);
                             setFormData(emptyUser);
                         }}
                     >
-                        + Add Account
+                        <i className="bi bi-plus"></i> Add Account
                     </button>
                 </div>
 
@@ -308,11 +385,7 @@ const ManageAccounts = () => {
 
                     <DataTable
                         columns={columns}
-                        data={users.filter((user) =>
-                            `${user.first_name} ${user.last_name} ${user.id_number} ${user.email}`
-                                .toLowerCase()
-                                .includes(search.toLowerCase())
-                        )}
+                        data={filteredUsers}
                         pagination
                         highlightOnHover
                         striped
@@ -327,56 +400,44 @@ const ManageAccounts = () => {
 
             {/* Modal */}
 
-            <div
-                className="modal fade"
-                id="userModal"
-                tabIndex="-1"
-            >
+            <div className="modal fade" id="userModal" tabIndex="-1">
                 <div className="modal-dialog">
 
                     <div className="modal-content">
 
-                        <div className="modal-header">
+                        <div className="modal-header main-background text-white">
                             <h5 className="modal-title">
                                 {editingId ? "Edit Account" : "Add Account"}
                             </h5>
 
-                            <button
-                                type="button"
-                                className="btn-close"
-                                data-bs-dismiss="modal"
-                            ></button>
+                            <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
 
                         </div>
 
                         <div className="modal-body">
 
-                            <input
-                                className="form-control mb-2"
+                            <input className="form-control mb-2"
                                 name="id_number"
                                 placeholder="ID Number"
                                 value={formData.id_number}
                                 onChange={handleChange}
                             />
 
-                            <input
-                                className="form-control mb-2"
+                            <input className="form-control mb-2"
                                 name="first_name"
                                 placeholder="First Name"
                                 value={formData.first_name}
                                 onChange={handleChange}
                             />
 
-                            <input
-                                className="form-control mb-2"
+                            <input className="form-control mb-2"
                                 name="last_name"
                                 placeholder="Last Name"
                                 value={formData.last_name}
                                 onChange={handleChange}
                             />
 
-                            <input
-                                className="form-control mb-2"
+                            <input className="form-control mb-2"
                                 name="email"
                                 type="email"
                                 placeholder="Email"
@@ -384,47 +445,46 @@ const ManageAccounts = () => {
                                 onChange={handleChange}
                             />
 
-                            <input
-                                className="form-control mb-2"
-                                name="password"
-                                type="password"
-                                placeholder={
-                                    editingId
-                                        ? "Leave blank to keep current password"
-                                        : "Password"
-                                }
+                            <input className="form-control mb-2" name="password" type="password" placeholder={
+                                editingId
+                                    ? "Leave blank to keep current password"
+                                    : "Password"
+                            }
                                 value={formData.password}
                                 onChange={handleChange}
                             />
 
-                            <select
-                                className="form-select"
-                                name="role"
-                                value={formData.role}
-                                onChange={handleChange}
-                            >
-                                <option value="employee">Employee</option>
-                                <option value="admin">Admin</option>
-                            </select>
+                            {currentUser?.role !== 'hr' ? (
+                                <select className="form-select" name="role" value={formData.role} onChange={handleChange}>
+                                    <option value="employee">Employee</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="viewer">Viewer</option>
+                                    <option value="hr">HR</option>
+                                </select>
+                            ) : (
+                                <select className="form-select" name="role" value={formData.role} onChange={handleChange} disabled>
+                                    <option value="employee">Employee</option>
+                                </select>
+                            )}
+
+                            {currentUser?.role !== 'hr' && (
+                                <input className="form-control mb-2 mt-2"
+                                    name="company"
+                                    placeholder="Company (optional)"
+                                    value={formData.company}
+                                    onChange={handleChange}
+                                />
+                            )}
 
                         </div>
 
                         <div className="modal-footer">
 
-                            <button
-                                className="btn btn-secondary"
-                                data-bs-dismiss="modal"
-                                id="closeModal"
-                            >
+                            <button className="btn btn-secondary" data-bs-dismiss="modal" id="closeModal">
                                 Cancel
                             </button>
 
-                            <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={handleSubmit}
-                                disabled={loading}
-                            >
+                            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
                                 {loading
                                     ? "Saving..."
                                     : editingId
@@ -441,56 +501,51 @@ const ManageAccounts = () => {
 
             {/* Task Category Modal */}
             <div
-                className={`modal fade ${showTaskModal ? 'show' : ''}`}
-                style={{ display: showTaskModal ? 'block' : 'none' }}
+                className="modal fade"
+                id="taskModal"
                 tabIndex="-1"
             >
                 <div className="modal-dialog">
                     <div className="modal-content">
-                        <div className="modal-header">
+                        <div className="modal-header main-background text-white">
                             <h5 className="modal-title">Manage Task Categories</h5>
                             <button
                                 type="button"
                                 className="btn-close"
-                                onClick={() => setShowTaskModal(false)}
+                                data-bs-dismiss="modal"
                             ></button>
                         </div>
                         <div className="modal-body">
-                            {taskCategories.length === 0 ? (
-                                <p className="text-muted">No task categories available.</p>
-                            ) : (
-                                <div className="list-group">
-                                    {taskCategories.map(category => (
-                                        <div key={category.id} className="list-group-item">
-                                            <div className="form-check">
-                                                <input
-                                                    className="form-check-input"
-                                                    type="checkbox"
-                                                    id={`category-${category.id}`}
-                                                    checked={selectedCategories.includes(category.id)}
-                                                    onChange={() => handleCategoryToggle(category.id)}
-                                                />
-                                                <label
-                                                    className="form-check-label"
-                                                    htmlFor={`category-${category.id}`}
-                                                >
-                                                    {category.name}
-                                                </label>
-                                            </div>
+                            <div className="row">
+                                {taskCategories.map((category) => (
+                                    <div key={category.id} className="col-md-6 mb-3">
+                                        <div className="form-check">
+                                            <input
+                                                className="form-check-input"
+                                                type="checkbox"
+                                                id={`category-${category.id}`}
+                                                checked={selectedCategories.includes(category.id)}
+                                                onChange={() => handleCategoryToggle(category.id)}
+                                            />
+                                            <label
+                                                className="form-check-label"
+                                                htmlFor={`category-${category.id}`}
+                                            >
+                                                {category.name}
+                                            </label>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                         <div className="modal-footer">
                             <button
                                 className="btn btn-secondary"
-                                onClick={() => setShowTaskModal(false)}
+                                data-bs-dismiss="modal"
                             >
                                 Cancel
                             </button>
                             <button
-                                type="button"
                                 className="btn btn-primary"
                                 onClick={saveTaskCategories}
                             >
@@ -500,7 +555,6 @@ const ManageAccounts = () => {
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };

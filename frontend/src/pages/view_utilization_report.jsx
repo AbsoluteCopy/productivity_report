@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import * as XLSX from 'xlsx';
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -18,20 +20,19 @@ const ViewUtilizationReport = () => {
     const REQUIRED_PRODUCTIVE_HOURS = 7.5;
     const WORK_DAY_HOURS = 8.5;
     const MINUTES_PER_HOUR = 60;
-    const isAdmin = currentUser?.role === "admin";
+    const role = currentUser?.role;
 
     // Derive selected user directly from the already-loaded users array — no extra state needed
     const selectedUserObj = selectedUser ? users.find(u => String(u.id) === String(selectedUser)) : null;
-
     const name = selectedUserObj
         ? `${selectedUserObj.first_name} ${selectedUserObj.last_name}`
-        : isAdmin
+        : (role === 'admin' || role === 'viewer' || role === 'hr')
             ? 'All Users'
             : currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : '';
 
     const employeeCode = selectedUserObj
         ? (selectedUserObj.id_number || '')
-        : isAdmin ? 'ALL' : (currentUser?.id_number || '');
+        : (role === 'admin' || role === 'viewer' || role === 'hr') ? 'ALL' : (currentUser?.id_number || '');
     const months = useMemo(
         () =>
             Array.from({ length: 12 }, (_, i) => ({
@@ -50,11 +51,10 @@ const ViewUtilizationReport = () => {
 
         const user = JSON.parse(stored);
         setCurrentUser(user);
-
-        if (user.role === "admin") {
+        if (role === "admin" || role === 'viewer' || role === 'hr') {
             fetchUsers();
         }
-    }, []);
+    }, [role]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -71,7 +71,16 @@ const ViewUtilizationReport = () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/users/`);
             if (Array.isArray(res.data)) {
-                setUsers(res.data.filter(u => u.role === 'employee'));
+                let filteredUsers = res.data.filter(u => u.role === 'employee');
+                
+                const userData = localStorage.getItem("user");
+                const user = userData ? JSON.parse(userData) : null;
+                
+                // If HR role, filter by company
+                if (user?.role === 'hr' && user?.company) {
+                    filteredUsers = filteredUsers.filter(u => u.company === user.company);
+                }
+                setUsers(filteredUsers);
             } else {
                 setUsers([]);
             }
@@ -88,11 +97,11 @@ const ViewUtilizationReport = () => {
         try {
             const params = new URLSearchParams({ year, month });
 
-            if (user.role === "admin" && userId) {
+            if ((role === "admin" || role === "viewer" || role === "hr") && userId) {
                 params.append("user_id", userId);
             }
 
-            const url = user.role === "admin"
+            const url = (role === "admin" || role === "viewer" || role === "hr")
                 ? `${API_BASE_URL}/daily-reports/?${params}`
                 : `${API_BASE_URL}/users/${user.id}/reports/?${params}`;
 
@@ -130,7 +139,11 @@ const ViewUtilizationReport = () => {
 
                 return acc;
             }, {})
-        ).sort((a, b) => new Date(a.date) - new Date(b.date));
+        ).sort((a, b) => {
+            const [aYear, aMonth, aDay] = a.date.split('-');
+            const [bYear, bMonth, bDay] = b.date.split('-');
+            return new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
+        });
     }, [dailyReports]);
 
     const addWeekendRows = (reports) => {
@@ -222,121 +235,195 @@ const ViewUtilizationReport = () => {
         );
     }).length;
 
-    const exportUtilizationReport = () => {
+    const exportUtilizationReport = async () => {
         const REQUIRED_PRODUCTIVE_HOURS = 7.5;
         const WORK_DAY_HOURS = 8.5;
         const MINUTES_PER_HOUR = 60;
 
         const personName = selectedUserObj
             ? `${selectedUserObj.first_name}_${selectedUserObj.last_name}`
-            : currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : 'User';
+            : currentUser
+                ? `${currentUser.first_name}_${currentUser.last_name}`
+                : "User";
 
         const monthName = new Date(selectedYear, selectedMonth - 1, 1)
-            .toLocaleString('default', { month: 'short' });
+            .toLocaleString("default", { month: "short" });
 
-        // Title / header info rows
-        const titleRows = [
-            ['EMPLOYEE UTILIZATION REPORT'],
-            [],
-            ['Employee Name', name || '', '', 'Employee Code', employeeCode || '', '', 'Month', new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase(), '', 'Year', selectedYear],
-            [],
-            [
-                'Date', 'Day', 'Week Offs', 'Holidays',
-                'Working Hours (mins)', 'Meetings/Training (mins)',
-                'Working Hours (hrs)', 'Meetings/Training (hrs)',
-                'Total Hours w/o Break', 'Total Hours',
-                'Productive Hours', 'Productive Hours %',
-                'Break Hours', 'Break Hours %',
-                'Over/Down time', 'Over/Downtime %'
-            ]
-        ];
+        // Load template
+        const response = await fetch("/templates/UtilizationTemplate.xlsx");
+        const buffer = await response.arrayBuffer();
 
-        const dataRows = displayReports.map(report => {
-            const [year, month, day] = report.date.split('-');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer);
+
+        const worksheet = workbook.getWorksheet("Sheet1");
+
+        // Header (adjust cells to match your template)
+        worksheet.getCell("B3").value = name || "";
+        worksheet.getCell("F3").value = employeeCode || "";
+        worksheet.getCell("I3").value = new Date(
+            selectedYear,
+            selectedMonth - 1,
+            1
+        )
+            .toLocaleString("default", { month: "long" })
+            .toUpperCase();
+        worksheet.getCell("L3").value = selectedYear;
+
+        // Table starts on row 6
+        let rowNumber = 6;
+
+        displayReports.forEach((report) => {
+            const [year, month, day] = report.date.split("-");
             const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
-            const dateLabel = `${day}-${dateObj.toLocaleString('en-US', { month: 'short' })}-${String(year).slice(-2)}`;
-            const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
 
-            const isHoliday = report.task_category === 'Holiday';
-            const isPTO = report.task_category === 'PTO';
+            const dateLabel = `${day}-${dateObj.toLocaleString("en-US", {
+                month: "short",
+            })}-${String(year).slice(-2)}`;
+
+            const dayLabel = dateObj.toLocaleDateString("en-US", {
+                weekday: "long",
+            });
+
+            const isHoliday = report.task_category === "Holiday";
+            const isPTO = report.task_category === "PTO";
             const isWeekend = report.isWeekend;
             const isSpecialDay = isWeekend || isHoliday || isPTO;
 
             const workingMins = Number(report.working_minutes || 0);
             const meetingMins = Number(report.meeting_minutes || 0);
-            const workingHrs = Number((workingMins / MINUTES_PER_HOUR).toFixed(2));
-            const meetingHrs = Number((meetingMins / MINUTES_PER_HOUR).toFixed(2));
-            const productiveHours = isSpecialDay ? '' : workingHrs + meetingHrs;
-            const breakHours = isSpecialDay ? '' : 1;
-            const totalHoursNoBreak = isSpecialDay ? '' : REQUIRED_PRODUCTIVE_HOURS;
-            const totalHours = isSpecialDay ? '' : WORK_DAY_HOURS;
-            const prodPct = isSpecialDay ? '' : `${Math.round((productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
-            const breakPct = isSpecialDay ? '' : `${Math.round((1 / WORK_DAY_HOURS) * 100)}%`;
-            const overDownTime = isSpecialDay ? '' : Number((REQUIRED_PRODUCTIVE_HOURS - productiveHours).toFixed(2));
-            const overDownPct = isSpecialDay ? '' : `${Math.round(((REQUIRED_PRODUCTIVE_HOURS - productiveHours) / REQUIRED_PRODUCTIVE_HOURS) * 100)}%`;
 
-            return [
-                dateLabel,
-                dayLabel,
-                isWeekend ? 'Weekend' : '',
-                isHoliday ? (report.task_list?.[0] || 'Holiday') : isPTO ? 'PTO' : '',
-                isSpecialDay ? '' : workingMins,
-                isSpecialDay ? '' : meetingMins,
-                isSpecialDay ? '' : workingHrs,
-                isSpecialDay ? '' : meetingHrs,
-                totalHoursNoBreak,
-                totalHours,
-                productiveHours,
-                prodPct,
-                breakHours,
-                breakPct,
-                overDownTime,
-                overDownPct
-            ];
+            const workingHrs = Number(
+                (workingMins / MINUTES_PER_HOUR).toFixed(2)
+            );
+
+            const meetingHrs = Number(
+                (meetingMins / MINUTES_PER_HOUR).toFixed(2)
+            );
+
+            const productiveHours = isSpecialDay
+                ? ""
+                : workingHrs + meetingHrs;
+
+            const breakHours = isSpecialDay ? "" : 1;
+            const totalHoursNoBreak = isSpecialDay
+                ? ""
+                : REQUIRED_PRODUCTIVE_HOURS;
+
+            const totalHours = isSpecialDay ? "" : WORK_DAY_HOURS;
+
+            const prodPct = isSpecialDay
+                ? ""
+                : `${Math.round(
+                    (productiveHours / REQUIRED_PRODUCTIVE_HOURS) * 100
+                )}%`;
+
+            const breakPct = isSpecialDay
+                ? ""
+                : `${Math.round((1 / WORK_DAY_HOURS) * 100)}%`;
+
+            const overDownTime = isSpecialDay
+                ? ""
+                : Number(
+                    (
+                        REQUIRED_PRODUCTIVE_HOURS -
+                        productiveHours
+                    ).toFixed(2)
+                );
+
+            const overDownPct = isSpecialDay
+                ? ""
+                : `${Math.round(
+                    ((REQUIRED_PRODUCTIVE_HOURS - productiveHours) /
+                        REQUIRED_PRODUCTIVE_HOURS) *
+                    100
+                )}%`;
+
+            const row = worksheet.getRow(rowNumber);
+
+            row.getCell(1).value = dateLabel;
+            row.getCell(2).value = dayLabel;
+            row.getCell(3).value = isWeekend ? "Weekend" : "";
+            row.getCell(4).value = isHoliday
+                ? report.task_list?.[0] || "Holiday"
+                : isPTO
+                    ? "PTO"
+                    : "";
+
+            row.getCell(5).value = isSpecialDay ? "" : workingMins;
+            row.getCell(6).value = isSpecialDay ? "" : meetingMins;
+            row.getCell(7).value = isSpecialDay ? "" : workingHrs;
+            row.getCell(8).value = isSpecialDay ? "" : meetingHrs;
+            row.getCell(9).value = totalHoursNoBreak;
+            row.getCell(10).value = totalHours;
+            row.getCell(11).value = productiveHours;
+            row.getCell(12).value = prodPct;
+            row.getCell(13).value = breakHours;
+            row.getCell(14).value = breakPct;
+            row.getCell(15).value = overDownTime;
+            row.getCell(16).value = overDownPct;
+
+            row.commit();
+
+            rowNumber++;
         });
 
-        // Footer summary row
-        const footerRow = [
-            `Average Productivity %`, `${Math.round(averageProductivity)}%`,
-            '', '',
-            `Total Productive Hours`, totalProductiveHours.toFixed(2),
-            '', '', '',
-            `Days Worked`, daysWorked,
-            '', '', '',
-            `Holidays or PTOs`, holidaysOrPTOs
-        ];
+        // Footer
+        rowNumber++;
 
-        const allRows = [...titleRows, ...dataRows, [], footerRow];
+        const footer = worksheet.getRow(rowNumber);
 
-        const ws = XLSX.utils.aoa_to_sheet(allRows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Utilization Report');
-        XLSX.writeFile(wb, `Utilization_Report_${personName}_${monthName}_${selectedYear}.xlsx`);
+        footer.getCell(1).value = "Average Productivity %";
+        footer.getCell(2).value = `${Math.round(averageProductivity)}%`;
+        footer.getCell(5).value = "Total Productive Hours";
+        footer.getCell(6).value = totalProductiveHours.toFixed(2);
+        footer.getCell(10).value = "Days Worked";
+        footer.getCell(11).value = daysWorked;
+        footer.getCell(15).value = "Holidays or PTOs";
+        footer.getCell(16).value = holidaysOrPTOs;
+
+        footer.commit();
+
+        // Download
+        const output = await workbook.xlsx.writeBuffer();
+
+        saveAs(
+            new Blob([output]),
+            `Utilization_Report_${personName}_${monthName}_${selectedYear}.xlsx`
+        );
     };
 
     return (
         <div className="container-fluid px-4 mt-4 mb-5">
-            <div className="d-flex align-items-center justify-content-between mb-4">
+            <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-4">
                 <div>
-                    <h2 className="fw-bold mb-1" style={{ color: '#08060d', letterSpacing: '-0.5px' }}>
-                        <i className="bi bi-graph-up-arrow me-2" style={{ color: '#055d47' }}></i>
+                    <h2
+                        className="fw-bold mb-1"
+                        style={{ color: "#08060d", letterSpacing: "-0.5px" }}
+                    >
+                        <i
+                            className="bi bi-graph-up-arrow me-2"
+                            style={{ color: "#055d47" }}
+                        ></i>
                         Utilization Report
                     </h2>
-                    <p className="text-muted mb-0">Analyze productivity, attendance, and time allocation.</p>
                 </div>
 
-                <div className="d-flex align-items-center gap-3 bg-white p-3 rounded-4 shadow-sm">
-                    {isAdmin && (
-                        <div className="d-flex align-items-center">
+                <div className="d-flex flex-column flex-md-row align-items-stretch align-items-md-center gap-2 bg-white p-3 rounded-4 shadow-sm w-100 w-lg-auto">
+
+                    {(role === 'admin' || role === 'viewer') && (
+                        <div className="d-flex align-items-center flex-grow-1">
                             <i className="bi bi-person-badge text-muted me-2"></i>
-                            <select className="form-select border-0 bg-light rounded-3" value={selectedUser}
-                                onChange={e => {
+                            <select
+                                className="form-select bg-light rounded-3"
+                                value={selectedUser}
+                                onChange={(e) => {
                                     setDailyReports([]);
                                     setSelectedUser(e.target.value);
                                 }}
                             >
-                                <option value="">Select</option>
-                                {users.map(user => (
+                                <option value="">Select User</option>
+                                {users.map((user) => (
                                     <option key={user.id} value={user.id}>
                                         {user.first_name} {user.last_name}
                                     </option>
@@ -345,34 +432,53 @@ const ViewUtilizationReport = () => {
                         </div>
                     )}
 
-                    <div className="d-flex align-items-center border-start ps-3">
+                    <div className="d-flex align-items-center flex-grow-1 border-md-start ps-md-3">
                         <i className="bi bi-calendar2-month text-muted me-2"></i>
-                        <select className="form-select border-0 bg-light rounded-3" value={selectedMonth}
-                            onChange={e => setSelectedMonth(Number(e.target.value))}
+                        <select
+                            className="form-select bg-light rounded-3"
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
                         >
                             {months.map((month) => (
-                                <option key={month.value} value={month.value}>{month.label}</option>
+                                <option key={month.value} value={month.value}>
+                                    {month.label}
+                                </option>
                             ))}
                         </select>
                     </div>
 
-                    <div className="d-flex align-items-center border-start ps-3">
+                    <div className="d-flex align-items-center flex-grow-1 border-md-start ps-md-3">
                         <i className="bi bi-calendar-event text-muted me-2"></i>
-                        <select className="form-select border-0 bg-light rounded-3" value={selectedYear}
-                            onChange={e => setSelectedYear(Number(e.target.value))}
+                        <select
+                            className="form-select bg-light rounded-3"
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
                         >
-                            {Array.from({ length: 4 }, (_, i) => 2025 + i).map(year => (
-                                <option key={year} value={year}>{year}</option>
+                            {Array.from({ length: 4 }, (_, i) => 2025 + i).map((year) => (
+                                <option key={year} value={year}>
+                                    {year}
+                                </option>
                             ))}
                         </select>
                     </div>
-                    <div className="d-flex align-items-center border-start ps-3">
-                        <button onClick={exportUtilizationReport} className="btn btn-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '7px 16px', whiteSpace: 'nowrap' }}>
-                            ⬇ Export to Excel
+                    {dailyReports.length > 0 && (
+                        <button
+                            onClick={exportUtilizationReport}
+                            className="btn"
+                            style={{
+                                backgroundColor: "#065d48",
+                                color: "white",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            <i className="bi bi-file-earmark-excel me-1"></i>
+                            Export to Excel
                         </button>
-                    </div>
+                    )}
                 </div>
             </div>
+
 
             {/* Stat Cards */}
             {!loading && (

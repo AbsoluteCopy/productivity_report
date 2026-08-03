@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -13,8 +15,6 @@ import {
 import { Bar, Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-
-import * as XLSX from 'xlsx';
 
 ChartJS.register(
     CategoryScale,
@@ -39,7 +39,7 @@ const ViewReport = () => {
 
     const [dailyReports, setDailyReports] = useState([]);
     const [expandedRows, setExpandedRows] = useState({});
-    const [isAdmin, setIsAdmin] = useState(false);
+    const [role, setRole] = useState('');
     const [users, setUsers] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -52,14 +52,14 @@ const ViewReport = () => {
         if (!user) return;
 
         setCurrentUser(user);
-        setIsAdmin(user.role === "admin");
+        setRole(user.role);
     }, []);
 
     useEffect(() => {
-        if (isAdmin) {
+        if ((role === 'admin' || role === 'viewer' || role === 'hr')) {
             fetchUsers();
         }
-    }, [isAdmin]);
+    }, [role]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -70,23 +70,24 @@ const ViewReport = () => {
             selectedMonth,
             selectedUser
         );
+
+        fetchCategories(selectedUser);
     }, [currentUser, selectedYear, selectedMonth, selectedUser]);
 
-    useEffect(() => {
-        fetchCategories();
-    }, []);
 
-    const fetchCategories = async () => {
+    const fetchCategories = async (userId = '') => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
             if (!user) return;
-
-            // Fetch current user data to get their task_list
-            const userRes = await axios.get(`${API_BASE_URL}/users/me/`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+            
+            const userRes = await axios.get(
+                userId ? `${API_BASE_URL}/users/${userId}/` : `${API_BASE_URL}/users/me/`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
                 }
-            });
+            );
             const userTaskList = userRes.data.task_list || [];
 
             // Fetch all task categories
@@ -121,7 +122,15 @@ const ViewReport = () => {
             const response = await fetch(`${API_BASE_URL}/users/`);
             const data = await response.json();
 
-            const filteredUsers = data.filter(user => user.role === 'employee');
+            let filteredUsers = data.filter(user => user.role === 'employee');
+            
+            const userData = localStorage.getItem("user");
+            const user = userData ? JSON.parse(userData) : null;
+            
+            // If HR role, filter by company
+            if (user?.role === 'hr' && user?.company) {
+                filteredUsers = filteredUsers.filter(user => user.company === user.company);
+            }
 
             setUsers(filteredUsers);
 
@@ -135,7 +144,7 @@ const ViewReport = () => {
         try {
             let url;
 
-            if (user.role === 'admin') {
+            if (role === 'admin' || role === 'viewer' || role === 'hr') {
                 if (userId === '') {
                     return;
                 }
@@ -197,7 +206,9 @@ const ViewReport = () => {
         }, {})
     ).sort((a, b) => {
 
-        const dateCompare = new Date(a.date) - new Date(b.date);
+        const [aYear, aMonth, aDay] = a.date.split('-');
+        const [bYear, bMonth, bDay] = b.date.split('-');
+        const dateCompare = new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
 
         if (dateCompare !== 0) {
             return dateCompare;
@@ -254,8 +265,10 @@ const ViewReport = () => {
             ...weekendRows
         ].sort((a, b) => {
 
+            const [aYear, aMonth, aDay] = a.date.split('-');
+            const [bYear, bMonth, bDay] = b.date.split('-');
             const dateCompare =
-                new Date(a.date) - new Date(b.date);
+                new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
 
             if (dateCompare !== 0) {
                 return dateCompare;
@@ -424,101 +437,267 @@ const ViewReport = () => {
         }]
     };
 
-    const exportDailyReport = () => {
+    const exportDailyReport = async () => {
         const personName = (() => {
             if (selectedUser) {
-                const u = users.find(u => String(u.id) === String(selectedUser));
-                return u ? `${u.first_name}_${u.last_name}` : 'User';
+                const u = users.find(
+                    u => String(u.id) === String(selectedUser)
+                );
+
+                return u
+                    ? `${u.first_name}_${u.last_name}`
+                    : "User";
             }
-            return currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : 'User';
+
+            return currentUser
+                ? `${currentUser.first_name}_${currentUser.last_name}`
+                : "User";
         })();
 
-        const monthName = new Date(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-            .toLocaleString('default', { month: 'short' });
+        const monthName = new Date(
+            `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
+        ).toLocaleString("default", {
+            month: "short"
+        });
 
-        // Build rows matching the Daily Report table format from screenshot
-        const rows = [];
+
+        // Load Excel template
+        const response = await fetch(
+            "/templates/DailyReportTemplate.xlsx"
+        );
+
+        const buffer = await response.arrayBuffer();
+
+        const workbook = new ExcelJS.Workbook();
+
+        await workbook.xlsx.load(buffer);
+
+
+        const worksheet = workbook.getWorksheet("Sheet1");
+
+        if (!worksheet) {
+            console.log(
+                workbook.worksheets.map(ws => ws.name)
+            );
+
+            throw new Error(
+                "Daily Report sheet not found in template"
+            );
+        }
+
+
+        // Starting row (after headers)
+        let rowNumber = 2;
+
+
         displayReports.forEach(report => {
+
             const isWeekend = report.isWeekend;
-            const isLeave = report.task_category === 'Holiday' || report.task_category === 'PTO' || report.task_category === 'Company Event';
-            const isDailyTotal = report.task_category === 'Daily Total';
-            const [year, month, day] = report.date.split('-');
-            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
-            const dateLabel = `${day}-${dateObj.toLocaleString('en-US', { month: 'short' })}-${String(year).slice(-2)}`;
-            const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+            const isLeave =
+                report.task_category === "Holiday" ||
+                report.task_category === "PTO" ||
+                report.task_category === "Company Event";
+
+            const isDailyTotal =
+                report.task_category === "Daily Total";
+
+
+            const [year, month, day] = report.date.split("-");
+
+            const dateObj = new Date(
+                Number(year),
+                Number(month) - 1,
+                Number(day)
+            );
+
+
+            const dateLabel =
+                `${day}-${dateObj.toLocaleString("en-US", {
+                    month: "short"
+                })}-${String(year).slice(-2)}`;
+
+
+            const dayLabel =
+                dateObj.toLocaleDateString(
+                    "en-US",
+                    {
+                        weekday: "long"
+                    }
+                );
+
+
+            let rowValues;
+
 
             if (isWeekend) {
-                rows.push({ Date: dateLabel, Day: dayLabel, Task: 'Weekend', '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': '', 'Meeting Trainings(mins)': '' });
-                return;
+
+                rowValues = [
+                    dateLabel,
+                    dayLabel,
+                    "Weekend",
+                    "",
+                    "",
+                    "",
+                    ""
+                ];
+
+            } else if (isLeave) {
+
+                const leaveLabel =
+                    report.task_category +
+                    (
+                        report.task_list?.[0]
+                            ? ` - ${report.task_list[0]}`
+                            : ""
+                    );
+
+
+                rowValues = [
+                    dateLabel,
+                    dayLabel,
+                    leaveLabel,
+                    "",
+                    "",
+                    "",
+                    ""
+                ];
+
+
+            } else if (isDailyTotal) {
+
+                rowValues = [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    report.dailyWorkingHours ?? "",
+                    report.dailyMeetings ?? ""
+                ];
+
+
+            } else {
+
+                const taskName =
+                    report.task_category === "Others"
+                        ? (report.sub_category || "Others")
+                        : report.task_category;
+
+
+                const workingHours =
+                    Number(report.number_of_tasks || 0) *
+                    Number(report.time_spent || 0);
+
+
+                rowValues = [
+                    dateLabel,
+                    dayLabel,
+                    taskName,
+                    report.number_of_tasks ?? "",
+                    report.time_spent ?? "",
+                    workingHours || "",
+                    report.meeting_count || ""
+                ];
             }
-            if (isLeave) {
-                const leaveLabel = report.task_category + (report.task_list?.[0] ? ` - ${report.task_list[0]}` : '');
-                rows.push({ Date: dateLabel, Day: dayLabel, Task: leaveLabel, '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': '', 'Meeting Trainings(mins)': '' });
-                return;
-            }
-            if (isDailyTotal) {
-                rows.push({ Date: '', Day: '', Task: '', '# of Task': '', 'Time Spent(mins)': '', 'Working Hours(mins)': report.dailyWorkingHours ?? '', 'Meeting Trainings(mins)': report.dailyMeetings ?? '' });
-                return;
-            }
-            const taskName = report.task_category === 'Others' ? (report.sub_category || 'Others') : report.task_category;
-            const workingHours = (Number(report.number_of_tasks || 0) * Number(report.time_spent || 0));
-            rows.push({
-                Date: dateLabel,
-                Day: dayLabel,
-                Task: taskName,
-                '# of Task': report.number_of_tasks ?? '',
-                'Time Spent(mins)': report.time_spent ?? '',
-                'Working Hours(mins)': workingHours || '',
-                'Meeting Trainings(mins)': report.meeting_count || ''
-            });
+
+
+            const row = worksheet.getRow(rowNumber);
+
+            row.values = rowValues;
+
+            row.commit();
+
+            rowNumber++;
         });
 
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Daily Report');
-        XLSX.writeFile(wb, `Daily_Report_${personName}_${monthName}_${selectedYear}.xlsx`);
+
+        const output =
+            await workbook.xlsx.writeBuffer();
+
+
+        saveAs(
+            new Blob([output]),
+            `Daily_Report_${personName}_${monthName}_${selectedYear}.xlsx`
+        );
     };
 
-    const exportItemsPerTask = () => {
+    const exportItemsPerTask = async () => {
         const personName = (() => {
             if (selectedUser) {
                 const u = users.find(u => String(u.id) === String(selectedUser));
-                return u ? `${u.first_name}_${u.last_name}` : 'User';
+                return u ? `${u.first_name}_${u.last_name}` : "User";
             }
-            return currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : 'User';
+            return currentUser
+                ? `${currentUser.first_name}_${currentUser.last_name}`
+                : "User";
         })();
 
-        const monthName = new Date(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-            .toLocaleString('default', { month: 'short' });
+        const monthName = new Date(
+            `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
+        ).toLocaleString("default", { month: "short" });
 
-        const rows = filteredReports.map(report => {
-            const row = { Date: report.date };
 
-            categoryNames.forEach(category => {
-                const taskKey = `${category}_tasks`;
-                const countKey = `${category}_count`;
-                const timeKey = `${category}_time`;
+        // Load template
+        const workbook = new ExcelJS.Workbook();
 
-                const taskList = report[taskKey] || [];
+        const templateResponse = await fetch("/templates/Items_Per_Task_Template.xlsx");
+        const templateBuffer = await templateResponse.arrayBuffer();
 
-                if (taskList.length > 0) {
-                    row[category] = taskList.join(', ');
-                    row[`# of Task - ${category}`] = report[countKey] || '';
-                    row[`Working Hours(mins) - ${category}`] = report[timeKey] || '';
-                } else {
-                    row[category] = '';
-                    row[`# of Task - ${category}`] = '';
-                    row[`Working Hours(mins) - ${category}`] = '';
-                }
-            });
+        await workbook.xlsx.load(templateBuffer);
 
-            return row;
+        // Get worksheet from template
+        const worksheet = workbook.getWorksheet("Sheet1");
+
+        if (!worksheet) {
+            throw new Error("Worksheet 'Items per Task' not found in template");
+        }
+
+        const headers = ["Date"];
+
+        categoryNames.forEach(category => {
+            headers.push(
+                category,
+                `# of Task - ${category}`,
+                `Working Hours(mins) - ${category}`
+            );
         });
 
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Items per Task');
-        XLSX.writeFile(wb, `Items_Per_Task_${personName}_${monthName}_${selectedYear}.xlsx`);
+        worksheet.getRow(1).values = headers;
+
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.commit();
+
+
+        const startRow = 2;
+
+        filteredReports.forEach((report, index) => {
+            const values = [report.date];
+
+            categoryNames.forEach(category => {
+                const taskList = report[`${category}_tasks`] || [];
+
+                values.push(
+                    taskList.length ? taskList.join(", ") : "",
+                    taskList.length ? report[`${category}_count`] || "" : "",
+                    taskList.length ? report[`${category}_time`] || "" : ""
+                );
+            });
+
+            worksheet.getRow(startRow + index).values = values;
+        });
+
+
+
+
+        // Generate file
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        saveAs(
+            new Blob([buffer]),
+            `Items_Per_Task_${personName}_${monthName}_${selectedYear}.xlsx`
+        );
     };
 
     const pieChartOptions = {
@@ -621,7 +800,7 @@ const ViewReport = () => {
 
         return (
             <div className="table-responsive">
-                <table className="table table-hover table-bordered table-striped">
+                <table className="table table-hover table-bordered table-striped font-12">
                     <thead className="table-light">
                         <tr>
                             {itemsReportColumns.map(col => (
@@ -675,47 +854,45 @@ const ViewReport = () => {
             <div className="card shadow-sm">
                 <div className="card-body">
 
-                    <div className="d-flex align-items-center justify-content-between gap-3 p-3 bg-light rounded shadow-sm">
+                    <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 p-3 bg-light rounded shadow-sm">
+                        <h3 className="mb-0">Daily Reports</h3>
 
-                        <h3 className="mb-0">
-                            Daily Reports
-                        </h3>
-
-                        <div className="d-flex align-items-center gap-2">
-                            {isAdmin && (
-                                <select className="form-select w-auto" value={selectedUser}
+                        <div className="d-flex flex-column flex-sm-row gap-2 w-100">
+                            {(role === 'admin' || role === 'viewer') && (
+                                <select
+                                    className="form-select flex-fill"
+                                    value={selectedUser}
                                     onChange={e => {
                                         setDailyReports([]);
                                         setSelectedUser(e.target.value);
                                     }}
                                 >
-                                    <option value="">Select</option>
+                                    <option value="">Select User</option>
 
-                                    {users.map((user) => (
+                                    {users.map(user => (
                                         <option key={user.id} value={user.id}>
                                             {user.first_name} {user.last_name}
                                         </option>
                                     ))}
-
                                 </select>
                             )}
 
-                            <select className="form-select w-auto" value={selectedMonth}
-                                onChange={(e) =>
-                                    setSelectedMonth(Number(e.target.value))
-                                }
+                            <select
+                                className="form-select flex-fill"
+                                value={selectedMonth}
+                                onChange={e => setSelectedMonth(Number(e.target.value))}
                             >
-                                {months.map((month) => (
+                                {months.map(month => (
                                     <option key={month.value} value={month.value}>
                                         {month.label}
                                     </option>
                                 ))}
                             </select>
 
-                            <select className="form-select w-auto" value={selectedYear}
-                                onChange={(e) =>
-                                    setSelectedYear(Number(e.target.value))
-                                }
+                            <select
+                                className="form-select flex-fill"
+                                value={selectedYear}
+                                onChange={e => setSelectedYear(Number(e.target.value))}
                             >
                                 {Array.from({ length: 4 }, (_, i) => 2025 + i).map(year => (
                                     <option key={year} value={year}>
@@ -726,181 +903,206 @@ const ViewReport = () => {
                         </div>
                     </div>
 
-                    <ul className="nav nav-tabs mt-3" id="reportTabs" role="tablist">
+
+                    <ul className="nav nav-tabs custom-report-tabs mt-3" id="reportTabs" role="tablist">
                         <li className="nav-item" role="presentation">
-                            <button className="nav-link active" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-report" type="button" role="tab" aria-selected>{''}
+                            <button
+                                className="nav-link active"
+                                id="daily-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#daily-report"
+                                type="button"
+                                role="tab"
+                                aria-selected="true"
+                            >
                                 Daily Report
                             </button>
                         </li>
 
                         <li className="nav-item" role="presentation">
-                            <button className="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-report" type="button" role="tab">
+                            <button
+                                className="nav-link"
+                                id="summary-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#summary-report"
+                                type="button"
+                                role="tab"
+                            >
                                 Summary of Task
                             </button>
                         </li>
 
                         <li className="nav-item" role="presentation">
-                            <button className="nav-link" id="items-tab" data-bs-toggle="tab" data-bs-target="#items-report" type="button" role="tab">
+                            <button
+                                className="nav-link"
+                                id="items-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#items-report"
+                                type="button"
+                                role="tab"
+                            >
                                 Items per Task
                             </button>
                         </li>
                     </ul>
+
 
                     <div className="tab-content" id="reportTabsContent">
                         <div className="tab-pane fade show active" id="daily-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2">
                                 {dailyReports.length === 0 ? null : (
                                     <button onClick={exportDailyReport} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
-                                        ⬇ Export to Excel
+                                        <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
                                 )}
                             </div>
-                            {loading ? (
-                                <div className="text-center py-5">
-                                    <div className="spinner-border text-primary" role="status">
-                                        <span className="visually-hidden">Loading...</span>
+                            <div className="table-responsive">
+                                {loading ? (
+                                    <div className="text-center py-5">
+                                        <div className="spinner-border text-primary" role="status">
+                                            <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p className="mt-2">Loading reports...</p>
                                     </div>
-                                    <p className="mt-2">Loading reports...</p>
-                                </div>
-                            ) : dailyReports.length === 0 ? (
-                                <div className="text-center py-5">
-                                    <p className="text-muted">No reports available for the selected period.</p>
-                                </div>
-                            ) : (
-                                <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
-                                    <thead>
-                                        <tr>
-                                            <th className='main-background text-white py-2'>Date</th>
-                                            <th className='main-background text-white py-2'>Day</th>
-                                            <th className='main-background text-white py-2'>Task</th>
-                                            <th className='main-background text-white py-2'># of Task</th>
-                                            <th className='main-background text-white py-2'>Time Spent(mins)</th>
-                                            <th className='main-background text-white py-2'>Working Hours(mins)</th>
-                                            <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
-                                        </tr>
-                                    </thead>
+                                ) : dailyReports.length === 0 ? (
+                                    <div className="text-center py-5">
+                                        <p className="text-muted">No reports available for the selected period.</p>
+                                    </div>
+                                ) : (
+                                    <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
+                                        <thead>
+                                            <tr>
+                                                <th className='main-background text-white py-2'>Date</th>
+                                                <th className='main-background text-white py-2'>Day</th>
+                                                <th className='main-background text-white py-2'>Task</th>
+                                                <th className='main-background text-white py-2'># of Task</th>
+                                                <th className='main-background text-white py-2'>Time Spent(mins)</th>
+                                                <th className='main-background text-white py-2'>Working Hours(mins)</th>
+                                                <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
+                                            </tr>
+                                        </thead>
 
-                                    <tbody>
-                                        {
-                                            displayReports.map((report, index) => {
-                                                if (report.isTotal) {
+                                        <tbody>
+                                            {
+                                                displayReports.map((report, index) => {
+                                                    if (report.isTotal) {
+                                                        return (
+                                                            <tr key={report.id} className="fw-bold">
+                                                                <td></td>
+                                                                <td></td>
+                                                                <td></td>
+                                                                <td></td>
+                                                                <td></td>
+                                                                <td>{report.working_hours_total}</td>
+                                                                <td>{report.meeting_total}</td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    const [year, month, day] = report.date.split('-');
+                                                    const date = new Date(year, month - 1, day);
+                                                    const previousReport = displayReports[index - 1];
+                                                    const showDate =
+                                                        !previousReport ||
+                                                        previousReport.date !== report.date;
+                                                    const isLeave =
+                                                        report.task_category === 'Holiday' ||
+                                                        report.task_category === 'PTO' ||
+                                                        report.task_category === 'Company Event';
                                                     return (
-                                                        <tr key={report.id} className="fw-bold">
-                                                            <td></td>
-                                                            <td></td>
-                                                            <td></td>
-                                                            <td></td>
-                                                            <td></td>
-                                                            <td>{report.working_hours_total}</td>
-                                                            <td>{report.meeting_total}</td>
-                                                        </tr>
-                                                    );
-                                                }
-                                                const [year, month, day] = report.date.split('-');
-                                                const date = new Date(year, month - 1, day);
-                                                const previousReport = displayReports[index - 1];
-                                                const showDate =
-                                                    !previousReport ||
-                                                    previousReport.date !== report.date;
-                                                const isLeave =
-                                                    report.task_category === 'Holiday' ||
-                                                    report.task_category === 'PTO' ||
-                                                    report.task_category === 'Company Event';
-                                                return (
-                                                    <tr key={`${report.date}-${report.task_category}-${report.time_spent}`} className={`
+                                                        <tr key={`${report.date}-${report.task_category}-${report.time_spent}`} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
                                                             ${isLeave ? "table-info" : ""}
                                                             middle
                                                         `}>
-                                                        <td>
-                                                            {showDate &&
-                                                                `${date.getDate()}-${date.toLocaleString(
-                                                                    'en-US',
-                                                                    { month: 'short' }
-                                                                )}-${String(date.getFullYear()).slice(-2)}`
-                                                            }
-                                                        </td>
+                                                            <td>
+                                                                {showDate &&
+                                                                    `${date.getDate()}-${date.toLocaleString(
+                                                                        'en-US',
+                                                                        { month: 'short' }
+                                                                    )}-${String(date.getFullYear()).slice(-2)}`
+                                                                }
+                                                            </td>
 
-                                                        <td>
-                                                            {showDate &&
-                                                                date.toLocaleDateString(
-                                                                    'en-US',
-                                                                    { weekday: 'long' }
-                                                                )
-                                                            }
-                                                        </td>
-                                                        <td>
-                                                            <div>
-                                                                {report.task_category === 'Others' ? report.sub_category : report.task_category}
-                                                                {(report.task_category === 'Holiday' || report.task_category === 'Company Event') && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
-                                                            </div>
+                                                            <td>
+                                                                {showDate &&
+                                                                    date.toLocaleDateString(
+                                                                        'en-US',
+                                                                        { weekday: 'long' }
+                                                                    )
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                <div>
+                                                                    {report.task_category === 'Others' ? report.sub_category : report.task_category}
+                                                                    {(report.task_category === 'Holiday' || report.task_category === 'Company Event') && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
+                                                                </div>
 
-                                                            {!report.isWeekend &&
-                                                                !isLeave &&
-                                                                report.task_list &&
-                                                                report.task_list.length > 0 &&
-                                                                report.number_of_tasks > 0 && (
-                                                                    <>
-                                                                        <button type="button"
-                                                                            className="btn btn-sm btn-outline-success mt-2"
-                                                                            onClick={() =>
-                                                                                toggleTaskList(
+                                                                {!report.isWeekend &&
+                                                                    !isLeave &&
+                                                                    report.task_list &&
+                                                                    report.task_list.length > 0 &&
+                                                                    report.number_of_tasks > 0 && (
+                                                                        <>
+                                                                            <button type="button"
+                                                                                className="btn btn-sm btn-outline-success mt-2"
+                                                                                onClick={() =>
+                                                                                    toggleTaskList(
+                                                                                        `${report.date}-${report.task_category}-${report.time_spent}`
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                {expandedRows[
                                                                                     `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                                )
-                                                                            }
-                                                                        >
+                                                                                ]
+                                                                                    ? 'Hide Tasks'
+                                                                                    : `Show Tasks (${report.task_list.length})`
+                                                                                }
+                                                                            </button>
+
+
                                                                             {expandedRows[
                                                                                 `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                            ]
-                                                                                ? 'Hide Tasks'
-                                                                                : `Show Tasks (${report.task_list.length})`
-                                                                            }
-                                                                        </button>
+                                                                            ] && (
+                                                                                    <ul className="mt-2 mb-0 ps-3">
+                                                                                        {report.task_list.map((task, i) => (
+                                                                                            <li key={`${task}-${i}`}>
+                                                                                                {task}
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                )}
+                                                                        </>
+                                                                    )
+                                                                }
+                                                            </td>
 
+                                                            <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
 
-                                                                        {expandedRows[
-                                                                            `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                        ] && (
-                                                                                <ul className="mt-2 mb-0 ps-3">
-                                                                                    {report.task_list.map((task, i) => (
-                                                                                        <li key={`${task}-${i}`}>
-                                                                                            {task}
-                                                                                        </li>
-                                                                                    ))}
-                                                                                </ul>
-                                                                            )}
-                                                                    </>
-                                                                )
-                                                            }
-                                                        </td>
+                                                            <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
 
-                                                        <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
+                                                            <td>
+                                                                {isLeave || report.number_of_tasks === 0
+                                                                    ? ''
+                                                                    : report.number_of_tasks && report.time_spent
+                                                                        ? report.number_of_tasks * report.time_spent
+                                                                        : ''
+                                                                }
+                                                            </td>
 
-                                                        <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
+                                                            <td>{isLeave || report.number_of_tasks === 0 ? '' : report.meeting_count}</td>
 
-                                                        <td>
-                                                            {isLeave || report.number_of_tasks === 0
-                                                                ? ''
-                                                                : report.number_of_tasks && report.time_spent
-                                                                    ? report.number_of_tasks * report.time_spent
-                                                                    : ''
-                                                            }
-                                                        </td>
-
-                                                        <td>{isLeave || report.number_of_tasks === 0 ? '' : report.meeting_count}</td>
-
-                                                    </tr>
-                                                );
-                                            })
-                                        }
-                                    </tbody>
-                                </table>
-                            )}
+                                                        </tr>
+                                                    );
+                                                })
+                                            }
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
                         </div>
 
                         <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="p-3">
-                                {/* Charts Section */}
                                 {dailyReports.length > 0 && (taskChartLabels.length > 0 || timeChartLabels.length > 0) && (
                                     <div className="row g-4 mb-4">
                                         <div className="col-md-6">
@@ -995,7 +1197,7 @@ const ViewReport = () => {
                             <div className="d-flex justify-content-end mt-3 me-2 mb-2">
                                 {dailyReports.length === 0 ? null : (
                                     <button onClick={exportItemsPerTask} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
-                                        ⬇ Export to Excel
+                                        <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
                                 )}
                             </div>
