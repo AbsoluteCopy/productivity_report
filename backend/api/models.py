@@ -17,7 +17,8 @@ class User(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     task_list = models.JSONField(default=list)
-    company = models.CharField(max_length=100, null=True)
+    token_version = models.IntegerField(default=0)
+    company = models.CharField(max_length=100, null=True, blank=True)
     
 
     def __str__(self):
@@ -58,7 +59,7 @@ class TaskCategory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=10, choices=[('active', 'Active'), ('inactive', 'Inactive')], default='active')
-    company = models.CharField(max_length=100, null=True)
+    company = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -72,7 +73,7 @@ class Holiday(models.Model):
     date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    company = models.CharField(max_length=100, null=True)
+    company = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return self.name

@@ -320,10 +320,11 @@ const ManageAccounts = () => {
                 <>
                     {row.role === "employee" && (
                         <button className="btn btn-info btn-sm me-2"
+                            data-bs-toggle="modal" data-bs-target="#taskModal"
                             onClick={() => manageTask(row.id)}
                         >
                             <i className="bi bi-list-task"></i> Manage Task
-                </button>
+                        </button>
                     )}
                     <button className="btn btn-primary btn-sm me-2"
                         data-bs-toggle="modal" data-bs-target="#userModal"
