@@ -246,33 +246,90 @@ const ViewUtilizationReport = () => {
                 ? `${currentUser.first_name}_${currentUser.last_name}`
                 : "User";
 
+        const displayName = selectedUserObj
+            ? `${selectedUserObj.first_name} ${selectedUserObj.last_name}`.toUpperCase()
+            : currentUser
+                ? `${currentUser.first_name} ${currentUser.last_name}`.toUpperCase()
+                : "USER";
+
         const monthName = new Date(selectedYear, selectedMonth - 1, 1)
+            .toLocaleString("default", { month: "long" }).toUpperCase();
+
+        const monthNameShort = new Date(selectedYear, selectedMonth - 1, 1)
             .toLocaleString("default", { month: "short" });
 
-        // Load template
-        const response = await fetch("/templates/UtilizationTemplate.xlsx");
-        const buffer = await response.arrayBuffer();
-
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(buffer);
+        const ws = workbook.addWorksheet("Sheet1");
 
-        const worksheet = workbook.getWorksheet("Sheet1");
+        ws.columns = [
+            { key: 'A', width: 11 }, { key: 'B', width: 12 }, { key: 'C', width: 9 },
+            { key: 'D', width: 10 }, { key: 'E', width: 10 }, { key: 'F', width: 10 },
+            { key: 'G', width: 10 }, { key: 'H', width: 10 }, { key: 'I', width: 9 },
+            { key: 'J', width: 9 },  { key: 'K', width: 2 },  { key: 'L', width: 10 },
+            { key: 'M', width: 11 }, { key: 'N', width: 8 },  { key: 'O', width: 9 },
+            { key: 'P', width: 11 }, { key: 'Q', width: 11 },
+        ];
 
-        // Header (adjust cells to match your template)
-        worksheet.getCell("B3").value = name || "";
-        worksheet.getCell("F3").value = employeeCode || "";
-        worksheet.getCell("I3").value = new Date(
-            selectedYear,
-            selectedMonth - 1,
-            1
-        )
-            .toLocaleString("default", { month: "long" })
-            .toUpperCase();
-        worksheet.getCell("L3").value = selectedYear;
+        const darkGreen  = 'FF3D6B27';
+        const hdrGreen   = 'FF4F7942';
+        const weekendClr = 'FFF4CCCC';
+        const holidayClr = 'FFFFF2CC';
+        const footerClr  = 'FFD9EAD3';
+        const goldClr    = 'FFF6C026';
+        const thin       = { style: 'thin', color: { argb: 'FF000000' } };
+        const borders    = { top: thin, left: thin, bottom: thin, right: thin };
+        const ctr        = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
-        // Table starts on row 6
-        let rowNumber = 6;
+        const fill = (cell, argb) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+        };
+        const font = (cell, { bold=false, color='FF000000', size=9 }={}) => {
+            cell.font = { bold, color: { argb: color }, size, name: 'Calibri' };
+        };
+        const style = (cell, bgArgb, fontOpts={}, align=ctr) => {
+            fill(cell, bgArgb); font(cell, fontOpts);
+            cell.alignment = align; cell.border = borders;
+        };
 
+        // ROW 1 — Title
+        ws.mergeCells('A1:Q1');
+        style(ws.getCell('A1'), hdrGreen, { bold:true, color:'FFFFFFFF', size:13 });
+        ws.getCell('A1').value = 'Employee Utilization Report';
+        ws.getRow(1).height = 22;
+
+        // ROW 2 — Info
+        ws.getRow(2).height = 18;
+        ws.mergeCells('A2:C2'); style(ws.getCell('A2'), hdrGreen, { color:'FFFFFFFF' });
+        ws.getCell('A2').value = 'Employee Name';
+        ws.mergeCells('D2:G2'); style(ws.getCell('D2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 });
+        ws.getCell('D2').value = displayName;
+        ws.mergeCells('H2:I2'); style(ws.getCell('H2'), hdrGreen, { color:'FFFFFFFF' });
+        ws.getCell('H2').value = 'Employee Code';
+        ws.mergeCells('J2:K2'); style(ws.getCell('J2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 });
+        ws.getCell('J2').value = employeeCode || '';
+        style(ws.getCell('L2'), hdrGreen, { color:'FFFFFFFF' }); ws.getCell('L2').value = 'Month';
+        ws.mergeCells('M2:O2'); style(ws.getCell('M2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 });
+        ws.getCell('M2').value = monthName;
+        style(ws.getCell('P2'), hdrGreen, { color:'FFFFFFFF' }); ws.getCell('P2').value = 'Year';
+        style(ws.getCell('Q2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 }); ws.getCell('Q2').value = selectedYear;
+
+        // ROW 3 — Column headers
+        ws.getRow(3).height = 40;
+        ['Date','Day','Week\nOffs','Holidays',
+         'Working\nHours\n(mins)','Meetings/\nTraining\n(mins)',
+         'Working\nHours\n(hrs)','Meetings/\nTraining\n(hrs)',
+         'Total\nHours w/o\nBreak','Total Hours','',
+         'Productive\nHours','Productive\nHours %',
+         'Break\nHours','Break\nHours %',
+         'Over/Down\ntime','Over/Downti\nme %'
+        ].forEach((h, i) => {
+            const c = ws.getRow(3).getCell(i+1);
+            style(c, hdrGreen, { bold:true, color:'FFFFFFFF' }); c.value = h;
+        });
+
+        // DATA ROWS from row 4
+        let rowNumber = 4;
+        // (data loop continues below)
         displayReports.forEach((report) => {
             const [year, month, day] = report.date.split("-");
             const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
@@ -287,8 +344,9 @@ const ViewUtilizationReport = () => {
 
             const isHoliday = report.task_category === "Holiday";
             const isPTO = report.task_category === "PTO";
+            const isCompanyEvent = report.task_category === "Company Event";
             const isWeekend = report.isWeekend;
-            const isSpecialDay = isWeekend || isHoliday || isPTO;
+            const isSpecialDay = isWeekend || isHoliday || isPTO || isCompanyEvent;
 
             const workingMins = Number(report.working_minutes || 0);
             const meetingMins = Number(report.meeting_minutes || 0);
@@ -339,57 +397,62 @@ const ViewUtilizationReport = () => {
                     100
                 )}%`;
 
-            const row = worksheet.getRow(rowNumber);
+            const row = ws.getRow(rowNumber);
+            row.height = 16;
 
-            row.getCell(1).value = dateLabel;
-            row.getCell(2).value = dayLabel;
-            row.getCell(3).value = isWeekend ? "Weekend" : "";
-            row.getCell(4).value = isHoliday
-                ? report.task_list?.[0] || "Holiday"
-                : isPTO
-                    ? "PTO"
-                    : "";
+            const vals = [
+                dateLabel, dayLabel,
+                isWeekend ? 'Weekend' : '',
+                isHoliday ? (report.task_list?.[0] || 'Holiday') : isPTO ? 'PTO' : isCompanyEvent ? 'Company Event' : '',
+                isSpecialDay ? '' : workingMins,
+                isSpecialDay ? '' : meetingMins,
+                isSpecialDay ? '' : workingHrs,
+                isSpecialDay ? '' : meetingHrs,
+                totalHoursNoBreak, totalHours, '',
+                isSpecialDay ? '' : productiveHours,
+                prodPct, breakHours, breakPct, overDownTime, overDownPct,
+            ];
 
-            row.getCell(5).value = isSpecialDay ? "" : workingMins;
-            row.getCell(6).value = isSpecialDay ? "" : meetingMins;
-            row.getCell(7).value = isSpecialDay ? "" : workingHrs;
-            row.getCell(8).value = isSpecialDay ? "" : meetingHrs;
-            row.getCell(9).value = totalHoursNoBreak;
-            row.getCell(10).value = totalHours;
-            row.getCell(11).value = productiveHours;
-            row.getCell(12).value = prodPct;
-            row.getCell(13).value = breakHours;
-            row.getCell(14).value = breakPct;
-            row.getCell(15).value = overDownTime;
-            row.getCell(16).value = overDownPct;
+            const rowBg = isWeekend ? weekendClr : (isHoliday || isPTO || isCompanyEvent) ? holidayClr : 'FFFFFFFF';
+
+            vals.forEach((val, idx) => {
+                const c = row.getCell(idx + 1);
+                c.value = val;
+                c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+                c.font = { name: 'Calibri', size: 9 };
+                c.border = borders;
+                fill(c, rowBg);
+            });
 
             row.commit();
-
             rowNumber++;
         });
 
-        // Footer
+        // FOOTER
         rowNumber++;
+        const fRow = rowNumber;
+        ws.getRow(fRow).height = 18;
 
-        const footer = worksheet.getRow(rowNumber);
+        ws.mergeCells(`A${fRow}:C${fRow}`);
+        style(ws.getCell(`A${fRow}`), footerClr, { bold:true }); ws.getCell(`A${fRow}`).value = 'Average Productivity %';
+        style(ws.getCell(`D${fRow}`), goldClr, { bold:true }); ws.getCell(`D${fRow}`).value = `${Math.round(averageProductivity)}%`;
+        ws.mergeCells(`E${fRow}:G${fRow}`);
+        style(ws.getCell(`E${fRow}`), footerClr, { bold:true }); ws.getCell(`E${fRow}`).value = 'Total Productive Hours';
+        style(ws.getCell(`H${fRow}`), goldClr, { bold:true }); ws.getCell(`H${fRow}`).value = totalProductiveHours.toFixed(2);
+        ws.mergeCells(`I${fRow}:J${fRow}`);
+        style(ws.getCell(`I${fRow}`), footerClr, { bold:true }); ws.getCell(`I${fRow}`).value = 'Days Worked';
+        ws.mergeCells(`K${fRow}:L${fRow}`);
+        style(ws.getCell(`K${fRow}`), goldClr, { bold:true }); ws.getCell(`K${fRow}`).value = daysWorked;
+        ws.mergeCells(`M${fRow}:P${fRow}`);
+        style(ws.getCell(`M${fRow}`), footerClr, { bold:true }); ws.getCell(`M${fRow}`).value = 'Holidays or PTOs';
+        style(ws.getCell(`Q${fRow}`), goldClr, { bold:true }); ws.getCell(`Q${fRow}`).value = holidaysOrPTOs;
+        ws.getRow(fRow).commit();
 
-        footer.getCell(1).value = "Average Productivity %";
-        footer.getCell(2).value = `${Math.round(averageProductivity)}%`;
-        footer.getCell(5).value = "Total Productive Hours";
-        footer.getCell(6).value = totalProductiveHours.toFixed(2);
-        footer.getCell(10).value = "Days Worked";
-        footer.getCell(11).value = daysWorked;
-        footer.getCell(15).value = "Holidays or PTOs";
-        footer.getCell(16).value = holidaysOrPTOs;
-
-        footer.commit();
-
-        // Download
+        // DOWNLOAD
         const output = await workbook.xlsx.writeBuffer();
-
         saveAs(
-            new Blob([output]),
-            `Utilization_Report_${personName}_${monthName}_${selectedYear}.xlsx`
+            new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+            `Utilization_Report_${personName}_${monthNameShort}_${selectedYear}.xlsx`
         );
     };
 

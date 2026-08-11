@@ -54,7 +54,9 @@ const ManageTaskCategory = () => {
         setLoading(true);
 
         try {
-            const { data } = await axios.get(API_URL);
+            const token = localStorage.getItem("token");
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            const { data } = await axios.get(API_URL, config);
             
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
@@ -131,10 +133,13 @@ const ManageTaskCategory = () => {
                 return;
             }
 
+            const token = localStorage.getItem("token");
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+
             if (editingId) {
-                await axios.put(`${API_URL}${editingId}/`, payload);
+                await axios.put(`${API_URL}${editingId}/`, payload, config);
             } else {
-                await axios.post(API_URL, payload);
+                await axios.post(API_URL, payload, config);
             }
 
             await fetchCategories();
@@ -183,7 +188,9 @@ const ManageTaskCategory = () => {
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
-                    await axios.delete(`${API_URL}${id}/`);
+                    const token = localStorage.getItem("token");
+                    const config = { headers: { Authorization: `Bearer ${token}` } };
+                    await axios.delete(`${API_URL}${id}/`, config);
                     await fetchCategories();
                     Swal.fire({
                         icon: "success",

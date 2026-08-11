@@ -43,6 +43,7 @@ def login(request):
             # Generate JWT token
             token = jwt.encode({
                 'user_id': user.id,
+                'token_version': user.token_version,
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
             }, settings.SECRET_KEY, algorithm='HS256')
             
@@ -98,7 +99,12 @@ class UserListView(APIView):
         if token:
             try:
                 decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-                return decoded.get('user_id')
+                user_id = decoded.get('user_id')
+                token_version = decoded.get('token_version', 0)
+                if user_id:
+                    user = User.objects.get(pk=user_id)
+                    if user.token_version == token_version:
+                        return user_id
             except:
                 pass
         return None
@@ -552,3 +558,28 @@ class HolidayDetailView(APIView):
             holiday.delete()
             return Response({"message": "Holiday deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         return Response({"error": "Holiday not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_id = None
+        # Try to get user_id from JWT token
+        token = request.META.get('HTTP_AUTHORIZATION', '').replace('Bearer ', '')
+        if token:
+            try:
+                decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+                user_id = decoded.get('user_id')
+            except:
+                pass
+
+        if user_id:
+            try:
+                user = User.objects.get(pk=user_id)
+                user.token_version += 1
+                user.save()
+                return Response({"message": "Successfully logged out."}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({"error": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
