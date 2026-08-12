@@ -79,7 +79,7 @@ const ViewReport = () => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
             if (!user) return;
-            
+
             const userRes = await axios.get(
                 userId ? `${API_BASE_URL}/users/${userId}/` : `${API_BASE_URL}/users/me/`,
                 {
@@ -123,10 +123,10 @@ const ViewReport = () => {
             const data = await response.json();
 
             let filteredUsers = data.filter(user => user.role === 'employee');
-            
+
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
-            
+
             // If HR role, filter by company
             if (user?.role === 'hr' && user?.company) {
                 filteredUsers = filteredUsers.filter(user => user.company === user.company);
@@ -663,11 +663,9 @@ const ViewReport = () => {
             );
         });
 
-        worksheet.getRow(1).values = headers;
-
-        const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true };
-        headerRow.commit();
+        headers.forEach((header, index) => {
+            worksheet.getCell(1, index + 1).value = header;
+        });
 
 
         const startRow = 2;
@@ -687,7 +685,6 @@ const ViewReport = () => {
 
             worksheet.getRow(startRow + index).values = values;
         });
-
 
 
 
@@ -858,7 +855,7 @@ const ViewReport = () => {
                         <h3 className="mb-0">Daily Reports</h3>
 
                         <div className="d-flex flex-column flex-sm-row gap-2 w-100">
-                            {(role === 'admin' || role === 'viewer') && (
+                            {(role === 'admin' || role === 'viewer' || role === 'hr') && (
                                 <select
                                     className="form-select flex-fill"
                                     value={selectedUser}

@@ -6,12 +6,22 @@ from rest_framework import status
 from rest_framework.views import APIView
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
+from django.utils import timezone
 import jwt
 import datetime
 
 from .models import User, DailyReport, TaskCategory, Holiday
 from .serializers import UserSerializer, DailyReportSerializer, TaskCategorySerializer, HolidaySerializer
 from .permissions import IsAdmin
+
+
+def is_more_than_one_month_old(report_date):
+    """Check if a date is more than 1 month old from current date."""
+    if not report_date:
+        return False
+    current_date = timezone.now().date()
+    one_month_ago = current_date - datetime.timedelta(days=30)
+    return report_date < one_month_ago
 
 
 # Create your views here.
@@ -292,6 +302,16 @@ class DailyReportListView(APIView):
 class DailyReportDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get_user_id_from_token(self, request):
+        token = request.META.get('HTTP_AUTHORIZATION', '').replace('Bearer ', '')
+        if token:
+            try:
+                decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+                return decoded.get('user_id')
+            except:
+                pass
+        return None
+
     def get_object(self, pk):
         try:
             return DailyReport.objects.get(pk=pk)
@@ -319,6 +339,13 @@ class DailyReportDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Check if report is more than 1 month old
+        if is_more_than_one_month_old(report.date):
+            return Response(
+                {"error": "Cannot edit records older than 1 month"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = DailyReportSerializer(
             report,
             data=request.data,
@@ -335,9 +362,18 @@ class DailyReportDetailView(APIView):
         )
         
     def has_permission(self, request, report):
-        if request.user.role == "admin":
-            return True
-        return report.user_id == request.user.id
+        # Get user from JWT token
+        user_id = self.get_user_id_from_token(request)
+        if not user_id:
+            return False
+        
+        try:
+            user = User.objects.get(pk=user_id)
+            if user.role == "admin":
+                return True
+            return report.user_id == user.id
+        except User.DoesNotExist:
+            return False
 
     def delete(self, request, pk):
         report = self.get_object(pk)
@@ -351,6 +387,13 @@ class DailyReportDetailView(APIView):
         if not self.has_permission(request, report):
             return Response(
                 {"error": "Permission denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if report is more than 1 month old
+        if is_more_than_one_month_old(report.date):
+            return Response(
+                {"error": "Cannot delete records older than 1 month"},
                 status=status.HTTP_403_FORBIDDEN
             )
 

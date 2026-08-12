@@ -8,6 +8,7 @@ db.sqlite3
 venv/
 env/
 .env
+.md
 
 # Node / React / Vite
 node_modules/
@@ -24,3 +25,5 @@ yarn-error.log*
 # System
 .DS_Store
 Thumbs.db
+deployment.md
+*.zip

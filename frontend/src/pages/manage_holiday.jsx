@@ -212,11 +212,11 @@ export default function HolidayManagement() {
             name: "Actions",
             cell: row => (
                 <>
-                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#holidayModal" onClick={() => editHoliday(row)}>
+                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" title="Edit Holiday" data-bs-target="#holidayModal" onClick={() => editHoliday(row)}>
                         <i className="bi bi-pencil"></i>
                     </button>
 
-                    <button className="btn btn-danger btn-sm" onClick={() => deleteHoliday(row.id)} >
+                    <button className="btn btn-danger btn-sm" title="Delete Holiday" onClick={() => deleteHoliday(row.id)} >
                         <i className="bi bi-trash"></i>
                     </button>
                 </>

@@ -43,6 +43,7 @@ const ManageAccounts = () => {
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
+    const [categorySearch, setCategorySearch] = useState("");
     const requiredFields = [
         "id_number",
         "first_name",
@@ -54,7 +55,7 @@ const ManageAccounts = () => {
     const isValid = requiredFields.every(
         field => formData[field]?.trim()
     );
-    
+
     useEffect(() => {
         const userData = localStorage.getItem("user");
         if (userData) {
@@ -82,16 +83,16 @@ const ManageAccounts = () => {
     const fetchUsers = async () => {
         try {
             const { data } = await getUsers();
-            
+
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
-            
+
             // If HR role, filter by company
             let filteredUsers = data;
             if (user?.role === 'hr' && user?.company) {
                 filteredUsers = data.filter(u => u.company === user.company);
             }
-            
+
             setUsers(filteredUsers);
         } catch (err) {
             console.error(err);
@@ -128,10 +129,10 @@ const ManageAccounts = () => {
             });
             return;
         }
-        
+
         const userData = localStorage.getItem("user");
         const user = userData ? JSON.parse(userData) : null;
-        
+
         // HR cannot create admin accounts
         if (user?.role === 'hr' && formData.role === 'admin') {
             Swal.fire({
@@ -141,7 +142,33 @@ const ManageAccounts = () => {
             });
             return;
         }
-        
+
+        // Check for duplicate ID number
+        const duplicateIdNumber = users.find(
+            u => u.id_number === formData.id_number && u.id !== editingId
+        );
+        if (duplicateIdNumber) {
+            Swal.fire({
+                icon: "error",
+                title: "Duplicate ID Number",
+                text: "An account with this ID number already exists.",
+            });
+            return;
+        }
+
+        // Check for duplicate email
+        const duplicateEmail = users.find(
+            u => u.email === formData.email && u.id !== editingId
+        );
+        if (duplicateEmail) {
+            Swal.fire({
+                icon: "error",
+                title: "Duplicate Email",
+                text: "An account with this email already exists.",
+            });
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = { ...formData };
@@ -149,12 +176,12 @@ const ManageAccounts = () => {
             if (editingId && !payload.password) {
                 delete payload.password;
             }
-            
+
             // If HR role, ensure company is set to their own company
             if (user?.role === 'hr' && user?.company) {
                 payload.company = user.company;
             }
-            
+
             // If HR and not editing, default role to employee
             if (user?.role === 'hr' && !editingId) {
                 payload.role = 'employee';
@@ -237,6 +264,7 @@ const ManageAccounts = () => {
         if (user) {
             setCurrentUserId(userId);
             setSelectedCategories(user.task_list || []);
+            setCategorySearch("");
             setShowTaskModal(true);
         }
     };
@@ -300,8 +328,8 @@ const ManageAccounts = () => {
                     className={`badge ${row.role === "admin"
                         ? "bg-danger"
                         : row.role === "hr"
-                        ? "bg-warning"
-                        : "bg-primary"
+                            ? "bg-warning"
+                            : "bg-primary"
                         }`}
                 >
                     {row.role.toUpperCase()}
@@ -321,21 +349,22 @@ const ManageAccounts = () => {
                     {row.role === "employee" && (
                         <button className="btn btn-info btn-sm me-2"
                             data-bs-toggle="modal" data-bs-target="#taskModal"
+                            title="Manage task categories"
                             onClick={() => manageTask(row.id)}
                         >
-                            <i className="bi bi-list-task"></i> Manage Task
+                            <i className="bi bi-list-task"></i>
                         </button>
                     )}
                     <button className="btn btn-primary btn-sm me-2"
                         data-bs-toggle="modal" data-bs-target="#userModal"
+                        title="Edit User"
                         onClick={() => editUser(row)}
                     >
                         <i className="bi bi-pen"></i>
                     </button>
 
-                    <button className="btn btn-danger btn-sm"
-                        onClick={() => handleDeleteUser(row.id)}
-                    >
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(row.id)}
+                        title="Delete User">
                         <i className="bi bi-trash"></i>
                     </button>
                 </>
@@ -357,6 +386,13 @@ const ManageAccounts = () => {
         );
     }, [users, search]);
 
+    const sortedAndFilteredCategories = useMemo(() => {
+        const filtered = taskCategories.filter(category =>
+            category.name.toLowerCase().includes(categorySearch.toLowerCase())
+        );
+        return filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }, [taskCategories, categorySearch]);
+
     return (
         <div className="container mt-4">
             <div className="card shadow">
@@ -376,9 +412,7 @@ const ManageAccounts = () => {
 
                 <div className="card-body">
 
-                    <input
-                        type="text"
-                        className="form-control mb-3"
+                    <input type="text" className="form-control mb-3"
                         placeholder="Search employee..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -517,8 +551,15 @@ const ManageAccounts = () => {
                             ></button>
                         </div>
                         <div className="modal-body">
+                            <input
+                                type="text"
+                                className="form-control mb-3"
+                                placeholder="Search categories..."
+                                value={categorySearch}
+                                onChange={(e) => setCategorySearch(e.target.value)}
+                            />
                             <div className="row">
-                                {taskCategories.map((category) => (
+                                {sortedAndFilteredCategories.map((category) => (
                                     <div key={category.id} className="col-md-6 mb-3">
                                         <div className="form-check">
                                             <input

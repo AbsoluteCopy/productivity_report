@@ -474,7 +474,7 @@ const ViewUtilizationReport = () => {
 
                 <div className="d-flex flex-column flex-md-row align-items-stretch align-items-md-center gap-2 bg-white p-3 rounded-4 shadow-sm w-100 w-lg-auto">
 
-                    {(role === 'admin' || role === 'viewer') && (
+                    {(role === 'admin' || role === 'viewer' || role === 'hr') && (
                         <div className="d-flex align-items-center flex-grow-1">
                             <i className="bi bi-person-badge text-muted me-2"></i>
                             <select

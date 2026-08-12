@@ -67,7 +67,11 @@ const ManageTaskCategory = () => {
                 filteredCategories = data.filter(category => category.company === user.company);
             }
             
-            setCategories(filteredCategories);
+            // Sort categories in ascending order by name
+            const sortedCategories = filteredCategories.sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+            setCategories(sortedCategories);
         } catch (err) {
             showError(err);
         } finally {
@@ -247,11 +251,11 @@ const ManageTaskCategory = () => {
             name: "Actions",
             cell: row => (
                 <>
-                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#categoryModal" onClick={() => editCategory(row)}>
+                    <button className="btn btn-primary btn-sm me-2" data-bs-toggle="modal" title="Edit Category" data-bs-target="#categoryModal" onClick={() => editCategory(row)}>
                         <i className="bi bi-pencil"></i>
                     </button>
 
-                    <button className="btn btn-danger btn-sm" onClick={() => deleteCategory(row.id)} >
+                    <button className="btn btn-danger btn-sm" title="Delete Category" onClick={() => deleteCategory(row.id)} >
                         <i className="bi bi-trash"></i>
                     </button>
                 </>
