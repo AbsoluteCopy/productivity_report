@@ -424,7 +424,6 @@ const ViewUtilizationReport = () => {
                 fill(c, rowBg);
             });
 
-            row.commit();
             rowNumber++;
         });
 
@@ -438,7 +437,7 @@ const ViewUtilizationReport = () => {
         style(ws.getCell(`D${fRow}`), goldClr, { bold:true }); ws.getCell(`D${fRow}`).value = `${Math.round(averageProductivity)}%`;
         ws.mergeCells(`E${fRow}:G${fRow}`);
         style(ws.getCell(`E${fRow}`), footerClr, { bold:true }); ws.getCell(`E${fRow}`).value = 'Total Productive Hours';
-        style(ws.getCell(`H${fRow}`), goldClr, { bold:true }); ws.getCell(`H${fRow}`).value = totalProductiveHours.toFixed(2);
+        style(ws.getCell(`H${fRow}`), goldClr, { bold:true }); ws.getCell(`H${fRow}`).value = Number(totalProductiveHours.toFixed(2));
         ws.mergeCells(`I${fRow}:J${fRow}`);
         style(ws.getCell(`I${fRow}`), footerClr, { bold:true }); ws.getCell(`I${fRow}`).value = 'Days Worked';
         ws.mergeCells(`K${fRow}:L${fRow}`);
@@ -446,7 +445,6 @@ const ViewUtilizationReport = () => {
         ws.mergeCells(`M${fRow}:P${fRow}`);
         style(ws.getCell(`M${fRow}`), footerClr, { bold:true }); ws.getCell(`M${fRow}`).value = 'Holidays or PTOs';
         style(ws.getCell(`Q${fRow}`), goldClr, { bold:true }); ws.getCell(`Q${fRow}`).value = holidaysOrPTOs;
-        ws.getRow(fRow).commit();
 
         // DOWNLOAD
         const output = await workbook.xlsx.writeBuffer();

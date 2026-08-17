@@ -606,8 +606,6 @@ const ViewReport = () => {
 
             row.values = rowValues;
 
-            row.commit();
-
             rowNumber++;
         });
 
