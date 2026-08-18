@@ -28,6 +28,25 @@ class User(models.Model):
     def is_authenticated(self):
         return True
 
+    @property
+    def is_anonymous(self):
+        return False
+
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_staff(self):
+        return self.role == 'admin'
+
+    @property
+    def is_superuser(self):
+        return self.role == 'admin'
+
+    def get_username(self):
+        return self.email
+
     class Meta:
         db_table = 'users'
 
