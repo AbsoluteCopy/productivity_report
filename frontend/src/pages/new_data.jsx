@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import API_BASE_URL from "../config";
 
 const categoryOptions = [
     'Accounting Unapplied Payments',
@@ -61,58 +60,74 @@ const NewData = () => {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
             });
-            const userTaskList = userRes.data.task_list || [];
+            const userData = userRes.data;
+            const userTaskList = Array.isArray(userData.task_list) ? userData.task_list : [];
 
             // Fetch all task categories
-            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`);
-            const allCategories = categoriesRes.data;
+            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            const allCategories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
 
-            // Filter categories to only include those in user's task_list
-            const filteredCategories = allCategories.filter(category =>
-                userTaskList.includes(category.id)
-            );
-
-            setTaskCategories(filteredCategories);
+            // If admin, hr, or user has no specific task list assigned, allow all categories
+            if (userData.role === 'admin' || userData.role === 'hr' || userTaskList.length === 0) {
+                setTaskCategories(allCategories);
+            } else {
+                const filteredCategories = allCategories.filter(category =>
+                    userTaskList.includes(category.id)
+                );
+                setTaskCategories(filteredCategories);
+            }
         } catch (err) {
             console.error(err);
             Swal.fire({
                 icon: "error",
                 title: "Error",
-                text: err.response?.data?.detail || "Something went wrong.",
+                text: err.response?.data?.detail || err.response?.data?.error || "Something went wrong.",
             });
         }
     };
 
     const fetchReportForEdit = async (id) => {
         try {
-            const user = JSON.parse(localStorage.getItem("user"));
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = response.data;
 
-            axios.get(`${API_BASE_URL}/daily-reports/${id}/?user_id=${user.id}`)
-                .then(response => {
-                    const data = response.data;
-                    setFormData({
-                        date: data.date,
-                        work_type: data.work_type,
-                        user_id: data.user,
-                        holiday_name: (data.task_category === 'Holiday' || data.task_category === 'Company Event') ? data.task_list[0] : ''
-                    });
+            setFormData({
+                date: data.date,
+                work_type: data.work_type,
+                user_id: data.user,
+                holiday_name: (data.task_category === 'Holiday' || data.task_category === 'Company Event')
+                    ? (data.task_list?.[0] || '')
+                    : ''
+            });
 
-                    if (data.work_type === 'Working') {
-                        setCategories([
-                            {
-                                id: 1,
-                                category: data.task_category,
-                                sub_category: data.sub_category || '',
-                                tasks: data.task_list || [],
-                                currentTask: '',
-                                timeSpent: data.time_spent ? Number(data.time_spent) : 15,
-                                meetingCount: data.meeting_count || 0
-                            }
-                        ]);
+            if (data.work_type === 'Working') {
+                setCategories([
+                    {
+                        id: 1,
+                        category: data.task_category,
+                        sub_category: data.sub_category || '',
+                        tasks: Array.isArray(data.task_list) ? data.task_list : [],
+                        currentTask: '',
+                        timeSpent: data.time_spent ? Number(data.time_spent) : 15,
+                        meetingCount: data.meeting_count || 0,
+                        meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : ''
                     }
-                });
+                ]);
+            }
         } catch (error) {
-            console.error('Error fetching report:', error);
+            console.error('Error fetching report for edit:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to load report data for editing.',
+            });
         }
     };
 
@@ -499,6 +514,9 @@ const NewData = () => {
                                                                 {taskCategories.map(category => (
                                                                     <option key={category.id} value={category.name}>{category.name}</option>
                                                                 ))}
+                                                                {cat.category && !taskCategories.some(c => c.name === cat.category) && !['Meeting', 'Others'].includes(cat.category) && (
+                                                                    <option value={cat.category}>{cat.category}</option>
+                                                                )}
                                                                 <option value="Meeting">Meeting</option>
                                                                 <option value="Others">Others</option>
                                                             </select>

@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import API_BASE_URL from "../config";
 const API_URL = `${API_BASE_URL}/holidays/`;
 
 const EMPTY_HOLIDAY = {

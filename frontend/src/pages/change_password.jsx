@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import API_BASE_URL from "../config";
 
 const ChangePassword = () => {
     const navigate = useNavigate();

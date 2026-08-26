@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import API_BASE_URL from "../config";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -25,8 +26,6 @@ ChartJS.register(
     Tooltip,
     Legend
 );
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const ViewReport = () => {
     const navigate = useNavigate();

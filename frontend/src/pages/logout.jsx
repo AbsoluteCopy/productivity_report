@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import axios from "axios";import API_BASE_URL from "../config";
 
 const Logout = () => {
     const navigate = useNavigate();

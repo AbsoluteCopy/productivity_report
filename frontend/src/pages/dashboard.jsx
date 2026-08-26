@@ -10,8 +10,7 @@ import {
     Title,
     Tooltip,
     Legend,
-} from 'chart.js';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+} from 'chart.js';import API_BASE_URL from "../config";
 
 ChartJS.register(
     CategoryScale,
