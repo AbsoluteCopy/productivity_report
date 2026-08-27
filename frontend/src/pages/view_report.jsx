@@ -442,177 +442,292 @@ const ViewReport = () => {
                 const u = users.find(
                     u => String(u.id) === String(selectedUser)
                 );
-
                 return u
                     ? `${u.first_name}_${u.last_name}`
                     : "User";
             }
-
             return currentUser
                 ? `${currentUser.first_name}_${currentUser.last_name}`
                 : "User";
         })();
 
-        const monthName = new Date(
-            `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
-        ).toLocaleString("default", {
+        const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", {
             month: "short"
         });
 
-
-        // Load Excel template
-        const response = await fetch(
-            "/templates/DailyReportTemplate.xlsx"
-        );
-
-        const buffer = await response.arrayBuffer();
-
         const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Daily Report");
 
-        await workbook.xlsx.load(buffer);
+        // Styling constants
+        const mainGreen = 'FF065D48';
+        const darkGreen = 'FF044334';
+        const thin = { style: 'thin', color: { argb: 'FFD0D5DD' } };
+        const borders = { top: thin, left: thin, bottom: thin, right: thin };
+        const centerAlign = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        const leftAlign = { horizontal: 'left', vertical: 'middle', wrapText: true };
 
-
-        const worksheet = workbook.getWorksheet("Sheet1");
-
-        if (!worksheet) {
-            console.log(
-                workbook.worksheets.map(ws => ws.name)
-            );
-
-            throw new Error(
-                "Daily Report sheet not found in template"
-            );
+        // 1. Determine active categories present in the report data
+        const dynamicCategories = [];
+        const seenCats = new Set();
+        groupedReports.forEach(r => {
+            const cat = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
+            if (cat && !['Weekend', 'Daily Total', 'Holiday', 'PTO', 'Company Event'].includes(cat)) {
+                if (!seenCats.has(cat)) {
+                    seenCats.add(cat);
+                    dynamicCategories.push(cat);
+                }
+            }
+        });
+        if (dynamicCategories.length === 0) {
+            categoryNames.forEach(c => {
+                if (!seenCats.has(c)) {
+                    seenCats.add(c);
+                    dynamicCategories.push(c);
+                }
+            });
         }
 
+        // 2. Setup Columns & Widths
+        const columns = [
+            { key: 'col_A', width: 14 }, // A: Date
+            { key: 'col_B', width: 13 }, // B: Day
+            { key: 'col_C', width: 36 }, // C: Tasks / Items
+            { key: 'col_D', width: 12 }, // D: # of Tasks
+            { key: 'col_E', width: 18 }, // E: Time Spent (mins)
+            { key: 'col_F', width: 22 }, // F: Working Hours (mins)
+            { key: 'col_G', width: 24 }, // G: Meetings/Training (mins)
+            { key: 'col_H', width: 4  }, // H: Spacer
+            { key: 'col_I', width: 34 }, // I: Summary of Tasks
+            { key: 'col_J', width: 20 }, // J: Total # of Tasks Done
+            { key: 'col_K', width: 22 }, // K: Total Time Spent (mins)
+            { key: 'col_L', width: 4  }, // L: Spacer
+        ];
 
-        // Starting row (after headers)
-        let rowNumber = 2;
+        dynamicCategories.forEach((cat, idx) => {
+            columns.push(
+                { key: `p3_${idx}_date`, width: 14 },
+                { key: `p3_${idx}_item`, width: 32 },
+                { key: `p3_${idx}_cnt`,  width: 12 },
+                { key: `p3_${idx}_time`, width: 20 }
+            );
+        });
+        worksheet.columns = columns;
 
+        // 3. Header Row 1
+        const row1 = worksheet.getRow(1);
+        row1.height = 28;
+
+        const setHdr = (row, colIdx, text, bg = mainGreen) => {
+            const cell = row.getCell(colIdx);
+            cell.value = text;
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10, name: 'Calibri' };
+            cell.alignment = centerAlign;
+            cell.border = borders;
+        };
+
+        // Panel 1 Header
+        ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Working Hours (mins)', 'Meetings/Training (mins)'].forEach((h, i) => {
+            setHdr(row1, i + 1, h);
+        });
+
+        // Panel 2 Header
+        setHdr(row1, 9,  'Summary of Tasks');
+        setHdr(row1, 10, 'Total # of Tasks Done');
+        setHdr(row1, 11, 'Total Time Spent (mins)');
+
+        // Panel 3 Header Row 1
+        dynamicCategories.forEach((cat, i) => {
+            const startCol = 13 + (i * 4);
+            setHdr(row1, startCol,     'Date');
+            setHdr(row1, startCol + 1, 'Items per Task');
+            setHdr(row1, startCol + 2, '# of Tasks');
+            setHdr(row1, startCol + 3, 'Working Hours (mins)');
+        });
+
+        // Header Row 2 (Category Titles above items columns in Panel 3)
+        const row2 = worksheet.getRow(2);
+        row2.height = 24;
+        dynamicCategories.forEach((cat, i) => {
+            const startCol = 13 + (i * 4);
+            setHdr(row2, startCol,     '', darkGreen);
+            setHdr(row2, startCol + 1, cat, darkGreen);
+            setHdr(row2, startCol + 2, '', darkGreen);
+            setHdr(row2, startCol + 3, '', darkGreen);
+        });
+
+        // 4. Populate Panel 1 (Daily Report with itemized sub-rows)
+        let currentRow = 3;
 
         displayReports.forEach(report => {
-
             const isWeekend = report.isWeekend;
-
             const isLeave =
                 report.task_category === "Holiday" ||
                 report.task_category === "PTO" ||
                 report.task_category === "Company Event";
+            const isDailyTotal = report.isTotal || report.task_category === "Daily Total";
 
-            const isDailyTotal =
-                report.task_category === "Daily Total";
+            const r = worksheet.getRow(currentRow);
+            r.height = 20;
 
+            if (isDailyTotal) {
+                const totalWorking = report.working_hours_total ?? report.dailyWorkingHours ?? "";
+                const totalMeetings = report.meeting_total ?? report.dailyMeetings ?? "";
 
-            const [year, month, day] = report.date.split("-");
+                r.getCell(1).value = "";
+                r.getCell(2).value = "";
+                r.getCell(3).value = "Daily Total";
+                r.getCell(4).value = "";
+                r.getCell(5).value = "";
+                r.getCell(6).value = totalWorking;
+                r.getCell(7).value = totalMeetings;
 
-            const dateObj = new Date(
-                Number(year),
-                Number(month) - 1,
-                Number(day)
-            );
-
-
-            const dateLabel =
-                `${day}-${dateObj.toLocaleString("en-US", {
-                    month: "short"
-                })}-${String(year).slice(-2)}`;
-
-
-            const dayLabel =
-                dateObj.toLocaleDateString(
-                    "en-US",
-                    {
-                        weekday: "long"
-                    }
-                );
-
-
-            let rowValues;
-
-
-            if (isWeekend) {
-
-                rowValues = [
-                    dateLabel,
-                    dayLabel,
-                    "Weekend",
-                    "",
-                    "",
-                    "",
-                    ""
-                ];
-
-            } else if (isLeave) {
-
-                const leaveLabel =
-                    report.task_category +
-                    (
-                        report.task_list?.[0]
-                            ? ` - ${report.task_list[0]}`
-                            : ""
-                    );
-
-
-                rowValues = [
-                    dateLabel,
-                    dayLabel,
-                    leaveLabel,
-                    "",
-                    "",
-                    "",
-                    ""
-                ];
-
-
-            } else if (isDailyTotal) {
-
-                rowValues = [
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    report.dailyWorkingHours ?? "",
-                    report.dailyMeetings ?? ""
-                ];
-
-
+                for (let c = 1; c <= 7; c++) {
+                    const cell = r.getCell(c);
+                    cell.font = { bold: true, size: 10, name: 'Calibri' };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+                    cell.border = borders;
+                    cell.alignment = c >= 4 ? centerAlign : leftAlign;
+                }
+                currentRow++;
             } else {
+                const [year, month, day] = report.date.split("-");
+                const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+                const dateLabel = `${day}-${dateObj.toLocaleString("en-US", { month: "short" })}-${String(year).slice(-2)}`;
+                const dayLabel = dateObj.toLocaleDateString("en-US", { weekday: "long" });
 
-                const taskName =
-                    report.task_category === "Others"
+                if (isWeekend) {
+                    r.getCell(1).value = dateLabel;
+                    r.getCell(2).value = dayLabel;
+                    r.getCell(3).value = "Weekend";
+
+                    for (let c = 1; c <= 7; c++) {
+                        const cell = r.getCell(c);
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F7' } };
+                        cell.border = borders;
+                        cell.font = { size: 10, name: 'Calibri' };
+                        cell.alignment = c <= 2 ? centerAlign : leftAlign;
+                    }
+                    currentRow++;
+                } else if (isLeave) {
+                    const leaveLabel = report.task_category + (report.task_list?.[0] ? ` - ${report.task_list[0]}` : "");
+                    r.getCell(1).value = dateLabel;
+                    r.getCell(2).value = dayLabel;
+                    r.getCell(3).value = leaveLabel;
+
+                    for (let c = 1; c <= 7; c++) {
+                        const cell = r.getCell(c);
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F8F5' } };
+                        cell.border = borders;
+                        cell.font = { size: 10, name: 'Calibri' };
+                        cell.alignment = c <= 2 ? centerAlign : leftAlign;
+                    }
+                    currentRow++;
+                } else {
+                    const taskName = report.task_category === "Others"
                         ? (report.sub_category || "Others")
                         : report.task_category;
+                    const numTasks = Number(report.number_of_tasks || 0);
+                    const timeSpent = Number(report.time_spent || 0);
+                    const workingHours = numTasks * timeSpent;
 
+                    r.getCell(1).value = dateLabel;
+                    r.getCell(2).value = dayLabel;
+                    r.getCell(3).value = taskName;
+                    r.getCell(4).value = numTasks || "";
+                    r.getCell(5).value = timeSpent || "";
+                    r.getCell(6).value = workingHours || "";
+                    r.getCell(7).value = report.meeting_count || "";
 
-                const workingHours =
-                    Number(report.number_of_tasks || 0) *
-                    Number(report.time_spent || 0);
+                    for (let c = 1; c <= 7; c++) {
+                        const cell = r.getCell(c);
+                        cell.border = borders;
+                        cell.font = { size: 10, name: 'Calibri' };
+                        cell.alignment = (c <= 2 || c >= 4) ? centerAlign : leftAlign;
+                    }
+                    currentRow++;
 
+                    // Sub-rows for each item in the task list (e.g. descriptions, tickets, notes)
+                    if (Array.isArray(report.task_list) && report.task_list.length > 0) {
+                        report.task_list.forEach(item => {
+                            if (!item) return;
+                            const itemRow = worksheet.getRow(currentRow);
+                            itemRow.height = 18;
+                            itemRow.getCell(3).value = item;
 
-                rowValues = [
-                    dateLabel,
-                    dayLabel,
-                    taskName,
-                    report.number_of_tasks ?? "",
-                    report.time_spent ?? "",
-                    workingHours || "",
-                    report.meeting_count || ""
-                ];
+                            for (let c = 1; c <= 7; c++) {
+                                const cell = itemRow.getCell(c);
+                                cell.border = borders;
+                                cell.font = { size: 9, italic: true, color: { argb: 'FF475467' }, name: 'Calibri' };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAFA' } };
+                                cell.alignment = c === 3 ? leftAlign : centerAlign;
+                            }
+                            currentRow++;
+                        });
+                    }
+                }
             }
-
-
-            const row = worksheet.getRow(rowNumber);
-
-            row.values = rowValues;
-
-            rowNumber++;
         });
 
+        // 5. Populate Panel 2 (Summary of Tasks)
+        summaryReports.forEach((summary, idx) => {
+            const sumRow = worksheet.getRow(3 + idx);
+            const c9 = sumRow.getCell(9);
+            const c10 = sumRow.getCell(10);
+            const c11 = sumRow.getCell(11);
 
-        const output =
-            await workbook.xlsx.writeBuffer();
+            c9.value = summary.task;
+            c10.value = summary.totalTasks || 0;
+            c11.value = summary.totalTime || 0;
 
+            [c9, c10, c11].forEach((cell, cIdx) => {
+                cell.border = borders;
+                cell.font = { size: 10, name: 'Calibri' };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                cell.alignment = cIdx === 0 ? leftAlign : centerAlign;
+            });
+        });
 
+        // 6. Populate Panel 3 (Dynamic Items per Task categorized side-by-side)
+        dynamicCategories.forEach((cat, catIdx) => {
+            const startCol = 13 + (catIdx * 4);
+            let p3Row = 3;
+
+            // Group user reports for this category
+            groupedReports.forEach(report => {
+                const repCat = report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category;
+                if (repCat === cat && Array.isArray(report.task_list) && report.task_list.length > 0) {
+                    const [year, month, day] = report.date.split("-");
+                    const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+                    const dateLabel = `${day}-${dateObj.toLocaleString("en-US", { month: "short" })}-${String(year).slice(-2)}`;
+                    const numTasks = Number(report.number_of_tasks || 0);
+                    const timeSpent = Number(report.time_spent || 0);
+                    const workingHours = numTasks * timeSpent;
+
+                    report.task_list.forEach((item, itemIdx) => {
+                        const targetRow = worksheet.getRow(p3Row);
+                        
+                        targetRow.getCell(startCol).value     = itemIdx === 0 ? dateLabel : "";
+                        targetRow.getCell(startCol + 1).value = item;
+                        targetRow.getCell(startCol + 2).value = itemIdx === 0 ? (numTasks || "") : "";
+                        targetRow.getCell(startCol + 3).value = itemIdx === 0 ? (workingHours || "") : "";
+
+                        for (let c = 0; c < 4; c++) {
+                            const cell = targetRow.getCell(startCol + c);
+                            cell.border = borders;
+                            cell.font = { size: 10, name: 'Calibri' };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                            cell.alignment = c === 1 ? leftAlign : centerAlign;
+                        }
+                        p3Row++;
+                    });
+                }
+            });
+        });
+
+        worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }];
+
+        const output = await workbook.xlsx.writeBuffer();
         saveAs(
             new Blob([output]),
             `Daily_Report_${personName}_${monthName}_${selectedYear}.xlsx`
@@ -620,78 +735,8 @@ const ViewReport = () => {
     };
 
     const exportItemsPerTask = async () => {
-        const personName = (() => {
-            if (selectedUser) {
-                const u = users.find(u => String(u.id) === String(selectedUser));
-                return u ? `${u.first_name}_${u.last_name}` : "User";
-            }
-            return currentUser
-                ? `${currentUser.first_name}_${currentUser.last_name}`
-                : "User";
-        })();
-
-        const monthName = new Date(
-            `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
-        ).toLocaleString("default", { month: "short" });
-
-
-        // Load template
-        const workbook = new ExcelJS.Workbook();
-
-        const templateResponse = await fetch("/templates/Items_Per_Task_Template.xlsx");
-        const templateBuffer = await templateResponse.arrayBuffer();
-
-        await workbook.xlsx.load(templateBuffer);
-
-        // Get worksheet from template
-        const worksheet = workbook.getWorksheet("Sheet1");
-
-        if (!worksheet) {
-            throw new Error("Worksheet 'Items per Task' not found in template");
-        }
-
-        const headers = ["Date"];
-
-        categoryNames.forEach(category => {
-            headers.push(
-                category,
-                `# of Task - ${category}`,
-                `Working Hours(mins) - ${category}`
-            );
-        });
-
-        headers.forEach((header, index) => {
-            worksheet.getCell(1, index + 1).value = header;
-        });
-
-
-        const startRow = 2;
-
-        filteredReports.forEach((report, index) => {
-            const values = [report.date];
-
-            categoryNames.forEach(category => {
-                const taskList = report[`${category}_tasks`] || [];
-
-                values.push(
-                    taskList.length ? taskList.join(", ") : "",
-                    taskList.length ? report[`${category}_count`] || "" : "",
-                    taskList.length ? report[`${category}_time`] || "" : ""
-                );
-            });
-
-            worksheet.getRow(startRow + index).values = values;
-        });
-
-
-
-        // Generate file
-        const buffer = await workbook.xlsx.writeBuffer();
-
-        saveAs(
-            new Blob([buffer]),
-            `Items_Per_Task_${personName}_${monthName}_${selectedYear}.xlsx`
-        );
+        // Reuse the comprehensive export
+        await exportDailyReport();
     };
 
     const pieChartOptions = {

@@ -207,7 +207,31 @@ const NewData = () => {
         }));
     };
 
+    const validateMinutes = (val) => {
+        if (val === '' || val === null || val === undefined) return { valid: true, value: '' };
+        const strVal = String(val).trim();
+        // Disallow leading zeros on multi-digit numbers (e.g. "020", "007") or non-numeric/negative strings
+        if (/^0\d+/.test(strVal)) {
+            return { valid: false, error: `Invalid number "${strVal}". Numbers cannot start with a leading zero (e.g., use "20" instead of "${strVal}").` };
+        }
+        const num = Number(strVal);
+        if (isNaN(num) || num < 0 || !Number.isInteger(num)) {
+            return { valid: false, error: `"${strVal}" is not a valid positive whole number of minutes.` };
+        }
+        return { valid: true, value: strVal };
+    };
+
     const handleTimeSpentChange = (id, value) => {
+        const check = validateMinutes(value);
+        if (!check.valid && value !== '') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid Input',
+                text: check.error,
+                confirmButtonColor: '#065d48',
+                confirmButtonText: 'Edit Input'
+            });
+        }
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, timeSpent: value } : cat
         ));
@@ -312,6 +336,34 @@ const NewData = () => {
         }
 
         // Handle Working submissions
+        for (let cat of categories) {
+            if (cat.category === 'Meeting') {
+                const check = validateMinutes(cat.timeSpent);
+                if (!check.valid || cat.timeSpent === '' || cat.timeSpent === null || cat.timeSpent === undefined) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Invalid Time Spent',
+                        text: `Please enter a valid time in minutes for the Meeting category. ${check.error || 'Value cannot be empty.'}`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'Edit Input'
+                    });
+                    return;
+                }
+            } else if (cat.category && cat.category !== 'Others') {
+                const check = validateMinutes(cat.timeSpent);
+                if (!check.valid) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Invalid Time Spent',
+                        text: `Invalid time for ${cat.category}: ${check.error}`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'Edit Input'
+                    });
+                    return;
+                }
+            }
+        }
+
         console.log(categories);
         const reports = categories
             .filter(cat =>
