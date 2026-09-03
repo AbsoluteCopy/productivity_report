@@ -467,24 +467,21 @@ const ViewReport = () => {
         const leftAlign = { horizontal: 'left', vertical: 'middle', wrapText: true };
 
         // 1. Determine active categories present in the report data
-        const dynamicCategories = [];
         const seenCats = new Set();
+        const catTaskTotals = {}; // category -> total number_of_tasks
         groupedReports.forEach(r => {
             const cat = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
             if (cat && !['Weekend', 'Daily Total', 'Holiday', 'PTO', 'Company Event'].includes(cat)) {
-                if (!seenCats.has(cat)) {
-                    seenCats.add(cat);
-                    dynamicCategories.push(cat);
-                }
+                seenCats.add(cat);
+                catTaskTotals[cat] = (catTaskTotals[cat] || 0) + Number(r.number_of_tasks || 0);
             }
         });
+        // Sort categories: most total tasks first (leftmost column)
+        let dynamicCategories = Array.from(seenCats).sort(
+            (a, b) => (catTaskTotals[b] || 0) - (catTaskTotals[a] || 0)
+        );
         if (dynamicCategories.length === 0) {
-            categoryNames.forEach(c => {
-                if (!seenCats.has(c)) {
-                    seenCats.add(c);
-                    dynamicCategories.push(c);
-                }
-            });
+            dynamicCategories = [...categoryNames];
         }
 
         // 2. Setup Columns & Widths
@@ -693,7 +690,7 @@ const ViewReport = () => {
             const startCol = 13 + (catIdx * 4);
             let p3Row = 3;
 
-            // Group user reports for this category
+            // Group reports for this category (chronological order)
             groupedReports.forEach(report => {
                 const repCat = report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category;
                 if (repCat === cat && Array.isArray(report.task_list) && report.task_list.length > 0) {

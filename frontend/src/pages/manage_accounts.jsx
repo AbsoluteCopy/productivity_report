@@ -113,20 +113,75 @@ const ManageAccounts = () => {
     };
 
     const handleSubmit = async () => {
-        if (!isValid) {
+        // Specific field-by-field validation so the user knows exactly what to fix
+        if (!formData.id_number || !formData.id_number.trim()) {
             Swal.fire({
                 icon: "warning",
-                title: "Incomplete Form",
-                text: "Please fill in all required fields.",
+                title: "Missing ID Number",
+                text: "Please enter an Employee/User ID Number.",
             });
             return;
         }
 
-        if (!editingId && !formData.password) {
+        if (!formData.first_name || !formData.first_name.trim()) {
             Swal.fire({
                 icon: "warning",
-                title: "Password Required",
-                text: "Password is required for new accounts.",
+                title: "Missing First Name",
+                text: "Please enter a First Name.",
+            });
+            return;
+        }
+
+        if (!formData.last_name || !formData.last_name.trim()) {
+            Swal.fire({
+                icon: "warning",
+                title: "Missing Last Name",
+                text: "Please enter a Last Name.",
+            });
+            return;
+        }
+
+        if (!formData.email || !formData.email.trim()) {
+            Swal.fire({
+                icon: "warning",
+                title: "Missing Email",
+                text: "Please enter an Email address.",
+            });
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email.trim())) {
+            Swal.fire({
+                icon: "warning",
+                title: "Invalid Email Format",
+                text: "Please enter a valid email address (e.g. employee@gratusinc.org).",
+            });
+            return;
+        }
+
+        if (!editingId) {
+            if (!formData.password || !formData.password.trim()) {
+                Swal.fire({
+                    icon: "warning",
+                    title: "Password Required",
+                    text: "Password is required for new accounts (minimum 6 characters).",
+                });
+                return;
+            }
+            if (formData.password.length < 6) {
+                Swal.fire({
+                    icon: "warning",
+                    title: "Weak Password",
+                    text: "Password must be at least 6 characters long.",
+                });
+                return;
+            }
+        } else if (formData.password && formData.password.length < 6) {
+            Swal.fire({
+                icon: "warning",
+                title: "Weak Password",
+                text: "Password must be at least 6 characters long.",
             });
             return;
         }
@@ -146,36 +201,43 @@ const ManageAccounts = () => {
 
         // Check for duplicate ID number
         const duplicateIdNumber = users.find(
-            u => u.id_number === formData.id_number && u.id !== editingId
+            u => u.id_number?.toLowerCase() === formData.id_number.trim().toLowerCase() && u.id !== editingId
         );
         if (duplicateIdNumber) {
             Swal.fire({
                 icon: "error",
                 title: "Duplicate ID Number",
-                text: "An account with this ID number already exists.",
+                text: `An account with ID Number "${formData.id_number.trim()}" already exists.`,
             });
             return;
         }
 
         // Check for duplicate email
         const duplicateEmail = users.find(
-            u => u.email === formData.email && u.id !== editingId
+            u => u.email?.toLowerCase() === formData.email.trim().toLowerCase() && u.id !== editingId
         );
         if (duplicateEmail) {
             Swal.fire({
                 icon: "error",
                 title: "Duplicate Email",
-                text: "An account with this email already exists.",
+                text: `An account with Email "${formData.email.trim()}" already exists.`,
             });
             return;
         }
 
         setLoading(true);
         try {
-            const payload = { ...formData };
+            const payload = {
+                id_number: formData.id_number.trim(),
+                first_name: formData.first_name.trim(),
+                last_name: formData.last_name.trim(),
+                email: formData.email.trim().toLowerCase(),
+                role: formData.role || 'employee',
+                company: formData.company ? formData.company.trim() : "",
+            };
 
-            if (editingId && !payload.password) {
-                delete payload.password;
+            if (formData.password && formData.password.trim()) {
+                payload.password = formData.password.trim();
             }
 
             // If HR role, ensure company is set to their own company
@@ -196,6 +258,10 @@ const ManageAccounts = () => {
 
             fetchUsers();
 
+            // Close modal using bootstrap
+            const closeBtn = document.getElementById("closeModal");
+            if (closeBtn) closeBtn.click();
+
             Swal.fire({
                 icon: "success",
                 title: "Success",
@@ -209,11 +275,18 @@ const ManageAccounts = () => {
             setFormData(emptyUser);
             setEditingId(null);
         } catch (err) {
-            console.error(err);
+            console.error("Account operation error:", err);
+            const errorMsg =
+                err.response?.data?.error ||
+                err.response?.data?.detail ||
+                err.response?.data?.message ||
+                (typeof err.response?.data === 'string' ? err.response?.data : null) ||
+                "Failed to save account. Please check your inputs and try again.";
+
             Swal.fire({
                 icon: "error",
-                title: "Error",
-                text: err.response?.data?.detail || "Something went wrong.",
+                title: editingId ? "Update Failed" : "Account Creation Failed",
+                text: errorMsg,
             });
         } finally {
             setLoading(false);

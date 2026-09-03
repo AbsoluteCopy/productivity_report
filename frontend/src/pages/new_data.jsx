@@ -326,9 +326,10 @@ const NewData = () => {
                 }
             } catch (error) {
                 console.error('Error:', error);
+                const errMsg = error.response?.data?.error || error.response?.data?.detail || `Error ${isEditMode ? 'updating' : 'submitting'} report. Please try again.`;
                 Swal.fire({
-                    title: 'Error',
-                    text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
+                    title: 'Submission Error',
+                    text: errMsg,
                     icon: 'error',
                 });
             }
@@ -444,9 +445,10 @@ const NewData = () => {
             }
         } catch (error) {
             console.error('Error:', error);
+            const errMsg = error.response?.data?.error || error.response?.data?.detail || error.response?.data?.message || `Error ${isEditMode ? 'updating' : 'submitting'} report. Please try again.`;
             Swal.fire({
-                title: 'Error',
-                text: `Error ${isEditMode ? 'updating' : 'submitting'} reports`,
+                title: 'Submission Error',
+                text: errMsg,
                 icon: 'error',
             });
         }

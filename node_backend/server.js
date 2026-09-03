@@ -181,36 +181,70 @@ app.get(['/api/users', '/api/users/'], authenticate, async (req, res) => {
 app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
   try {
     if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'You do not have permission to create users.' });
+      return res.status(403).json({ error: 'You do not have permission to create users.', detail: 'You do not have permission to create users.' });
     }
 
     let { id_number, first_name, last_name, email, password, role, company, task_list } = req.body;
-    if (!id_number || !first_name || !last_name || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required.' });
+    
+    // Explicit field validations
+    if (!id_number || typeof id_number !== 'string' || !id_number.trim()) {
+      return res.status(400).json({ error: 'ID Number is required.', detail: 'ID Number is required.' });
     }
+    if (!first_name || typeof first_name !== 'string' || !first_name.trim()) {
+      return res.status(400).json({ error: 'First Name is required.', detail: 'First Name is required.' });
+    }
+    if (!last_name || typeof last_name !== 'string' || !last_name.trim()) {
+      return res.status(400).json({ error: 'Last Name is required.', detail: 'Last Name is required.' });
+    }
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required.', detail: 'Email is required.' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ error: 'Please enter a valid email address (e.g., name@gratusinc.org).', detail: 'Please enter a valid email address.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password is required and must be at least 6 characters long.', detail: 'Password must be at least 6 characters long.' });
+    }
+    
+    const validRoles = ['admin', 'hr', 'employee', 'viewer'];
+    const chosenRole = (role && validRoles.includes(role)) ? role : 'employee';
 
     if (req.user.role === 'hr') {
       if (role === 'admin') {
-        return res.status(403).json({ error: 'HR users cannot create administrator accounts.' });
+        return res.status(403).json({ error: 'HR users cannot create administrator accounts.', detail: 'HR users cannot create administrator accounts.' });
       }
       company = req.user.company;
+    }
+
+    // Check for existing ID number
+    const [existingId] = await pool.query('SELECT id FROM users WHERE id_number = ?', [id_number.trim()]);
+    if (existingId.length > 0) {
+      return res.status(400).json({ error: `An account with ID Number "${id_number.trim()}" already exists.`, detail: `An account with ID Number "${id_number.trim()}" already exists.` });
+    }
+
+    // Check for existing email
+    const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ error: `An account with Email "${email.trim().toLowerCase()}" already exists.`, detail: `An account with Email "${email.trim().toLowerCase()}" already exists.` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const taskListJson = JSON.stringify(task_list || []);
 
     const [result] = await pool.query(
-      'INSERT INTO users (id_number, first_name, last_name, email, password, role, company, task_list, token_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW(), NOW())',
-      [id_number, first_name, last_name, email.toLowerCase(), hashedPassword, role || 'employee', company || null, taskListJson]
+      'INSERT INTO users (id_number, first_name, last_name, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
+      [id_number.trim(), first_name.trim(), last_name.trim(), email.trim().toLowerCase(), hashedPassword, chosenRole, company ? company.trim() : null, taskListJson]
     );
 
     const [created] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
     return res.status(201).json(formatUser(created[0]));
   } catch (err) {
+    console.error('Create user error:', err);
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: 'Email or ID number already exists.' });
+      return res.status(400).json({ error: 'Email or ID number already exists.', detail: 'Email or ID number already exists.' });
     }
-    return res.status(500).json({ error: 'Error creating user.' });
+    return res.status(500).json({ error: 'Error creating user: ' + (err.sqlMessage || err.message), detail: 'Error creating user: ' + (err.sqlMessage || err.message) });
   }
 });
 
@@ -218,22 +252,22 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
 app.get(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found.', detail: 'User not found.' });
 
     const targetUser = rows[0];
     if (req.user.role === 'admin' || (req.user.role === 'hr' && req.user.company === targetUser.company) || req.user.id == targetUser.id) {
       return res.json(formatUser(targetUser));
     }
-    return res.status(403).json({ error: 'Permission denied.' });
+    return res.status(403).json({ error: 'Permission denied.', detail: 'Permission denied.' });
   } catch (err) {
-    return res.status(500).json({ error: 'Error fetching user.' });
+    return res.status(500).json({ error: 'Error fetching user.', detail: 'Error fetching user.' });
   }
 });
 
 app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found.', detail: 'User not found.' });
 
     const targetUser = rows[0];
     const isSelf = req.user.id == targetUser.id;
@@ -241,47 +275,78 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
     const isHR = req.user.role === 'hr' && req.user.company === targetUser.company;
 
     if (!isAdmin && !isHR && !isSelf) {
-      return res.status(403).json({ error: 'Permission denied.' });
+      return res.status(403).json({ error: 'Permission denied.', detail: 'Permission denied.' });
     }
 
     let { first_name, last_name, email, role, company, id_number, task_list, password } = req.body;
     let updates = [];
     let params = [];
 
-    if (first_name) { updates.push('first_name = ?'); params.push(first_name); }
-    if (last_name) { updates.push('last_name = ?'); params.push(last_name); }
-    if (email) { updates.push('email = ?'); params.push(email.toLowerCase()); }
-    if (task_list !== undefined) { updates.push('task_list = ?'); params.push(JSON.stringify(task_list)); }
+    if (first_name !== undefined) {
+      if (!first_name.trim()) return res.status(400).json({ error: 'First Name cannot be blank.', detail: 'First Name cannot be blank.' });
+      updates.push('first_name = ?'); params.push(first_name.trim());
+    }
+    if (last_name !== undefined) {
+      if (!last_name.trim()) return res.status(400).json({ error: 'Last Name cannot be blank.', detail: 'Last Name cannot be blank.' });
+      updates.push('last_name = ?'); params.push(last_name.trim());
+    }
+    if (email !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) return res.status(400).json({ error: 'Please enter a valid email address.', detail: 'Please enter a valid email address.' });
+      const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [email.trim().toLowerCase(), req.params.id]);
+      if (existingEmail.length > 0) return res.status(400).json({ error: `An account with Email "${email.trim().toLowerCase()}" already exists.`, detail: `An account with Email "${email.trim().toLowerCase()}" already exists.` });
+      updates.push('email = ?'); params.push(email.trim().toLowerCase());
+    }
+    if (task_list !== undefined) {
+      updates.push('task_list = ?'); params.push(JSON.stringify(task_list));
+    }
     if (password) {
+      if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters long.', detail: 'Password must be at least 6 characters long.' });
       const hashed = await bcrypt.hash(password, 10);
       updates.push('password = ?');
       params.push(hashed);
     }
 
     if (isAdmin) {
-      if (role) { updates.push('role = ?'); params.push(role); }
-      if (company !== undefined) { updates.push('company = ?'); params.push(company); }
-      if (id_number) { updates.push('id_number = ?'); params.push(id_number); }
+      if (role) {
+        const validRoles = ['admin', 'hr', 'employee', 'viewer'];
+        if (!validRoles.includes(role)) return res.status(400).json({ error: `Invalid role '${role}'.`, detail: `Invalid role '${role}'.` });
+        updates.push('role = ?'); params.push(role);
+      }
+      if (company !== undefined) { updates.push('company = ?'); params.push(company ? company.trim() : null); }
+      if (id_number !== undefined) {
+        if (!id_number.trim()) return res.status(400).json({ error: 'ID Number cannot be blank.', detail: 'ID Number cannot be blank.' });
+        const [existingId] = await pool.query('SELECT id FROM users WHERE id_number = ? AND id != ?', [id_number.trim(), req.params.id]);
+        if (existingId.length > 0) return res.status(400).json({ error: `An account with ID Number "${id_number.trim()}" already exists.`, detail: `An account with ID Number "${id_number.trim()}" already exists.` });
+        updates.push('id_number = ?'); params.push(id_number.trim());
+      }
     } else if (isHR) {
-      if (role && role !== 'admin') { updates.push('role = ?'); params.push(role); }
+      if (role && role !== 'admin') {
+        const validRoles = ['employee', 'viewer', 'hr'];
+        if (!validRoles.includes(role)) return res.status(400).json({ error: `Invalid role '${role}'.`, detail: `Invalid role '${role}'.` });
+        updates.push('role = ?'); params.push(role);
+      }
       updates.push('company = ?'); params.push(req.user.company);
-      if (id_number) { updates.push('id_number = ?'); params.push(id_number); }
+      if (id_number !== undefined) {
+        if (!id_number.trim()) return res.status(400).json({ error: 'ID Number cannot be blank.', detail: 'ID Number cannot be blank.' });
+        const [existingId] = await pool.query('SELECT id FROM users WHERE id_number = ? AND id != ?', [id_number.trim(), req.params.id]);
+        if (existingId.length > 0) return res.status(400).json({ error: `An account with ID Number "${id_number.trim()}" already exists.`, detail: `An account with ID Number "${id_number.trim()}" already exists.` });
+        updates.push('id_number = ?'); params.push(id_number.trim());
+      }
     }
 
     if (updates.length === 0) {
       return res.json(formatUser(targetUser));
     }
 
-    updates.push('updated_at = NOW()');
     params.push(req.params.id);
-
     const updateQuery = 'UPDATE users SET ' + updates.join(', ') + ' WHERE id = ?';
     await pool.query(updateQuery, params);
     const [updated] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     return res.json(formatUser(updated[0]));
   } catch (err) {
     console.error('Update user error:', err);
-    return res.status(500).json({ error: 'Error updating user.' });
+    return res.status(500).json({ error: 'Error updating user: ' + (err.sqlMessage || err.message), detail: 'Error updating user: ' + (err.sqlMessage || err.message) });
   }
 });
 
