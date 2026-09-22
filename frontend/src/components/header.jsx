@@ -136,7 +136,7 @@ function Navbar() {
 
                             <ul className="dropdown-menu dropdown-menu-end shadow">
                                 <li>
-                                    <a href="/change_password" className="dropdown-item"><i className="bi bi-key me-2"></i> Change Password</a>
+                                    <Link to="/change_password" className="dropdown-item"><i className="bi bi-key me-2"></i> Change Password</Link>
                                 </li>
                                 <li>
                                     <button className="dropdown-item text-danger" onClick={handleLogout}>

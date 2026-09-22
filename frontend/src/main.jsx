@@ -21,10 +21,12 @@ axios.interceptors.response.use(
     response => response,
     error => {
         if (error.response && error.response.status === 401) {
-            // Token expired or invalid - logout user
+            // Token expired or invalid - logout user (only if not already on /login)
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            window.location.href = '/login';
+            if (window.location.pathname !== '/login' && !error.config?.url?.includes('/login')) {
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
@@ -47,11 +49,14 @@ window.fetch = async (...args) => {
     }
     const response = await originalFetch(resource, config);
     
-    // Handle 401 errors for API requests
-    if (typeof resource === 'string' && resource.includes('/api/') && response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+    // Handle 401 errors for API requests (only logout/redirect if not already on login page)
+    if (response.status === 401) {
+        const urlStr = typeof resource === 'string' ? resource : (resource?.url || '');
+        if (!urlStr.includes('/login') && window.location.pathname !== '/login') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
     }
     
     return response;

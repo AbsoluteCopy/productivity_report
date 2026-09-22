@@ -142,13 +142,14 @@ app.post(['/api/change-password', '/api/change-password/'], authenticate, async 
 
     const hashedPassword = await bcrypt.hash(new_password, 10);
     await pool.query(
-      'UPDATE users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET password = ?, token_version = token_version + 1 WHERE id = ?',
       [hashedPassword, req.user.id]
     );
 
     return res.json({ message: 'Password changed successfully.' });
   } catch (err) {
-    return res.status(500).json({ error: 'Error changing password.' });
+    console.error('Change password error:', err);
+    return res.status(500).json({ error: 'Error changing password.', detail: err.message });
   }
 });
 

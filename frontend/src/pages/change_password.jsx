@@ -14,13 +14,53 @@ const ChangePassword = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
 
-        if (newPassword !== confirmPassword) {
-            setError("New passwords do not match.");
-            setLoading(false);
+        if (!currentPassword.trim()) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Missing Current Password',
+                text: 'Please enter your current password.',
+            });
             return;
         }
+
+        if (!newPassword) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Missing New Password',
+                text: 'Please enter a new password.',
+            });
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Weak Password',
+                text: 'New password must be at least 8 characters long.',
+            });
+            return;
+        }
+
+        if (currentPassword === newPassword) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid New Password',
+                text: 'New password cannot be the same as your current password.',
+            });
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Passwords Do Not Match',
+                text: 'New password and confirmation password do not match.',
+            });
+            return;
+        }
+
+        setLoading(true);
 
         try {
             const token = localStorage.getItem('token');
@@ -49,10 +89,22 @@ const ChangePassword = () => {
                 });
                 navigate('/dashboard');
             } else {
-                setError(data.error || 'Failed to change password');
+                const errorMessage = data.error || data.detail || 'Failed to change password.';
+                setError(errorMessage);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Password Error',
+                    text: errorMessage,
+                });
             }
         } catch (err) {
-            setError('Network error. Please try again.');
+            const errorMsg = 'Network error. Please try again.';
+            setError(errorMsg);
+            Swal.fire({
+                icon: 'error',
+                title: 'Connection Error',
+                text: errorMsg,
+            });
         } finally {
             setLoading(false);
         }
@@ -85,54 +137,55 @@ const ChangePassword = () => {
                                 </div>
                             )}
 
-                            <form onSubmit={handleSubmit}>
-                                <div className="mb-3">
-                                    <label className="form-label">
-                                        Current Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="form-control"
-                                        value={currentPassword}
-                                        onChange={(e) => setCurrentPassword(e.target.value)}
-                                        required
-                                    />
-                                </div>
+                                <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} noValidate>
+                                    <div className="mb-3">
+                                        <label className="form-label">
+                                            Current Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="form-control"
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            required
+                                        />
+                                    </div>
 
-                                <div className="mb-3">
-                                    <label className="form-label">
-                                        New Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="form-control"
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        required
-                                    />
-                                </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">
+                                            New Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="form-control"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            required
+                                        />
+                                    </div>
 
-                                <div className="mb-3">
-                                    <label className="form-label">
-                                        Confirm New Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="form-control"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        required
-                                    />
-                                </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">
+                                            Confirm New Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="form-control"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            required
+                                        />
+                                    </div>
 
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary w-100"
-                                    disabled={loading}
-                                >
-                                    {loading ? 'Updating...' : 'Update Password'}
-                                </button>
-                            </form>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); handleSubmit(e); }}
+                                        className="btn btn-primary w-100"
+                                        disabled={loading}
+                                    >
+                                        {loading ? 'Updating...' : 'Update Password'}
+                                    </button>
+                                </form>
                         </div>
                     </div>
                 </div>
