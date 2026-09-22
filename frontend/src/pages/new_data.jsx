@@ -26,7 +26,7 @@ const NewData = () => {
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
-        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
+        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
     ]);
     const [taskCategories, setTaskCategories] = useState([]);
 
@@ -115,7 +115,7 @@ const NewData = () => {
                         sub_category: data.sub_category || '',
                         tasks: Array.isArray(data.task_list) ? data.task_list : [],
                         currentTask: '',
-                        timeSpent: data.time_spent ? Number(data.time_spent) : 15,
+                        timeSpent: (data.time_spent !== undefined && data.time_spent !== null) ? String(data.time_spent) : '',
                         meetingCount: data.meeting_count || 0,
                         meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : ''
                     }
@@ -208,9 +208,8 @@ const NewData = () => {
     };
 
     const validateMinutes = (val) => {
-        if (val === '' || val === null || val === undefined) return { valid: true, value: '' };
+        if (val === '' || val === null || val === undefined) return { valid: false, error: 'Value cannot be empty.' };
         const strVal = String(val).trim();
-        // Disallow leading zeros on multi-digit numbers (e.g. "020", "007") or non-numeric/negative strings
         if (/^0\d+/.test(strVal)) {
             return { valid: false, error: `Invalid number "${strVal}". Numbers cannot start with a leading zero (e.g., use "20" instead of "${strVal}").` };
         }
@@ -222,19 +221,20 @@ const NewData = () => {
     };
 
     const handleTimeSpentChange = (id, value) => {
-        const check = validateMinutes(value);
-        if (!check.valid && value !== '') {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Invalid Input',
-                text: check.error,
-                confirmButtonColor: '#065d48',
-                confirmButtonText: 'Edit Input'
-            });
-        }
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, timeSpent: value } : cat
         ));
+    };
+
+    const handleTimeSpentBlur = (id, value) => {
+        if (!value || typeof value !== 'string') return;
+        const trimmed = value.trim();
+        if (/^0\d+/.test(trimmed)) {
+            const sanitized = String(parseInt(trimmed, 10));
+            setCategories(prev => prev.map(cat =>
+                cat.id === id ? { ...cat, timeSpent: sanitized } : cat
+            ));
+        }
     };
 
     const handleMeetingTitleChange = (id, value) => {
@@ -258,7 +258,7 @@ const NewData = () => {
     const addCategory = () => {
         setCategories(prev => [
             ...prev,
-            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0, sub_category: '', meetingTitle: '' }
+            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, sub_category: '', meetingTitle: '' }
         ]);
     };
 
@@ -285,7 +285,7 @@ const NewData = () => {
                 category: '',
                 tasks: [],
                 currentTask: '',
-                timeSpent: '15',
+                timeSpent: '',
                 meetingCount: 0,
                 sub_category: '',
                 meetingTitle: ''
@@ -340,23 +340,26 @@ const NewData = () => {
         for (let cat of categories) {
             if (cat.category === 'Meeting') {
                 const check = validateMinutes(cat.timeSpent);
-                if (!check.valid || cat.timeSpent === '' || cat.timeSpent === null || cat.timeSpent === undefined) {
+                if (!check.valid) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Invalid Time Spent',
-                        text: `Please enter a valid time in minutes for the Meeting category. ${check.error || 'Value cannot be empty.'}`,
+                        text: `Please enter a valid time in minutes for the Meeting category. ${check.error}`,
                         confirmButtonColor: '#065d48',
                         confirmButtonText: 'Edit Input'
                     });
                     return;
                 }
-            } else if (cat.category && cat.category !== 'Others') {
+            } else if (cat.category === 'Others' && hasTimeSpent) {
+                // "No Time Spent" checked for Others, skip validation
+                continue;
+            } else if (cat.category) {
                 const check = validateMinutes(cat.timeSpent);
                 if (!check.valid) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Invalid Time Spent',
-                        text: `Invalid time for ${cat.category}: ${check.error}`,
+                        text: `Please enter a valid time in minutes for ${cat.category}: ${check.error}`,
                         confirmButtonColor: '#065d48',
                         confirmButtonText: 'Edit Input'
                     });
@@ -603,37 +606,38 @@ const NewData = () => {
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes)
+                                                                    Time Spent (Minutes) *
                                                                 </label>
-                                                                <select value={cat.timeSpent}
+                                                                <input
+                                                                    type="number"
+                                                                    value={cat.timeSpent}
                                                                     onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                    className="form-select"
-                                                                    disabled={hasTimeSpent}
-                                                                >
-                                                                    <option value="">Select</option>
-                                                                    <option value="0">0</option>
-                                                                    <option value="15">15</option>
-                                                                    <option value="30">30</option>
-                                                                    <option value="45">45</option>
-                                                                    <option value="60">60</option>
-                                                                    <option value="90">90</option>
-                                                                    <option value="120">120</option>
-                                                                </select>
+                                                                    onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                    min="0"
+                                                                    step="1"
+                                                                    placeholder="Enter minutes (e.g. 15)"
+                                                                    className="form-control"
+                                                                    disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                    required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                />
                                                             </div>
                                                         )}
                                                         {cat.category === 'Meeting' && (
                                                             <>
                                                                 <div className="mb-3 col-lg-6">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Time Spent (Minutes)
+                                                                        Time Spent (Minutes) *
                                                                     </label>
                                                                     <input
                                                                         type="number"
                                                                         value={cat.timeSpent}
                                                                         onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                        onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
                                                                         min="0"
-                                                                        placeholder="0"
+                                                                        step="1"
+                                                                        placeholder="Enter minutes (e.g. 30)"
                                                                         className="form-control"
+                                                                        required
                                                                     />
                                                                 </div>
                                                                 {/* <div className="mb-3 col-lg-3">
