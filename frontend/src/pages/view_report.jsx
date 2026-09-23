@@ -330,9 +330,9 @@ const ViewReport = () => {
 
             if (!report.isWeekend && !isLeave) {
                 if (report.task_category === 'Meeting') {
-                    dailyMeetings += Number(report.time_spent || 0);
+                    dailyMeetings += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
                 } else {
-                    dailyWorkingHours += Number(report.time_spent || 0);
+                    dailyWorkingHours += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
                 }
 
                 hasWorkData = true;
@@ -381,7 +381,7 @@ const ViewReport = () => {
         if (!acc[cat]) acc[cat] = { tasks: 0, minutes: 0 };
 
         acc[cat].tasks += Number(report.number_of_tasks || 0);
-        acc[cat].minutes += Number(report.time_spent || 0);
+        acc[cat].minutes += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
         return acc;
     }, initialCategoryMap);
 
@@ -642,8 +642,8 @@ const ViewReport = () => {
                     const numTasks = Number(report.number_of_tasks || 0);
                     const timeSpent = Number(report.time_spent || 0);
                     const isMeeting = report.task_category === "Meeting";
-                    const workingHours = isMeeting ? "" : (timeSpent || "");
-                    const meetingMins = isMeeting ? (timeSpent || "") : "";
+                    const workingHours = isMeeting ? "" : (numTasks * timeSpent || "");
+                    const meetingMins = isMeeting ? (numTasks * timeSpent || "") : "";
 
                     r.getCell(1).value = dateLabel;
                     r.getCell(2).value = dayLabel;
@@ -717,7 +717,7 @@ const ViewReport = () => {
                     const numTasks = Number(report.number_of_tasks || 0);
                     const timeSpent = Number(report.time_spent || 0);
                     const isMeeting = report.task_category === "Meeting";
-                    const workingHours = isMeeting ? "" : (timeSpent || "");
+                    const workingHours = isMeeting ? "" : (numTasks * timeSpent || "");
 
                     report.task_list.forEach((item, itemIdx) => {
                         const targetRow = worksheet.getRow(p3Row);
@@ -1134,11 +1134,11 @@ const ViewReport = () => {
                                                             <td>
                                                                 {isLeave || report.number_of_tasks === 0 || isMeeting
                                                                     ? ''
-                                                                    : (report.time_spent || '')
+                                                                    : (Number(report.number_of_tasks || 0) * Number(report.time_spent || 0) || '')
                                                                 }
                                                             </td>
 
-                                                            <td>{isMeeting ? (report.time_spent || '') : (report.meeting_count || '')}</td>
+                                                            <td>{isMeeting ? (Number(report.meeting_count || 0) * Number(report.time_spent || 0) || '') : (report.meeting_count || '')}</td>
 
                                                         </tr>
                                                     );
