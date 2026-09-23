@@ -181,22 +181,30 @@ const ViewReport = () => {
         };
     });
 
+    const getReportCategory = (report) => {
+        if (!report) return '';
+        if (report.task_category === 'Others' && report.sub_category) {
+            return `Others (${report.sub_category.trim()})`;
+        }
+        return report.task_category === 'Other' ? 'Others' : (report.task_category || '');
+    };
+
     const groupedReports = Object.values(
         dailyReports.reduce((acc, report) => {
-
-            const key = `${report.date}-${report.task_category}-${report.time_spent}`;
+            const catName = getReportCategory(report);
+            const key = `${report.date}-${catName}-${report.id || Math.random()}`;
 
             if (!acc[key]) {
                 acc[key] = {
                     ...report,
-                    number_of_tasks: Number(report.number_of_tasks),
+                    display_category: catName,
+                    number_of_tasks: Number(report.number_of_tasks || 0),
                     meeting_count: Number(report.meeting_count || 0),
                     task_list: [...(report.task_list || [])]
                 };
             } else {
-                acc[key].number_of_tasks += Number(report.number_of_tasks);
+                acc[key].number_of_tasks += Number(report.number_of_tasks || 0);
                 acc[key].meeting_count += Number(report.meeting_count || 0);
-
                 acc[key].task_list.push(...(report.task_list || []));
             }
 
@@ -213,7 +221,9 @@ const ViewReport = () => {
             return dateCompare;
         }
 
-        return a.task_category.localeCompare(b.task_category);
+        const catA = a.display_category || a.task_category || '';
+        const catB = b.display_category || b.task_category || '';
+        return catA.localeCompare(catB);
 
     });
     const addWeekendRows = (reports) => {
@@ -249,6 +259,7 @@ const ViewReport = () => {
                         id: `weekend-${dateString}`,
                         date: dateString,
                         task_category: 'Weekend',
+                        display_category: 'Weekend',
                         number_of_tasks: '',
                         time_spent: '',
                         meeting_count: '',
@@ -273,9 +284,9 @@ const ViewReport = () => {
                 return dateCompare;
             }
 
-            return a.task_category.localeCompare(
-                b.task_category
-            );
+            const catA = a.display_category || a.task_category || '';
+            const catB = b.display_category || b.task_category || '';
+            return catA.localeCompare(catB);
         });
     };
 
@@ -318,11 +329,11 @@ const ViewReport = () => {
                 report.task_category === 'Company Event';
 
             if (!report.isWeekend && !isLeave) {
-                dailyWorkingHours +=
-                    Number(report.number_of_tasks || 0) *
-                    Number(report.time_spent || 0);
-
-                dailyMeetings += Number(report.meeting_count || 0);
+                if (report.task_category === 'Meeting') {
+                    dailyMeetings += Number(report.time_spent || 0);
+                } else {
+                    dailyWorkingHours += Number(report.time_spent || 0);
+                }
 
                 hasWorkData = true;
             }
@@ -353,18 +364,24 @@ const ViewReport = () => {
 
     const categoryNames = [...taskCategories.map(cat => cat.name), 'Meeting'];
 
-    const initialCategoryMap = categoryNames.reduce((acc, cat) => {
+    const allReportCategories = Array.from(new Set([
+        ...taskCategories.map(cat => cat.name),
+        ...dailyReports.map(r => getReportCategory(r)).filter(c => c && !['Weekend', 'Daily Total', 'Holiday', 'PTO', 'Company Event'].includes(c)),
+        'Meeting'
+    ]));
+
+    const initialCategoryMap = allReportCategories.reduce((acc, cat) => {
         acc[cat] = { tasks: 0, minutes: 0 };
         return acc;
     }, {});
 
     const categoryMap = groupedReports.reduce((acc, report) => {
-        const cat = report.task_category === 'Other' ? 'Others' : (report.task_category || 'Others');
-        if (cat === 'Weekend' || cat === 'Daily Total' || cat === 'PTO' || cat === 'Holiday' || cat === 'Company Event') return acc;
+        const cat = getReportCategory(report);
+        if (!cat || cat === 'Weekend' || cat === 'Daily Total' || cat === 'PTO' || cat === 'Holiday' || cat === 'Company Event') return acc;
         if (!acc[cat]) acc[cat] = { tasks: 0, minutes: 0 };
 
         acc[cat].tasks += Number(report.number_of_tasks || 0);
-        acc[cat].minutes += Number(report.time_spent || 0) * Number(report.number_of_tasks || 0);
+        acc[cat].minutes += Number(report.time_spent || 0);
         return acc;
     }, initialCategoryMap);
 
@@ -470,7 +487,7 @@ const ViewReport = () => {
         const seenCats = new Set();
         const catTaskTotals = {}; // category -> total number_of_tasks
         groupedReports.forEach(r => {
-            const cat = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
+            const cat = getReportCategory(r);
             if (cat && !['Weekend', 'Daily Total', 'Holiday', 'PTO', 'Company Event'].includes(cat)) {
                 seenCats.add(cat);
                 catTaskTotals[cat] = (catTaskTotals[cat] || 0) + Number(r.number_of_tasks || 0);
@@ -481,7 +498,7 @@ const ViewReport = () => {
             (a, b) => (catTaskTotals[b] || 0) - (catTaskTotals[a] || 0)
         );
         if (dynamicCategories.length === 0) {
-            dynamicCategories = [...categoryNames];
+            dynamicCategories = [...allReportCategories];
         }
 
         // 2. Setup Columns & Widths
@@ -621,20 +638,20 @@ const ViewReport = () => {
                     }
                     currentRow++;
                 } else {
-                    const taskName = report.task_category === "Others"
-                        ? (report.sub_category || "Others")
-                        : report.task_category;
+                    const taskName = getReportCategory(report);
                     const numTasks = Number(report.number_of_tasks || 0);
                     const timeSpent = Number(report.time_spent || 0);
-                    const workingHours = numTasks * timeSpent;
+                    const isMeeting = report.task_category === "Meeting";
+                    const workingHours = isMeeting ? "" : (timeSpent || "");
+                    const meetingMins = isMeeting ? (timeSpent || "") : "";
 
                     r.getCell(1).value = dateLabel;
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = taskName;
                     r.getCell(4).value = numTasks || "";
                     r.getCell(5).value = timeSpent || "";
-                    r.getCell(6).value = workingHours || "";
-                    r.getCell(7).value = report.meeting_count || "";
+                    r.getCell(6).value = workingHours;
+                    r.getCell(7).value = meetingMins;
 
                     for (let c = 1; c <= 7; c++) {
                         const cell = r.getCell(c);
@@ -692,14 +709,15 @@ const ViewReport = () => {
 
             // Group reports for this category (chronological order)
             groupedReports.forEach(report => {
-                const repCat = report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category;
+                const repCat = getReportCategory(report);
                 if (repCat === cat && Array.isArray(report.task_list) && report.task_list.length > 0) {
                     const [year, month, day] = report.date.split("-");
                     const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
                     const dateLabel = `${day}-${dateObj.toLocaleString("en-US", { month: "short" })}-${String(year).slice(-2)}`;
                     const numTasks = Number(report.number_of_tasks || 0);
                     const timeSpent = Number(report.time_spent || 0);
-                    const workingHours = numTasks * timeSpent;
+                    const isMeeting = report.task_category === "Meeting";
+                    const workingHours = isMeeting ? "" : (timeSpent || "");
 
                     report.task_list.forEach((item, itemIdx) => {
                         const targetRow = worksheet.getRow(p3Row);
@@ -768,7 +786,7 @@ const ViewReport = () => {
 
     const itemsReportColumns = [
         { key: 'date', label: 'Date' },
-        ...categoryNames.flatMap(category => [
+        ...allReportCategories.flatMap(category => [
             {
                 key: `${category}_tasks`,
                 label: `${category}`
@@ -793,7 +811,7 @@ const ViewReport = () => {
                         date: formatDate(report.date),
                     };
 
-                    categoryNames.forEach(category => {
+                    allReportCategories.forEach(category => {
                         acc[report.date][`${category}_tasks`] = [];
                         if (category !== 'Meeting') {
                             acc[report.date][`${category}_count`] = 0;
@@ -802,7 +820,7 @@ const ViewReport = () => {
                     });
                 }
 
-                const category = report.task_category;
+                const category = getReportCategory(report);
 
                 if (acc[report.date][`${category}_tasks`]) {
                     acc[report.date][`${category}_tasks`].push(
@@ -1023,10 +1041,10 @@ const ViewReport = () => {
                                                 displayReports.map((report, index) => {
                                                     if (report.isTotal) {
                                                         return (
-                                                            <tr key={report.id} className="fw-bold">
+                                                            <tr key={report.id} className="fw-bold table-success">
                                                                 <td></td>
                                                                 <td></td>
-                                                                <td></td>
+                                                                <td>Daily Total</td>
                                                                 <td></td>
                                                                 <td></td>
                                                                 <td>{report.working_hours_total}</td>
@@ -1044,8 +1062,11 @@ const ViewReport = () => {
                                                         report.task_category === 'Holiday' ||
                                                         report.task_category === 'PTO' ||
                                                         report.task_category === 'Company Event';
+                                                    const isMeeting = report.task_category === 'Meeting';
+                                                    const displayCat = getReportCategory(report);
+                                                    const rowKey = `${report.date}-${displayCat}-${report.id || index}`;
                                                     return (
-                                                        <tr key={`${report.date}-${report.task_category}-${report.time_spent}`} className={`
+                                                        <tr key={rowKey} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
                                                             ${isLeave ? "table-info" : ""}
                                                             middle
@@ -1069,7 +1090,7 @@ const ViewReport = () => {
                                                             </td>
                                                             <td>
                                                                 <div>
-                                                                    {report.task_category === 'Others' ? report.sub_category : report.task_category}
+                                                                    {displayCat}
                                                                     {(report.task_category === 'Holiday' || report.task_category === 'Company Event') && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
                                                                 </div>
 
@@ -1082,23 +1103,17 @@ const ViewReport = () => {
                                                                             <button type="button"
                                                                                 className="btn btn-sm btn-outline-success mt-2"
                                                                                 onClick={() =>
-                                                                                    toggleTaskList(
-                                                                                        `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                                    )
+                                                                                    toggleTaskList(rowKey)
                                                                                 }
                                                                             >
-                                                                                {expandedRows[
-                                                                                    `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                                ]
+                                                                                {expandedRows[rowKey]
                                                                                     ? 'Hide Tasks'
                                                                                     : `Show Tasks (${report.task_list.length})`
                                                                                 }
                                                                             </button>
 
 
-                                                                            {expandedRows[
-                                                                                `${report.date}-${report.task_category}-${report.time_spent}`
-                                                                            ] && (
+                                                                            {expandedRows[rowKey] && (
                                                                                     <ul className="mt-2 mb-0 ps-3">
                                                                                         {report.task_list.map((task, i) => (
                                                                                             <li key={`${task}-${i}`}>
@@ -1117,15 +1132,13 @@ const ViewReport = () => {
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
 
                                                             <td>
-                                                                {isLeave || report.number_of_tasks === 0
+                                                                {isLeave || report.number_of_tasks === 0 || isMeeting
                                                                     ? ''
-                                                                    : report.number_of_tasks && report.time_spent
-                                                                        ? report.number_of_tasks * report.time_spent
-                                                                        : ''
+                                                                    : (report.time_spent || '')
                                                                 }
                                                             </td>
 
-                                                            <td>{isLeave || report.number_of_tasks === 0 ? '' : report.meeting_count}</td>
+                                                            <td>{isMeeting ? (report.time_spent || '') : (report.meeting_count || '')}</td>
 
                                                         </tr>
                                                     );

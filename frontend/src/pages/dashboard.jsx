@@ -108,7 +108,7 @@ const Home = () => {
             const [year, month, day] = report.date.split('-');
             const reportDate = new Date(Number(year), Number(month) - 1, Number(day));
             if (reportDate.getMonth() === currentMonth && reportDate.getFullYear() === currentYear) {
-                timeSpentData[day - 1] = report.time_spent;
+                timeSpentData[day - 1] = (timeSpentData[day - 1] || 0) + Number(report.time_spent || 0);
             }
         });
 

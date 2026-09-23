@@ -35,7 +35,7 @@ const DailyReport = () => {
     }, []);
     const getDisplayCategory = useCallback((report) => { 
         if (report.task_category === "Others" && report.sub_category) { 
-            return `${report.task_category} - ${report.sub_category}`; 
+            return `Others (${report.sub_category})`; 
         } 
         return report.task_category || ""; 
     }, []);

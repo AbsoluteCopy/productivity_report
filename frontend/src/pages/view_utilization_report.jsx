@@ -122,15 +122,11 @@ const ViewUtilizationReport = () => {
                 if (!acc[key]) {
                     acc[key] = {
                         ...report,
-                        working_minutes:
-                            Number(report.number_of_tasks) *
-                            Number(report.time_spent || 0),
+                        working_minutes: Number(report.time_spent || 0),
                         meeting_minutes: Number(report.meeting_minutes || 0),
                     };
                 } else {
-                    acc[key].working_minutes +=
-                        Number(report.number_of_tasks) *
-                        Number(report.time_spent || 0);
+                    acc[key].working_minutes += Number(report.time_spent || 0);
 
                     acc[key].meeting_minutes +=
                         Number(report.meeting_minutes || 0);
