@@ -17,6 +17,10 @@ import ManageHoliday from './pages/manage_holiday';
 import ChangePassword from './pages/change_password';
 import NotFound from './pages/404';
 
+import { useEffect } from 'react';
+import axios from 'axios';
+import API_BASE_URL from './config';
+
 function App() {
   return (
     <>
@@ -29,6 +33,37 @@ function App() {
 
 
 function AppContent() {
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios.post(`${API_BASE_URL}/users/heartbeat/`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    };
+
+    // Send immediately on mount
+    sendHeartbeat();
+
+    // Ping every 60 seconds
+    const interval = setInterval(sendHeartbeat, 60000);
+
+    const onActive = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+      }
+    };
+    window.addEventListener('focus', onActive);
+    document.addEventListener('visibilitychange', onActive);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onActive);
+      document.removeEventListener('visibilitychange', onActive);
+    };
+  }, []);
+
   return (
     <div className="app-content">
       <Routes>

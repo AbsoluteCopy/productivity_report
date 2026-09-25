@@ -21,6 +21,21 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Auto-migrate: Ensure last_active_at column exists in users table
+(async () => {
+  try {
+    const [cols] = await pool.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_active_at'"
+    );
+    if (cols.length === 0) {
+      await pool.query("ALTER TABLE users ADD COLUMN last_active_at DATETIME NULL DEFAULT NULL");
+      console.log("Added column 'last_active_at' to users table.");
+    }
+  } catch (err) {
+    console.error("Migration check error for last_active_at:", err);
+  }
+})();
+
 // Rate limiter for login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -85,6 +100,9 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
       { expiresIn: '12h' }
     );
 
+    // Update last_active_at on login
+    await pool.query('UPDATE users SET last_active_at = NOW() WHERE id = ?', [user.id]).catch(() => {});
+
     return res.json({
       message: 'Login successful.',
       user: formatUser(user),
@@ -99,7 +117,7 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
 // 3. Logout
 app.post(['/api/logout', '/api/logout/'], authenticate, async (req, res) => {
   try {
-    await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = ?', [req.user.id]);
+    await pool.query('UPDATE users SET token_version = token_version + 1, last_active_at = NULL WHERE id = ?', [req.user.id]);
     return res.json({ message: 'Successfully logged out.' });
   } catch (err) {
     return res.status(500).json({ error: 'Error logging out.' });
@@ -246,6 +264,76 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Email or ID number already exists.', detail: 'Email or ID number already exists.' });
     }
     return res.status(500).json({ error: 'Error creating user: ' + (err.sqlMessage || err.message), detail: 'Error creating user: ' + (err.sqlMessage || err.message) });
+  }
+});
+
+// 6.1. Heartbeat - keep current user active
+app.post(['/api/users/heartbeat', '/api/users/heartbeat/'], authenticate, async (req, res) => {
+  try {
+    await pool.query('UPDATE users SET last_active_at = NOW() WHERE id = ?', [req.user.id]);
+    return res.json({ status: 'ok', timestamp: new Date() });
+  } catch (err) {
+    return res.status(500).json({ error: 'Error updating heartbeat.' });
+  }
+});
+
+// 6.2. Online Users - Admin and HR multi-company monitor
+app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, res) => {
+  try {
+    if (!['admin', 'hr'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Permission denied. Only Admin and HR can view online users.' });
+    }
+
+    // 1. Fetch users active within last 5 minutes
+    const [onlineRows] = await pool.query(
+      `SELECT id, id_number, first_name, last_name, email, role, company, last_active_at
+       FROM users
+       WHERE last_active_at >= NOW() - INTERVAL 5 MINUTE
+       ORDER BY last_active_at DESC`
+    );
+
+    // 2. Fetch all known companies for the filter tabs/chips
+    const [companyRows] = await pool.query(
+      `SELECT DISTINCT company FROM users WHERE company IS NOT NULL AND TRIM(company) != '' ORDER BY company ASC`
+    );
+    const allCompanies = companyRows.map(r => r.company.trim()).filter(Boolean);
+
+    // 3. Tally online counts per company
+    const companyCounts = {};
+    allCompanies.forEach(c => { companyCounts[c] = 0; });
+    onlineRows.forEach(u => {
+      const c = (u.company || '').trim();
+      if (c) {
+        companyCounts[c] = (companyCounts[c] || 0) + 1;
+      }
+    });
+
+    // 4. Multi-company filter support (e.g. ?companies=CompA,CompB or ?company=CompA)
+    let selectedCompanies = [];
+    if (req.query.companies) {
+      selectedCompanies = req.query.companies.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+    } else if (req.query.company) {
+      selectedCompanies = [req.query.company.trim().toLowerCase()];
+    }
+
+    let filteredUsers = onlineRows;
+    if (selectedCompanies.length > 0) {
+      filteredUsers = onlineRows.filter(u => {
+        const userComp = (u.company || '').trim().toLowerCase();
+        return selectedCompanies.includes(userComp);
+      });
+    }
+
+    return res.json({
+      total_online: filteredUsers.length,
+      all_online_count: onlineRows.length,
+      company_counts: companyCounts,
+      companies: allCompanies,
+      users: filteredUsers
+    });
+  } catch (err) {
+    console.error('Error fetching online users:', err);
+    return res.status(500).json({ error: 'Error fetching online users.' });
   }
 });
 

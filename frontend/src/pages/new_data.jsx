@@ -30,6 +30,13 @@ const NewData = () => {
     ]);
     const [taskCategories, setTaskCategories] = useState([]);
 
+    // Copy from previous day
+    const [showCopyModal, setShowCopyModal] = useState(false);
+    const [previousReports, setPreviousReports] = useState([]);
+    const [selectedCopyIds, setSelectedCopyIds] = useState(new Set());
+    const [copyLoading, setCopyLoading] = useState(false);
+    const [copyFromDate, setCopyFromDate] = useState('');
+
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
         if (user) {
@@ -456,6 +463,130 @@ const NewData = () => {
             });
         }
     };
+
+    // All historical working reports, grouped by date — loaded once when modal opens
+    const [allPastReports, setAllPastReports] = useState({});
+    const [availableDates, setAvailableDates] = useState([]);
+    const [selectedCopyDate, setSelectedCopyDate] = useState('');
+
+    const fetchPreviousReports = async () => {
+        setCopyLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user'));
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/`, {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { user_id: user.id }
+            });
+
+            const allReports = Array.isArray(response.data) ? response.data : [];
+            // Only working-day reports, exclude the current form date
+            const workingReports = allReports.filter(r =>
+                r.work_type === 'Working' && r.date < formData.date
+            );
+
+            if (workingReports.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'No Previous Reports',
+                    text: 'No previous working day reports found to copy from.',
+                    confirmButtonColor: '#065d48',
+                });
+                setCopyLoading(false);
+                return;
+            }
+
+            // Group by date
+            const grouped = workingReports.reduce((acc, r) => {
+                if (!acc[r.date]) acc[r.date] = [];
+                acc[r.date].push(r);
+                return acc;
+            }, {});
+
+            // Sort dates descending (most recent first)
+            const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+            const mostRecentDate = sortedDates[0];
+            const reportsForDate = grouped[mostRecentDate];
+
+            setAllPastReports(grouped);
+            setAvailableDates(sortedDates);
+            setSelectedCopyDate(mostRecentDate);
+            setPreviousReports(reportsForDate);
+            setCopyFromDate(formatDateLabel(mostRecentDate));
+            setSelectedCopyIds(new Set(reportsForDate.map(r => r.id)));
+            setShowCopyModal(true);
+        } catch (err) {
+            console.error('Error fetching previous reports:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Could not load previous reports. Please try again.',
+                confirmButtonColor: '#065d48',
+            });
+        } finally {
+            setCopyLoading(false);
+        }
+    };
+
+    const formatDateLabel = (dateStr) => {
+        const [y, m, d] = dateStr.split('-');
+        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+        return dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    };
+
+    const handleCopyDateChange = (newDate) => {
+        setSelectedCopyDate(newDate);
+        const reports = allPastReports[newDate] || [];
+        setPreviousReports(reports);
+        setCopyFromDate(formatDateLabel(newDate));
+        setSelectedCopyIds(new Set(reports.map(r => r.id)));
+    };
+
+    const toggleCopySelection = (id) => {
+        setSelectedCopyIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedCopyIds.size === previousReports.length) {
+            setSelectedCopyIds(new Set());
+        } else {
+            setSelectedCopyIds(new Set(previousReports.map(r => r.id)));
+        }
+    };
+
+    const handleCopySelected = () => {
+        const toCopy = previousReports.filter(r => selectedCopyIds.has(r.id));
+        if (toCopy.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'Nothing selected', text: 'Please select at least one category to copy.', confirmButtonColor: '#065d48' });
+            return;
+        }
+
+        const newCats = toCopy.map((report, i) => ({
+            id: Date.now() + i,
+            category: report.task_category,
+            sub_category: report.sub_category || '',
+            tasks: Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [],
+            currentTask: '',
+            timeSpent: String(report.time_spent || ''),
+            meetingCount: report.meeting_count || 0,
+            meetingTitle: report.task_category === 'Meeting' && report.task_list?.[0] ? report.task_list[0] : ''
+        }));
+
+        setCategories(prev => {
+            // If the only existing row is blank, replace it; otherwise append
+            const isDefault = prev.length === 1 && !prev[0].category && prev[0].tasks.length === 0;
+            return isDefault ? newCats : [...prev, ...newCats];
+        });
+
+        setShowCopyModal(false);
+    };
+
     const handleBack = () => {
         navigate('/daily_report');
     };
@@ -720,9 +851,24 @@ const NewData = () => {
                                             </div>
                                         ))}
 
-                                        <button type="button" className="btn btn-outline-success w-100 mb-3" onClick={addCategory} >
-                                            + Add Another Category
-                                        </button>
+                                        <div className="d-flex gap-2 mb-3">
+                                            <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
+                                                + Add Another Category
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-secondary d-flex align-items-center"
+                                                onClick={fetchPreviousReports}
+                                                disabled={copyLoading}
+                                                title="Copy tasks from your most recent previous working day"
+                                            >
+                                                {copyLoading
+                                                    ? <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                    : <i className="bi bi-clipboard-plus me-1"></i>
+                                                }
+                                                {copyLoading ? ' Loading...' : ' Copy from Previous Day'}
+                                            </button>
+                                        </div>
                                     </>
                                 )}
                                 <button type="submit" className="btn btn-success w-100 fw-bold">
@@ -733,6 +879,127 @@ const NewData = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Copy from Previous Day Modal */}
+            {showCopyModal && (
+                <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div className="modal-content">
+                            <div className="modal-header" style={{ backgroundColor: '#065d48', color: 'white' }}>
+                                <h5 className="modal-title">
+                                    <i className="bi bi-clipboard-plus me-2"></i>Copy Tasks from a Previous Day
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowCopyModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                {/* Date picker row */}
+                                <div className="mb-3">
+                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                        Select a date to copy from:
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedCopyDate}
+                                        onChange={e => handleCopyDateChange(e.target.value)}
+                                    >
+                                        {availableDates.map(date => (
+                                            <option key={date} value={date}>
+                                                {formatDateLabel(date)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <small className="text-muted">Select the categories you want to copy into today's report.</small>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={toggleSelectAll}
+                                    >
+                                        {selectedCopyIds.size === previousReports.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                </div>
+
+                                <div className="d-flex flex-column gap-3">
+                                    {previousReports.map(report => {
+                                        const isSelected = selectedCopyIds.has(report.id);
+                                        const displayCat = report.task_category === 'Others' && report.sub_category
+                                            ? `Others (${report.sub_category})`
+                                            : report.task_category;
+                                        const taskList = Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [];
+
+                                        return (
+                                            <div
+                                                key={report.id}
+                                                onClick={() => toggleCopySelection(report.id)}
+                                                className="card"
+                                                style={{
+                                                    cursor: 'pointer',
+                                                    border: isSelected ? '2px solid #065d48' : '2px solid #e0e0e0',
+                                                    backgroundColor: isSelected ? '#f0faf6' : '#fff',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <div className="card-body py-3 px-3">
+                                                    <div className="d-flex justify-content-between align-items-start">
+                                                        <div className="d-flex align-items-center gap-2 flex-grow-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="form-check-input mt-0 flex-shrink-0"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleCopySelection(report.id)}
+                                                                onClick={e => e.stopPropagation()}
+                                                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                            />
+                                                            <div>
+                                                                <span className="fw-semibold" style={{ color: '#065d48' }}>{displayCat}</span>
+                                                                {taskList.length > 0 && (
+                                                                    <ul className="mb-0 mt-1 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
+                                                                        {taskList.map((task, i) => (
+                                                                            <li key={i}>{task}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-end ms-3 flex-shrink-0">
+                                                            {report.time_spent > 0 && (
+                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6,93,72,0.1)', color: '#065d48', fontSize: '0.8rem' }}>
+                                                                    <i className="bi bi-clock me-1"></i>{report.time_spent} min
+                                                                </span>
+                                                            )}
+                                                            {report.task_category === 'Meeting' && report.meeting_count > 0 && (
+                                                                <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '2px' }}>
+                                                                    {report.meeting_count} meeting{report.meeting_count > 1 ? 's' : ''}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-outline-secondary" onClick={() => setShowCopyModal(false)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-success fw-semibold"
+                                    onClick={handleCopySelected}
+                                    disabled={selectedCopyIds.size === 0}
+                                    style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
+                                >
+                                    Copy Selected ({selectedCopyIds.size})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

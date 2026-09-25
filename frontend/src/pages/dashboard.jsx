@@ -31,6 +31,14 @@ const Home = () => {
     const [monthlyData, setMonthlyData] = useState([]);
     const [chartData, setChartData] = useState(null);
 
+    // Online users tracking (Admin & HR)
+    const [onlineUsers, setOnlineUsers] = useState([]);
+    const [onlineLoading, setOnlineLoading] = useState(true);
+    const [allOnlineCount, setAllOnlineCount] = useState(0);
+    const [companyCounts, setCompanyCounts] = useState({});
+    const [availableCompanies, setAvailableCompanies] = useState([]);
+    const [selectedCompanies, setSelectedCompanies] = useState([]);
+
     useEffect(() => {
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -39,6 +47,62 @@ const Home = () => {
             setRole(parsedUser.role);
         }
     }, []);
+
+    const fetchOnlineUsers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            let url = `${API_BASE_URL}/users/online/`;
+            if (selectedCompanies.length > 0) {
+                url += `?companies=${encodeURIComponent(selectedCompanies.join(','))}`;
+            }
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setOnlineUsers(data.users || []);
+                setAllOnlineCount(data.all_online_count || 0);
+                setCompanyCounts(data.company_counts || {});
+                setAvailableCompanies(data.companies || []);
+            }
+        } catch (err) {
+            console.error('Error fetching online users:', err);
+        } finally {
+            setOnlineLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (role === 'admin' || role === 'hr') {
+            fetchOnlineUsers();
+            const interval = setInterval(fetchOnlineUsers, 30000);
+            return () => clearInterval(interval);
+        }
+    }, [role, selectedCompanies]);
+
+    const toggleCompanySelection = (comp) => {
+        setSelectedCompanies(prev => {
+            if (prev.includes(comp)) {
+                return prev.filter(c => c !== comp);
+            } else {
+                return [...prev, comp];
+            }
+        });
+    };
+
+    const formatRelativeTime = (dateStr) => {
+        if (!dateStr) return '';
+        const now = new Date();
+        const past = new Date(dateStr);
+        const diffSec = Math.floor((now - past) / 1000);
+        if (diffSec < 60) return 'Active just now';
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin === 1) return 'Active 1m ago';
+        if (diffMin < 60) return `Active ${diffMin}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        return `Active ${diffHr}h ago`;
+    };
 
     useEffect(() => {
         if (user) {
@@ -257,6 +321,144 @@ const Home = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Online Users Tracker (Admin & HR) */}
+                {(role === 'admin' || role === 'hr') && (
+                    <div className="col-12 mt-4">
+                        <div className="card shadow-sm border-0 rounded-4">
+                            <div className="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="spinner-grow spinner-grow-sm text-success" role="status" style={{ width: '10px', height: '10px' }} />
+                                    <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                                        <i className="bi bi-people me-2"></i>Who's Online Now
+                                    </h5>
+                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
+                                        {onlineUsers.length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
+                                    </span>
+                                </div>
+                                <div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 rounded-3"
+                                        onClick={fetchOnlineUsers}
+                                        title="Refresh online status"
+                                    >
+                                        <i className="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="card-body px-4 pt-2 pb-4">
+                                {/* Multi-Company Filter Bar */}
+                                <div className="mb-4 p-3 rounded-3 border" style={{ backgroundColor: '#f9fafb' }}>
+                                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                        <div className="d-flex align-items-center gap-1 text-muted small fw-semibold">
+                                            <i className="bi bi-funnel"></i>
+                                            <span>Filter by Company (click multiple to monitor at the same time):</span>
+                                        </div>
+                                        {selectedCompanies.length > 0 && (
+                                            <button
+                                                type="button"
+                                                className="btn btn-link btn-sm text-decoration-none p-0 text-muted"
+                                                style={{ fontSize: '0.78rem' }}
+                                                onClick={() => setSelectedCompanies([])}
+                                            >
+                                                Clear filter (show all)
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="d-flex flex-wrap align-items-center gap-2">
+                                        {/* All Companies option */}
+                                        <button
+                                            type="button"
+                                            className={`btn btn-sm rounded-pill fw-semibold ${selectedCompanies.length === 0 ? 'btn-success' : 'btn-outline-secondary'}`}
+                                            style={selectedCompanies.length === 0 ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.8rem' } : { fontSize: '0.8rem' }}
+                                            onClick={() => setSelectedCompanies([])}
+                                        >
+                                            All Companies ({allOnlineCount})
+                                        </button>
+
+                                        {/* Company chips */}
+                                        {availableCompanies.map(comp => {
+                                            const count = companyCounts[comp] || 0;
+                                            const isSelected = selectedCompanies.includes(comp);
+                                            return (
+                                                <button
+                                                    key={comp}
+                                                    type="button"
+                                                    className={`btn btn-sm rounded-pill fw-semibold d-flex align-items-center gap-1 ${isSelected ? 'btn-success' : 'btn-outline-secondary'}`}
+                                                    style={isSelected ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.8rem' } : { fontSize: '0.8rem' }}
+                                                    onClick={() => toggleCompanySelection(comp)}
+                                                >
+                                                    {isSelected && <i className="bi bi-check-lg"></i>}
+                                                    {comp}
+                                                    <span className={`badge rounded-pill ms-1 ${isSelected ? 'bg-light text-dark' : 'bg-secondary'}`} style={{ fontSize: '0.7rem' }}>
+                                                        {count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Active users grid */}
+                                {onlineLoading ? (
+                                    <div className="text-center py-5">
+                                        <div className="spinner-border text-success" role="status">
+                                            <span className="visually-hidden">Loading online users...</span>
+                                        </div>
+                                    </div>
+                                ) : onlineUsers.length > 0 ? (
+                                    <div className="row g-3">
+                                        {onlineUsers.map(u => (
+                                            <div key={u.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+                                                <div className="p-3 border rounded-3 h-100 d-flex flex-column justify-content-between" style={{ backgroundColor: '#ffffff', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+                                                    <div className="d-flex align-items-start gap-2 mb-2">
+                                                        <div className="position-relative flex-shrink-0">
+                                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '40px', height: '40px', fontSize: '0.9rem', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                                                {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
+                                                            </div>
+                                                            <span className="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle" style={{ width: '10px', height: '10px' }} title="Online"></span>
+                                                        </div>
+                                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.2 }}>
+                                                            <div className="fw-bold text-dark text-truncate" title={`${u.first_name} ${u.last_name}`} style={{ fontSize: '0.9rem' }}>
+                                                                {u.first_name} {u.last_name}
+                                                            </div>
+                                                            <span className="badge mt-1" style={{
+                                                                fontSize: '0.65rem',
+                                                                backgroundColor: u.role === 'admin' ? '#fff3cd' : u.role === 'hr' ? '#cff4fc' : '#d1e7dd',
+                                                                color: u.role === 'admin' ? '#664d03' : u.role === 'hr' ? '#055160' : '#0f5132',
+                                                                textTransform: 'uppercase'
+                                                            }}>
+                                                                {u.role}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="border-top pt-2 mt-2 d-flex justify-content-between align-items-center" style={{ fontSize: '0.75rem' }}>
+                                                        <span className="text-muted text-truncate me-1" title={u.company || 'No Company'}>
+                                                            <i className="bi bi-building me-1"></i>{u.company || 'General'}
+                                                        </span>
+                                                        <span className="text-success fw-semibold flex-shrink-0">
+                                                            {formatRelativeTime(u.last_active_at)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-5 text-muted">
+                                        <i className="bi bi-people fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                                        <p className="mb-0 fw-medium">
+                                            No users currently online {selectedCompanies.length > 0 ? `in selected companies (${selectedCompanies.join(', ')})` : ''}.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {role === 'employee' && chartData && (
                     <div className="col-12 mt-4">
