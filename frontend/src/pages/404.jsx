@@ -3,13 +3,10 @@ import "bootstrap/dist/css/bootstrap.min.css";
 
 export default function NotFound() {
     return (
-        <div
-            className="min-vh-100 d-flex align-items-center justify-content-center overflow-hidden position-relative text-white"
+        <div className="min-vh-100 d-flex align-items-center justify-content-center overflow-hidden position-relative text-white"
             style={{ backgroundColor: "#055d47" }}
         >
-            {/* Decorative circles */}
-            <div
-                className="position-absolute rounded-circle"
+            <div className="position-absolute rounded-circle"
                 style={{
                     width: "220px",
                     height: "220px",
@@ -19,8 +16,7 @@ export default function NotFound() {
                 }}
             />
 
-            <div
-                className="position-absolute rounded-circle"
+            <div className="position-absolute rounded-circle"
                 style={{
                     width: "250px",
                     height: "250px",
@@ -30,8 +26,7 @@ export default function NotFound() {
                 }}
             />
 
-            <div
-                className="position-absolute rounded-circle"
+            <div className="position-absolute rounded-circle"
                 style={{
                     width: "100px",
                     height: "100px",
@@ -41,12 +36,8 @@ export default function NotFound() {
                 }}
             />
 
-            {/* Content */}
             <div className="container text-center position-relative">
-                <h1
-                    className="fw-bold display-1 mb-2"
-                    style={{ letterSpacing: "-5px" }}
-                >
+                <h1 className="fw-bold display-1 mb-2" style={{ letterSpacing: "-5px" }}>
                     404
                 </h1>
 
@@ -59,13 +50,13 @@ export default function NotFound() {
                     Let's get you back to the homepage.
                 </p>
 
-                <a
-                    href="/"
-                    className="btn btn-light rounded-pill px-4 py-3 fw-bold shadow"
+                <button 
+                    onClick={() => window.history.back()} 
+                    className="btn btn-light rounded-pill px-4 py-3 fw-bold shadow" 
                     style={{ color: "#055d47" }}
                 >
                     ← Back to Home
-                </a>
+                </button>
             </div>
         </div>
     );

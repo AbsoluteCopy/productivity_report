@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/login.css";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import API_BASE_URL from "../config";
 
 const Login = () => {
     const navigate = useNavigate();
@@ -12,6 +11,20 @@ const Login = () => {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
+
+    useEffect(() => {
+        // Clear any stuck/invalid tokens from previous sessions/databases
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Load remembered email if exists
+        const rememberedEmail = localStorage.getItem('rememberedEmail');
+        if (rememberedEmail) {
+            setEmail(rememberedEmail);
+            setRememberMe(true);
+        }
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -31,7 +44,19 @@ const Login = () => {
 
             if (response.ok) {
                 localStorage.setItem("user", JSON.stringify(data.user));
-                navigate("/dashboard");
+                localStorage.setItem("token", data.token);
+                
+                // Handle remember me functionality
+                if (rememberMe) {
+                    localStorage.setItem('rememberedEmail', email);
+                } else {
+                    localStorage.removeItem('rememberedEmail');
+                }
+                if (data.user.role === 'viewer') {
+                    navigate("/view_report");
+                } else {
+                    navigate("/dashboard");
+                }
             } else {
                 setError(data.error || "Login failed");
             }
@@ -54,11 +79,12 @@ const Login = () => {
                 {/* Logo */}
                 <div>
                     <img
-                        src="/images/NeitClem Sticker.png"
+                        src="/images/gratus.png"
                         alt="Logo"
                         style={{
-                            width: "90px",
-                            height: "90px",
+                            width: "250px",
+                            height: "auto",
+                            marginBottom: "15px",
                             objectFit: "contain",
                         }}
                         className="logo"
@@ -188,6 +214,34 @@ const Login = () => {
                                 )}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Remember Me Checkbox */}
+                    <div style={{ marginBottom: "20px", display: "flex", alignItems: "center" }}>
+                        <input
+                            type="checkbox"
+                            id="rememberMe"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            style={{
+                                width: "18px",
+                                height: "18px",
+                                marginRight: "10px",
+                                cursor: "pointer",
+                                accentColor: "#065d48",
+                            }}
+                        />
+                        <label
+                            htmlFor="rememberMe"
+                            style={{
+                                color: "#065d48",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Remember me
+                        </label>
                     </div>
 
                     {/* Login Button */}

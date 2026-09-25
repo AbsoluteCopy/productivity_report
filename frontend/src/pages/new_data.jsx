@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Swal from 'sweetalert2';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import API_BASE_URL from "../config";
 
 const categoryOptions = [
     'Accounting Unapplied Payments',
@@ -26,8 +26,16 @@ const NewData = () => {
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
-        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '15', meetingCount: 0, work_type: '', sub_category: '' }
+        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
     ]);
+    const [taskCategories, setTaskCategories] = useState([]);
+
+    // Copy from previous day
+    const [showCopyModal, setShowCopyModal] = useState(false);
+    const [previousReports, setPreviousReports] = useState([]);
+    const [selectedCopyIds, setSelectedCopyIds] = useState(new Set());
+    const [copyLoading, setCopyLoading] = useState(false);
+    const [copyFromDate, setCopyFromDate] = useState('');
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
@@ -44,36 +52,89 @@ const NewData = () => {
         }
     }, [editId]);
 
-    const fetchReportForEdit = async (id) => {
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
+    const fetchCategories = async () => {
         try {
-            const user = JSON.parse(localStorage.getItem("user"));
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user) return;
 
-            fetch(
-                `${API_BASE_URL}/daily-reports/${id}/?user_id=${user.id}`
-            ).then(response => response.json()).then(data => {
-                setFormData({
-                    date: data.date,
-                    work_type: data.work_type,
-                    user_id: data.user,
-                    holiday_name: data.task_category === 'Holiday' ? data.task_list[0] : ''
-                });
-
-                if (data.work_type === 'Working') {
-                    setCategories([
-                        {
-                            id: 1,
-                            category: data.task_category,
-                            sub_category: data.sub_category || '',
-                            tasks: data.task_list || [],
-                            currentTask: '',
-                            timeSpent: data.time_spent?.toString() || '15',
-                            meetingCount: data.meeting_count || 0
-                        }
-                    ]);
+            // Fetch current user data to get their task_list
+            const userRes = await axios.get(`${API_BASE_URL}/users/me/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
             });
+            const userData = userRes.data;
+            const userTaskList = Array.isArray(userData.task_list) ? userData.task_list : [];
+
+            // Fetch all task categories
+            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            const allCategories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
+
+            // If admin, hr, or user has no specific task list assigned, allow all categories
+            if (userData.role === 'admin' || userData.role === 'hr' || userTaskList.length === 0) {
+                setTaskCategories(allCategories);
+            } else {
+                const filteredCategories = allCategories.filter(category =>
+                    userTaskList.includes(category.id)
+                );
+                setTaskCategories(filteredCategories);
+            }
+        } catch (err) {
+            console.error(err);
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: err.response?.data?.detail || err.response?.data?.error || "Something went wrong.",
+            });
+        }
+    };
+
+    const fetchReportForEdit = async (id) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = response.data;
+
+            setFormData({
+                date: data.date,
+                work_type: data.work_type,
+                user_id: data.user,
+                holiday_name: (data.task_category === 'Holiday' || data.task_category === 'Company Event')
+                    ? (data.task_list?.[0] || '')
+                    : ''
+            });
+
+            if (data.work_type === 'Working') {
+                setCategories([
+                    {
+                        id: 1,
+                        category: data.task_category,
+                        sub_category: data.sub_category || '',
+                        tasks: Array.isArray(data.task_list) ? data.task_list : [],
+                        currentTask: '',
+                        timeSpent: (data.time_spent !== undefined && data.time_spent !== null) ? String(data.time_spent) : '',
+                        meetingCount: data.meeting_count || 0,
+                        meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : ''
+                    }
+                ]);
+            }
         } catch (error) {
-            console.error('Error fetching report:', error);
+            console.error('Error fetching report for edit:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to load report data for editing.',
+            });
         }
     };
 
@@ -153,9 +214,39 @@ const NewData = () => {
         }));
     };
 
+    const validateMinutes = (val) => {
+        if (val === '' || val === null || val === undefined) return { valid: false, error: 'Value cannot be empty.' };
+        const strVal = String(val).trim();
+        if (/^0\d+/.test(strVal)) {
+            return { valid: false, error: `Invalid number "${strVal}". Numbers cannot start with a leading zero (e.g., use "20" instead of "${strVal}").` };
+        }
+        const num = Number(strVal);
+        if (isNaN(num) || num < 0 || !Number.isInteger(num)) {
+            return { valid: false, error: `"${strVal}" is not a valid positive whole number of minutes.` };
+        }
+        return { valid: true, value: strVal };
+    };
+
     const handleTimeSpentChange = (id, value) => {
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, timeSpent: value } : cat
+        ));
+    };
+
+    const handleTimeSpentBlur = (id, value) => {
+        if (!value || typeof value !== 'string') return;
+        const trimmed = value.trim();
+        if (/^0\d+/.test(trimmed)) {
+            const sanitized = String(parseInt(trimmed, 10));
+            setCategories(prev => prev.map(cat =>
+                cat.id === id ? { ...cat, timeSpent: sanitized } : cat
+            ));
+        }
+    };
+
+    const handleMeetingTitleChange = (id, value) => {
+        setCategories(prev => prev.map(cat =>
+            cat.id === id ? { ...cat, meetingTitle: value } : cat
         ));
     };
 
@@ -174,7 +265,7 @@ const NewData = () => {
     const addCategory = () => {
         setCategories(prev => [
             ...prev,
-            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '0', meetingCount: 0, sub_category: '' }
+            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, sub_category: '', meetingTitle: '' }
         ]);
     };
 
@@ -201,9 +292,10 @@ const NewData = () => {
                 category: '',
                 tasks: [],
                 currentTask: '',
-                timeSpent: '15',
+                timeSpent: '',
                 meetingCount: 0,
-                sub_category: ''
+                sub_category: '',
+                meetingTitle: ''
             }
         ]);
     };
@@ -211,13 +303,13 @@ const NewData = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Handle PTO and Holiday submissions
-        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday') {
+        // Handle PTO, Holiday, and Company Event submissions
+        if (formData.work_type === 'PTO' || formData.work_type === 'Holiday' || formData.work_type === 'Company Event') {
             const report = {
                 user: formData.user_id,
                 date: formData.date,
                 task_category: formData.work_type,
-                task_list: formData.work_type === 'Holiday' ? [formData.holiday_name] : ['PTO'],
+                task_list: formData.work_type === 'PTO' ? ['PTO'] : [formData.holiday_name],
                 number_of_tasks: 0,
                 time_spent: 0,
                 meeting_count: 0,
@@ -227,37 +319,24 @@ const NewData = () => {
 
             try {
                 const url = isEditMode ? `${API_BASE_URL}/daily-reports/${editId}/` : `${API_BASE_URL}/daily-reports/`;
-                const method = isEditMode ? 'PUT' : 'POST';
+                const request = isEditMode ? axios.put : axios.post;
 
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(report)
+                await request(url, report);
+
+                Swal.fire({
+                    title: 'Success',
+                    text: `${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`,
+                    icon: 'success',
                 });
-
-                if (response.ok) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: `${formData.work_type} ${isEditMode ? 'updated' : 'submitted'} successfully!`,
-                        icon: 'success',
-                    });
-                    if (!isEditMode) {
-                        resetForm();
-                    }
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
-                        icon: 'error',
-                    });
+                if (!isEditMode) {
+                    resetForm();
                 }
             } catch (error) {
                 console.error('Error:', error);
+                const errMsg = error.response?.data?.error || error.response?.data?.detail || `Error ${isEditMode ? 'updating' : 'submitting'} report. Please try again.`;
                 Swal.fire({
-                    title: 'Error',
-                    text: `Error ${isEditMode ? 'updating' : 'submitting'} report`,
+                    title: 'Submission Error',
+                    text: errMsg,
                     icon: 'error',
                 });
             }
@@ -265,24 +344,64 @@ const NewData = () => {
         }
 
         // Handle Working submissions
+        for (let cat of categories) {
+            if (cat.category === 'Meeting') {
+                const check = validateMinutes(cat.timeSpent);
+                if (!check.valid) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Invalid Time Spent',
+                        text: `Please enter a valid time in minutes for the Meeting category. ${check.error}`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'Edit Input'
+                    });
+                    return;
+                }
+            } else if (cat.category === 'Others' && hasTimeSpent) {
+                // "No Time Spent" checked for Others, skip validation
+                continue;
+            } else if (cat.category) {
+                const check = validateMinutes(cat.timeSpent);
+                if (!check.valid) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Invalid Time Spent',
+                        text: `Please enter a valid time in minutes for ${cat.category}: ${check.error}`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'Edit Input'
+                    });
+                    return;
+                }
+            }
+        }
+
+        console.log(categories);
         const reports = categories
             .filter(cat =>
                 cat.category &&
-                (cat.tasks.length > 0 || cat.category === 'Others')
+                (
+                    cat.tasks.length > 0 ||
+                    cat.category === 'Others' ||
+                    (cat.category === 'Meeting' && cat.meetingTitle.trim() !== '')
+                )
             )
             .map(cat => ({
                 user: formData.user_id,
                 date: formData.date,
                 task_category: cat.category,
-                task_list: cat.category === 'Others' && cat.tasks.length === 0
-                    ? ['']
-                    : cat.tasks,
-                number_of_tasks: cat.category === 'Others'
-                    ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
-                    : cat.tasks.length,
+                task_list: cat.category === 'Meeting'
+                    ? [cat.meetingTitle]
+                    : (cat.category === 'Others' && cat.tasks.length === 0
+                        ? ['']
+                        : cat.tasks),
+                number_of_tasks: cat.category === 'Meeting'
+                    ? (cat.meetingTitle.trim() ? 1 : 0)
+                    : cat.category === 'Others'
+                        ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
+                        : cat.tasks.length,
                 time_spent: hasTimeSpent && cat.category === 'Others'
                     ? 0
-                    : cat.timeSpent,
+                    : parseInt(cat.timeSpent, 10) || 0,
                 meeting_count: cat.category === 'Meeting'
                     ? (cat.meetingCount || 0)
                     : 0,
@@ -290,6 +409,7 @@ const NewData = () => {
                 sub_category: cat.sub_category
             }));
         if (reports.length === 0) {
+            console.log(reports);
             Swal.fire({
                 title: 'Error',
                 text: 'Please add at least one category with tasks',
@@ -300,67 +420,173 @@ const NewData = () => {
 
         try {
             if (isEditMode) {
-                // Update single report
-                const report = reports[0];
-                const response = await fetch(`${API_BASE_URL}/daily-reports/${editId}/`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(report)
-                });
+                // Update the original report with the first category
+                await axios.put(`${API_BASE_URL}/daily-reports/${editId}/`, reports[0]);
 
-                if (response.ok) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: 'Daily report updated successfully!',
-                        icon: 'success',
-                    });
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Error updating report',
-                        icon: 'error',
-                    });
+                // If the user added extra categories, POST them as new reports
+                if (reports.length > 1) {
+                    const newReports = reports.slice(1).map(report =>
+                        axios.post(`${API_BASE_URL}/daily-reports/`, report)
+                    );
+                    await Promise.all(newReports);
                 }
+
+                await Swal.fire({
+                    title: 'Success',
+                    text: 'Daily report updated successfully!',
+                    icon: 'success',
+                });
+                // Navigate back so the list refreshes and user can't re-submit
+                navigate('/daily_report');
             } else {
                 // Create new reports
                 const promises = reports.map(report =>
-                    fetch(`${API_BASE_URL}/daily-reports/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(report)
-                    })
+                    axios.post(`${API_BASE_URL}/daily-reports/`, report)
                 );
 
-                const responses = await Promise.all(promises);
+                await Promise.all(promises);
 
-                if (responses.every(r => r.ok)) {
-                    Swal.fire({
-                        title: 'Success',
-                        text: 'All daily reports submitted successfully!',
-                        icon: 'success',
-                    });
-                    resetForm();
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Error submitting some reports',
-                        icon: 'error',
-                    });
-                }
+                await Swal.fire({
+                    title: 'Success',
+                    text: 'All daily reports submitted successfully!',
+                    icon: 'success',
+                });
+                resetForm();
             }
         } catch (error) {
             console.error('Error:', error);
+            const errMsg = error.response?.data?.error || error.response?.data?.detail || error.response?.data?.message || `Error ${isEditMode ? 'updating' : 'submitting'} report. Please try again.`;
             Swal.fire({
-                title: 'Error',
-                text: `Error ${isEditMode ? 'updating' : 'submitting'} reports`,
+                title: 'Submission Error',
+                text: errMsg,
                 icon: 'error',
             });
         }
     };
+
+    // All historical working reports, grouped by date — loaded once when modal opens
+    const [allPastReports, setAllPastReports] = useState({});
+    const [availableDates, setAvailableDates] = useState([]);
+    const [selectedCopyDate, setSelectedCopyDate] = useState('');
+
+    const fetchPreviousReports = async () => {
+        setCopyLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user'));
+            const response = await axios.get(`${API_BASE_URL}/daily-reports/`, {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { user_id: user.id }
+            });
+
+            const allReports = Array.isArray(response.data) ? response.data : [];
+            // Only working-day reports, exclude the current form date
+            const workingReports = allReports.filter(r =>
+                r.work_type === 'Working' && r.date < formData.date
+            );
+
+            if (workingReports.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'No Previous Reports',
+                    text: 'No previous working day reports found to copy from.',
+                    confirmButtonColor: '#065d48',
+                });
+                setCopyLoading(false);
+                return;
+            }
+
+            // Group by date
+            const grouped = workingReports.reduce((acc, r) => {
+                if (!acc[r.date]) acc[r.date] = [];
+                acc[r.date].push(r);
+                return acc;
+            }, {});
+
+            // Sort dates descending (most recent first)
+            const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+            const mostRecentDate = sortedDates[0];
+            const reportsForDate = grouped[mostRecentDate];
+
+            setAllPastReports(grouped);
+            setAvailableDates(sortedDates);
+            setSelectedCopyDate(mostRecentDate);
+            setPreviousReports(reportsForDate);
+            setCopyFromDate(formatDateLabel(mostRecentDate));
+            setSelectedCopyIds(new Set(reportsForDate.map(r => r.id)));
+            setShowCopyModal(true);
+        } catch (err) {
+            console.error('Error fetching previous reports:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Could not load previous reports. Please try again.',
+                confirmButtonColor: '#065d48',
+            });
+        } finally {
+            setCopyLoading(false);
+        }
+    };
+
+    const formatDateLabel = (dateStr) => {
+        const [y, m, d] = dateStr.split('-');
+        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+        return dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    };
+
+    const handleCopyDateChange = (newDate) => {
+        setSelectedCopyDate(newDate);
+        const reports = allPastReports[newDate] || [];
+        setPreviousReports(reports);
+        setCopyFromDate(formatDateLabel(newDate));
+        setSelectedCopyIds(new Set(reports.map(r => r.id)));
+    };
+
+    const toggleCopySelection = (id) => {
+        setSelectedCopyIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedCopyIds.size === previousReports.length) {
+            setSelectedCopyIds(new Set());
+        } else {
+            setSelectedCopyIds(new Set(previousReports.map(r => r.id)));
+        }
+    };
+
+    const handleCopySelected = () => {
+        const toCopy = previousReports.filter(r => selectedCopyIds.has(r.id));
+        if (toCopy.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'Nothing selected', text: 'Please select at least one category to copy.', confirmButtonColor: '#065d48' });
+            return;
+        }
+
+        const newCats = toCopy.map((report, i) => ({
+            id: Date.now() + i,
+            category: report.task_category,
+            sub_category: report.sub_category || '',
+            tasks: Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [],
+            currentTask: '',
+            timeSpent: String(report.time_spent || ''),
+            meetingCount: report.meeting_count || 0,
+            meetingTitle: report.task_category === 'Meeting' && report.task_list?.[0] ? report.task_list[0] : ''
+        }));
+
+        setCategories(prev => {
+            // If the only existing row is blank, replace it; otherwise append
+            const isDefault = prev.length === 1 && !prev[0].category && prev[0].tasks.length === 0;
+            return isDefault ? newCats : [...prev, ...newCats];
+        });
+
+        setShowCopyModal(false);
+    };
+
     const handleBack = () => {
         navigate('/daily_report');
     };
@@ -398,7 +624,7 @@ const NewData = () => {
                                             className="form-control"
                                         />
                                     </div>
-                                    <div className="col-6">
+                                    <div className="col-lg-6 col-sm-12">
                                         <div className="mb-3">
                                             <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                 Option *
@@ -416,14 +642,18 @@ const NewData = () => {
                                                 <input className="form-check-input" type="radio" name="work_type" id="holiday" value="Holiday" checked={formData.work_type === "Holiday"} onChange={handleChange} required />
                                                 <label className="form-check-label" htmlFor="holiday">Holiday</label>
                                             </div>
+                                            <div className="form-check form-check-inline">
+                                                <input className="form-check-input" type="radio" name="work_type" id="company_event" value="Company Event" checked={formData.work_type === "Company Event"} onChange={handleChange} required />
+                                                <label className="form-check-label" htmlFor="company_event">Company Event</label>
+                                            </div>
                                         </div>
                                     </div>
-                                    {formData.work_type === "Holiday" && (
+                                    {(formData.work_type === "Holiday" || formData.work_type === "Company Event") && (
                                         <div className="col-12">
                                             <div className="col-12">
                                                 <div className="mb-3">
                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                        Holiday Name *
+                                                        {formData.work_type === "Company Event" ? "Event Name *" : "Holiday Name *"}
                                                     </label>
                                                     <input
                                                         type="text"
@@ -469,9 +699,14 @@ const NewData = () => {
                                                                 className="form-select"
                                                             >
                                                                 <option value="" disabled>Select a category</option>
-                                                                {categoryOptions.map(option => (
-                                                                    <option key={option} value={option}>{option}</option>
+                                                                {taskCategories.map(category => (
+                                                                    <option key={category.id} value={category.name}>{category.name}</option>
                                                                 ))}
+                                                                {cat.category && !taskCategories.some(c => c.name === cat.category) && !['Meeting', 'Others'].includes(cat.category) && (
+                                                                    <option value={cat.category}>{cat.category}</option>
+                                                                )}
+                                                                <option value="Meeting">Meeting</option>
+                                                                <option value="Others">Others</option>
                                                             </select>
                                                         </div>
                                                         {cat.category === 'Others' && (
@@ -479,13 +714,9 @@ const NewData = () => {
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                     Other Category
                                                                 </label>
-                                                                <input
-                                                                    type="text"
-                                                                    name='sub_category'
-                                                                    value={cat.sub_category}
+                                                                <input type="text" name='sub_category' value={cat.sub_category}
                                                                     onChange={(e) => handleSubCategoryChange(cat.id, e.target.value)}
-                                                                    className="form-control"
-                                                                    placeholder="Enter other category"
+                                                                    className="form-control" placeholder="Enter other category"
                                                                 />
                                                             </div>
                                                         )}
@@ -506,90 +737,138 @@ const NewData = () => {
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
                                                                 <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes)
-                                                                </label>
-                                                                <select value={cat.timeSpent}
-                                                                    onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                    className="form-select"
-                                                                    disabled={hasTimeSpent}
-                                                                >
-                                                                    <option value="">Select</option>
-                                                                    <option value="0">0</option>
-                                                                    <option value="15">15</option>
-                                                                    <option value="30">30</option>
-                                                                    <option value="45">45</option>
-                                                                    <option value="60">60</option>
-                                                                    <option value="90">90</option>
-                                                                    <option value="120">120</option>
-                                                                </select>
-                                                            </div>
-                                                        )}
-                                                        {cat.category === 'Meeting' && (
-                                                            <div className="mb-3 col-lg-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes)
+                                                                    Time Spent (Minutes) *
                                                                 </label>
                                                                 <input
                                                                     type="number"
-                                                                    value={cat.meetingCount}
-                                                                    onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
+                                                                    value={cat.timeSpent}
+                                                                    onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                    onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
                                                                     min="0"
-                                                                    placeholder="0"
+                                                                    step="1"
+                                                                    placeholder="Enter minutes (e.g. 15)"
                                                                     className="form-control"
+                                                                    disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                    required={!(cat.category === 'Others' && hasTimeSpent)}
                                                                 />
                                                             </div>
                                                         )}
-                                                        <div className="mb-3 col-lg-8">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Task List *
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={cat.currentTask}
-                                                                onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                placeholder="Type task and press Enter to add"
-                                                                className="form-control"
-                                                            />
-                                                            {cat.tasks.length > 0 && (
-                                                                <div className="mt-2">
-                                                                    <ul className="list-group">
-                                                                        {cat.tasks.map((task, taskIndex) => (
-                                                                            <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
-                                                                                {task}
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="btn btn-sm btn-outline-danger"
-                                                                                    onClick={() => removeTask(cat.id, taskIndex)}
-                                                                                >
-                                                                                    ×
-                                                                                </button>
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
+                                                        {cat.category === 'Meeting' && (
+                                                            <>
+                                                                <div className="mb-3 col-lg-6">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Time Spent (Minutes) *
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.timeSpent}
+                                                                        onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                        onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                        min="0"
+                                                                        step="1"
+                                                                        placeholder="Enter minutes (e.g. 30)"
+                                                                        className="form-control"
+                                                                        required
+                                                                    />
                                                                 </div>
-                                                            )}
-                                                        </div>
+                                                                {/* <div className="mb-3 col-lg-3">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        No. of Meetings
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.meetingCount}
+                                                                        onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
+                                                                        min="0"
+                                                                        placeholder="0"
+                                                                        className="form-control"
+                                                                    />
+                                                                </div> */}
+                                                                <div className="mb-3 col-lg-12">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Meeting Title
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={cat.meetingTitle}
+                                                                        onChange={(e) => handleMeetingTitleChange(cat.id, e.target.value)}
+                                                                        placeholder="Enter meeting title"
+                                                                        className="form-control"
+                                                                        name='meeting_title'
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                        {cat.category !== 'Meeting' && (
+                                                            <>
+                                                                <div className="mb-3 col-lg-8">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Task List *
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={cat.currentTask}
+                                                                        onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                        onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                        placeholder="Type task and press Enter to add"
+                                                                        className="form-control"
+                                                                    />
+                                                                    {cat.tasks.length > 0 && (
+                                                                        <div className="mt-2">
+                                                                            <ul className="list-group">
+                                                                                {cat.tasks.map((task, taskIndex) => (
+                                                                                    <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
+                                                                                        {task}
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn btn-sm btn-outline-danger"
+                                                                                            onClick={() => removeTask(cat.id, taskIndex)}
+                                                                                        >
+                                                                                            ×
+                                                                                        </button>
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
 
-                                                        <div className="mb-3 col-lg-4">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Number of Tasks
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                value={cat.tasks.length}
-                                                                readOnly
-                                                                className="form-control"
-                                                            />
-                                                        </div>
+                                                                <div className="mb-3 col-lg-4">
+                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        Number of Tasks
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={cat.tasks.length}
+                                                                        readOnly
+                                                                        className="form-control"
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
 
-                                        <button type="button" className="btn btn-outline-success w-100 mb-3" onClick={addCategory} >
-                                            + Add Another Category
-                                        </button>
+                                        <div className="d-flex gap-2 mb-3">
+                                            <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
+                                                + Add Another Category
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-secondary d-flex align-items-center"
+                                                onClick={fetchPreviousReports}
+                                                disabled={copyLoading}
+                                                title="Copy tasks from your most recent previous working day"
+                                            >
+                                                {copyLoading
+                                                    ? <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                    : <i className="bi bi-clipboard-plus me-1"></i>
+                                                }
+                                                {copyLoading ? ' Loading...' : ' Copy from Previous Day'}
+                                            </button>
+                                        </div>
                                     </>
                                 )}
                                 <button type="submit" className="btn btn-success w-100 fw-bold">
@@ -600,6 +879,127 @@ const NewData = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Copy from Previous Day Modal */}
+            {showCopyModal && (
+                <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div className="modal-content">
+                            <div className="modal-header" style={{ backgroundColor: '#065d48', color: 'white' }}>
+                                <h5 className="modal-title">
+                                    <i className="bi bi-clipboard-plus me-2"></i>Copy Tasks from a Previous Day
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowCopyModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                {/* Date picker row */}
+                                <div className="mb-3">
+                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                        Select a date to copy from:
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedCopyDate}
+                                        onChange={e => handleCopyDateChange(e.target.value)}
+                                    >
+                                        {availableDates.map(date => (
+                                            <option key={date} value={date}>
+                                                {formatDateLabel(date)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <small className="text-muted">Select the categories you want to copy into today's report.</small>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={toggleSelectAll}
+                                    >
+                                        {selectedCopyIds.size === previousReports.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                </div>
+
+                                <div className="d-flex flex-column gap-3">
+                                    {previousReports.map(report => {
+                                        const isSelected = selectedCopyIds.has(report.id);
+                                        const displayCat = report.task_category === 'Others' && report.sub_category
+                                            ? `Others (${report.sub_category})`
+                                            : report.task_category;
+                                        const taskList = Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [];
+
+                                        return (
+                                            <div
+                                                key={report.id}
+                                                onClick={() => toggleCopySelection(report.id)}
+                                                className="card"
+                                                style={{
+                                                    cursor: 'pointer',
+                                                    border: isSelected ? '2px solid #065d48' : '2px solid #e0e0e0',
+                                                    backgroundColor: isSelected ? '#f0faf6' : '#fff',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <div className="card-body py-3 px-3">
+                                                    <div className="d-flex justify-content-between align-items-start">
+                                                        <div className="d-flex align-items-center gap-2 flex-grow-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="form-check-input mt-0 flex-shrink-0"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleCopySelection(report.id)}
+                                                                onClick={e => e.stopPropagation()}
+                                                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                            />
+                                                            <div>
+                                                                <span className="fw-semibold" style={{ color: '#065d48' }}>{displayCat}</span>
+                                                                {taskList.length > 0 && (
+                                                                    <ul className="mb-0 mt-1 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
+                                                                        {taskList.map((task, i) => (
+                                                                            <li key={i}>{task}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-end ms-3 flex-shrink-0">
+                                                            {report.time_spent > 0 && (
+                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6,93,72,0.1)', color: '#065d48', fontSize: '0.8rem' }}>
+                                                                    <i className="bi bi-clock me-1"></i>{report.time_spent} min
+                                                                </span>
+                                                            )}
+                                                            {report.task_category === 'Meeting' && report.meeting_count > 0 && (
+                                                                <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '2px' }}>
+                                                                    {report.meeting_count} meeting{report.meeting_count > 1 ? 's' : ''}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-outline-secondary" onClick={() => setShowCopyModal(false)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-success fw-semibold"
+                                    onClick={handleCopySelected}
+                                    disabled={selectedCopyIds.size === 0}
+                                    style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
+                                >
+                                    Copy Selected ({selectedCopyIds.size})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
