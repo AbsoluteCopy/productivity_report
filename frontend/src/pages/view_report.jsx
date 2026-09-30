@@ -183,36 +183,22 @@ const ViewReport = () => {
 
     const getReportCategory = (report) => {
         if (!report) return '';
-        if (report.task_category === 'Others' && report.sub_category) {
-            return `Others (${report.sub_category.trim()})`;
+        if (report.task_category === 'Others' && report.sub_category && report.sub_category.trim()) {
+            return report.sub_category.trim();
         }
         return report.task_category === 'Other' ? 'Others' : (report.task_category || '');
     };
 
-    const groupedReports = Object.values(
-        dailyReports.reduce((acc, report) => {
-            const catName = getReportCategory(report);
-            const key = `${report.date}-${catName}-${report.id || Math.random()}`;
-
-            if (!acc[key]) {
-                acc[key] = {
-                    ...report,
-                    display_category: catName,
-                    number_of_tasks: Number(report.number_of_tasks || 0),
-                    meeting_count: Number(report.meeting_count || 0),
-                    task_list: [...(report.task_list || [])]
-                };
-            } else {
-                acc[key].number_of_tasks += Number(report.number_of_tasks || 0);
-                acc[key].meeting_count += Number(report.meeting_count || 0);
-                acc[key].task_list.push(...(report.task_list || []));
-            }
-
-            return acc;
-
-        }, {})
-    ).sort((a, b) => {
-
+    const groupedReports = (dailyReports || []).map(report => {
+        const catName = getReportCategory(report);
+        return {
+            ...report,
+            display_category: catName,
+            number_of_tasks: Number(report.number_of_tasks || 0),
+            meeting_count: Number(report.meeting_count || 0),
+            task_list: [...(report.task_list || [])]
+        };
+    }).sort((a, b) => {
         const [aYear, aMonth, aDay] = a.date.split('-');
         const [bYear, bMonth, bDay] = b.date.split('-');
         const dateCompare = new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
@@ -224,7 +210,6 @@ const ViewReport = () => {
         const catA = a.display_category || a.task_category || '';
         const catB = b.display_category || b.task_category || '';
         return catA.localeCompare(catB);
-
     });
     const addWeekendRows = (reports) => {
         const weekendRows = [];
@@ -330,7 +315,7 @@ const ViewReport = () => {
 
             if (!report.isWeekend && !isLeave) {
                 if (report.task_category === 'Meeting') {
-                    dailyMeetings += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
+                    dailyMeetings += Number(report.meeting_count || report.number_of_tasks || 0) * Number(report.time_spent || 0);
                 } else {
                     dailyWorkingHours += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
                 }
