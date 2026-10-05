@@ -526,13 +526,6 @@ const ManageAccounts = () => {
                         <div className="modal-body">
 
                             <input className="form-control mb-2"
-                                name="id_number"
-                                placeholder="ID Number"
-                                value={formData.id_number}
-                                onChange={handleChange}
-                            />
-
-                            <input className="form-control mb-2"
                                 name="first_name"
                                 placeholder="First Name"
                                 value={formData.first_name}
@@ -543,6 +536,13 @@ const ManageAccounts = () => {
                                 name="last_name"
                                 placeholder="Last Name"
                                 value={formData.last_name}
+                                onChange={handleChange}
+                            />
+
+                            <input className="form-control mb-2"
+                                name="id_number"
+                                placeholder="ID Number"
+                                value={formData.id_number}
                                 onChange={handleChange}
                             />
 
@@ -564,25 +564,34 @@ const ManageAccounts = () => {
                             />
 
                             {currentUser?.role !== 'hr' ? (
-                                <select className="form-select" name="role" value={formData.role} onChange={handleChange}>
-                                    <option value="employee">Employee</option>
+                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
                                     <option value="admin">Admin</option>
-                                    <option value="viewer">Viewer</option>
                                     <option value="hr">HR</option>
+                                    <option value="viewer">Viewer</option>
+                                    <option value="employee">Employee</option>
                                 </select>
                             ) : (
-                                <select className="form-select" name="role" value={formData.role} onChange={handleChange} disabled>
+                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange} disabled>
                                     <option value="employee">Employee</option>
                                 </select>
                             )}
 
                             {currentUser?.role !== 'hr' && (
-                                <input className="form-control mb-2 mt-2"
-                                    name="company"
-                                    placeholder="Company (optional)"
-                                    value={formData.company}
-                                    onChange={handleChange}
-                                />
+                                <>
+                                    <input className="form-control mb-2"
+                                        name="company"
+                                        placeholder="Company (optional)"
+                                        value={formData.company}
+                                        onChange={handleChange}
+                                        list="company-suggestions"
+                                        autoComplete="off"
+                                    />
+                                    <datalist id="company-suggestions">
+                                        {[...new Set(users.map(u => u.company).filter(Boolean))].sort().map(c => (
+                                            <option key={c} value={c} />
+                                        ))}
+                                    </datalist>
+                                </>
                             )}
 
                         </div>
