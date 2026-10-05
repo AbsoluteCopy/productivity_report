@@ -379,6 +379,8 @@ const ManageAccounts = () => {
         });
     };
 
+    const roleOrder = { admin: 0, hr: 1, viewer: 2, employee: 3 };
+
     const columns = [
         {
             name: "ID Number",
@@ -396,14 +398,19 @@ const ManageAccounts = () => {
             sortable: true,
         },
         {
+            id: "role",
             name: "Role",
+            selector: row => row.role,
+            sortFunction: (a, b) => (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99),
             cell: row => (
                 <span
                     className={`badge ${row.role === "admin"
                         ? "bg-danger"
                         : row.role === "hr"
-                            ? "bg-warning"
-                            : "bg-primary"
+                            ? "bg-warning text-dark"
+                            : row.role === "viewer"
+                                ? "bg-secondary"
+                                : "bg-primary"
                         }`}
                 >
                     {row.role.toUpperCase()}
@@ -502,6 +509,8 @@ const ManageAccounts = () => {
                         persistTableHead
                         noDataComponent="No users found."
                         customStyles={customStyles}
+                        defaultSortFieldId="role"
+                        defaultSortAsc={true}
                     />
                 </div>
 
