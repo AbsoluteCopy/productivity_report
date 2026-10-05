@@ -121,14 +121,14 @@ const ViewReport = () => {
             const response = await fetch(`${API_BASE_URL}/users/`);
             const data = await response.json();
 
-            let filteredUsers = data.filter(user => user.role === 'employee');
+            let filteredUsers = data.filter(u => u.role === 'employee');
 
             const userData = localStorage.getItem("user");
-            const user = userData ? JSON.parse(userData) : null;
+            const loggedInUser = userData ? JSON.parse(userData) : null;
 
-            // If HR role, filter by company
-            if (user?.role === 'hr' && user?.company) {
-                filteredUsers = filteredUsers.filter(user => user.company === user.company);
+            // Viewer and HR roles can only see employees from their own company
+            if ((loggedInUser?.role === 'hr' || loggedInUser?.role === 'viewer') && loggedInUser?.company) {
+                filteredUsers = filteredUsers.filter(u => u.company === loggedInUser.company);
             }
 
             setUsers(filteredUsers);

@@ -75,8 +75,8 @@ const ViewUtilizationReport = () => {
                 const userData = localStorage.getItem("user");
                 const user = userData ? JSON.parse(userData) : null;
                 
-                // If HR role, filter by company
-                if (user?.role === 'hr' && user?.company) {
+                // Viewer and HR roles can only see employees from their own company
+                if ((user?.role === 'hr' || user?.role === 'viewer') && user?.company) {
                     filteredUsers = filteredUsers.filter(u => u.company === user.company);
                 }
                 setUsers(filteredUsers);
