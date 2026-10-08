@@ -7,7 +7,7 @@ const Login = () => {
     const navigate = useNavigate();
 
     const [showPassword, setShowPassword] = useState(false);
-    const [email, setEmail] = useState("");
+    const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
@@ -19,9 +19,9 @@ const Login = () => {
         localStorage.removeItem('user');
         
         // Load remembered email if exists
-        const rememberedEmail = localStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
-            setEmail(rememberedEmail);
+        const rememberedIdentifier = localStorage.getItem('rememberedEmail');
+        if (rememberedIdentifier) {
+            setIdentifier(rememberedIdentifier);
             setRememberMe(true);
         }
     }, []);
@@ -37,7 +37,7 @@ const Login = () => {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ identifier, password }),
             });
 
             const data = await response.json();
@@ -48,7 +48,7 @@ const Login = () => {
                 
                 // Handle remember me functionality
                 if (rememberMe) {
-                    localStorage.setItem('rememberedEmail', email);
+                    localStorage.setItem('rememberedEmail', identifier);
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
@@ -126,15 +126,15 @@ const Login = () => {
                                 fontWeight: "600",
                             }}
                         >
-                            Email
+                            Email or Username
                         </label>
 
                         <input
-                            type="email"
-                            placeholder="Enter your email"
-                            value={email}
+                            type="text"
+                            placeholder="Enter your email or username"
+                            value={identifier}
                             required
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => setIdentifier(e.target.value)}
                             className="login-input"
                         />
                     </div>

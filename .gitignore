@@ -25,3 +25,11 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 *.zip
+
+# Local employee data and recovery scripts; never commit these
+/GRATUS 1 - Jude Tulabut.xlsx
+/GRATUS 2 - Kaymar Yumiaco.xlsx
+/GRATUS 4 - Joanna Ayala.xlsx
+/GRATUS 6 - Charlene Lee.xlsx
+/restore_from_backup.py
+/sync_backup_local.py

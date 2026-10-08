@@ -18,7 +18,7 @@ function Navbar() {
         if (userData) {
             const user = JSON.parse(userData);
             const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-            setUserName(fullName || user.email || "User");
+            setUserName(fullName || user.username || user.email || "User");
             setRole(user.role || '');
             setCompany(user.company || '');
             setIdNumber(user.id_number || '');

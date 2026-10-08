@@ -79,18 +79,26 @@ const ViewReport = () => {
             const user = JSON.parse(localStorage.getItem('user'));
             if (!user) return;
 
-            const userRes = await axios.get(
-                userId ? `${API_BASE_URL}/users/${userId}/` : `${API_BASE_URL}/users/me/`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+            const selectedReportUser = users.find(user => String(user.id) === String(userId));
+            let userTaskList = selectedReportUser?.task_list || [];
+            if (!selectedReportUser) {
+                const userRes = await axios.get(
+                    userId ? `${API_BASE_URL}/users/${userId}/` : `${API_BASE_URL}/users/me/`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
                     }
-                }
-            );
-            const userTaskList = userRes.data.task_list || [];
+                );
+                userTaskList = userRes.data.task_list || [];
+            }
 
             // Fetch all task categories
-            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`);
+            const categoriesRes = await axios.get(`${API_BASE_URL}/task-categories/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
             const allCategories = categoriesRes.data;
 
             // Filter categories to only include those in user's task_list
@@ -118,7 +126,14 @@ const ViewReport = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/users/`);
+            const response = await fetch(`${API_BASE_URL}/users/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
             const data = await response.json();
 
             let filteredUsers = data.filter(u => u.role === 'employee');
@@ -152,7 +167,11 @@ const ViewReport = () => {
                 url = `${API_BASE_URL}/users/${user.id}/reports/?year=${year}&month=${month}`;
             }
 
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
 
             if (!response.ok) {
                 throw new Error("Failed to fetch reports");

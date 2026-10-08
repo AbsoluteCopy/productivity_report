@@ -4,6 +4,11 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const fsPromises = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
 const pool = require('./db');
 const { authenticate, sanitize } = require('./auth');
 require('dotenv').config();
@@ -11,6 +16,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 8097;
 const SECRET_KEY = process.env.SECRET_KEY || 'default-secret-key-12345';
+
+// Trust Nginx reverse proxy (fixes express-rate-limit X-Forwarded-For error)
+app.set('trust proxy', 1);
 
 // Security Headers & Middlewares
 app.use(helmet());
@@ -33,6 +41,39 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     }
   } catch (err) {
     console.error("Migration check error for last_active_at:", err);
+  }
+})();
+
+// Auto-migrate: Allow users to sign in with a username, email, or both
+(async () => {
+  try {
+    const [columns] = await pool.query(
+      "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('username', 'email')"
+    );
+    let usernameColumn = columns.find(column => column.COLUMN_NAME === 'username');
+    const emailColumn = columns.find(column => column.COLUMN_NAME === 'email');
+
+    if (!usernameColumn) {
+      await pool.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL');
+      await pool.query("UPDATE users SET username = CONCAT('user', id) WHERE username IS NULL OR TRIM(username) = ''");
+      usernameColumn = { COLUMN_TYPE: 'varchar(100)', IS_NULLABLE: 'YES' };
+    }
+
+    if (usernameColumn.IS_NULLABLE === 'NO') {
+      await pool.query(`ALTER TABLE users MODIFY username ${usernameColumn.COLUMN_TYPE} NULL`);
+    }
+    if (emailColumn && emailColumn.IS_NULLABLE === 'NO') {
+      await pool.query(`ALTER TABLE users MODIFY email ${emailColumn.COLUMN_TYPE} NULL`);
+    }
+
+    const [indexes] = await pool.query(
+      "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uq_users_username'"
+    );
+    if (indexes.length === 0) {
+      await pool.query('ALTER TABLE users ADD UNIQUE INDEX uq_users_username (username)');
+    }
+  } catch (err) {
+    console.error('Migration check error for username:', err);
   }
 })();
 
@@ -62,13 +103,17 @@ app.get(['/api', '/api/'], (req, res) => {
 // 2. Login (12 hours token expiration)
 app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
   try {
-    let { email, password } = req.body;
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ error: 'Email and password are required.' });
+    let { identifier, email, username, password } = req.body;
+    identifier = identifier ?? email ?? username;
+    if (!identifier || !password || typeof identifier !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'Username or email and password are required.' });
     }
-    email = email.trim().toLowerCase();
+    identifier = identifier.trim().toLowerCase();
 
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await pool.query(
+      'SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ? LIMIT 1',
+      [identifier, identifier]
+    );
     if (rows.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
@@ -203,7 +248,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to create users.', detail: 'You do not have permission to create users.' });
     }
 
-    let { id_number, first_name, last_name, email, password, role, company, task_list } = req.body;
+    let { id_number, first_name, last_name, username, email, password, role, company, task_list } = req.body;
     
     // Explicit field validations
     if (!id_number || typeof id_number !== 'string' || !id_number.trim()) {
@@ -215,11 +260,17 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     if (!last_name || typeof last_name !== 'string' || !last_name.trim()) {
       return res.status(400).json({ error: 'Last Name is required.', detail: 'Last Name is required.' });
     }
-    if (!email || typeof email !== 'string' || !email.trim()) {
-      return res.status(400).json({ error: 'Email is required.', detail: 'Email is required.' });
+    if ((username !== undefined && username !== null && typeof username !== 'string') ||
+        (email !== undefined && email !== null && typeof email !== 'string')) {
+      return res.status(400).json({ error: 'Username and email must be text.', detail: 'Username and email must be text.' });
+    }
+    username = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!username && !email) {
+      return res.status(400).json({ error: 'Enter a username, an email, or both.', detail: 'Enter a username, an email, or both.' });
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
+    if (email && !emailRegex.test(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address (e.g., name@gratusinc.org).', detail: 'Please enter a valid email address.' });
     }
     if (!password || typeof password !== 'string' || password.length < 6) {
@@ -242,18 +293,27 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(400).json({ error: `An account with ID Number "${id_number.trim()}" already exists.`, detail: `An account with ID Number "${id_number.trim()}" already exists.` });
     }
 
+    if (username) {
+      const [existingUsername] = await pool.query('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?', [username, username]);
+      if (existingUsername.length > 0) {
+        return res.status(400).json({ error: `An account with Username "${username}" already exists.`, detail: `An account with Username "${username}" already exists.` });
+      }
+    }
+
     // Check for existing email
-    const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
-    if (existingEmail.length > 0) {
-      return res.status(400).json({ error: `An account with Email "${email.trim().toLowerCase()}" already exists.`, detail: `An account with Email "${email.trim().toLowerCase()}" already exists.` });
+    if (email) {
+      const [existingEmail] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?', [email, email]);
+      if (existingEmail.length > 0) {
+        return res.status(400).json({ error: `An account with Email "${email}" already exists.`, detail: `An account with Email "${email}" already exists.` });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const taskListJson = JSON.stringify(task_list || []);
 
     const [result] = await pool.query(
-      'INSERT INTO users (id_number, first_name, last_name, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
-      [id_number.trim(), first_name.trim(), last_name.trim(), email.trim().toLowerCase(), hashedPassword, chosenRole, company ? company.trim() : null, taskListJson]
+      'INSERT INTO users (id_number, first_name, last_name, username, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
+      [id_number.trim(), first_name.trim(), last_name.trim(), username || null, email || null, hashedPassword, chosenRole, company ? company.trim() : null, taskListJson]
     );
 
     const [created] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
@@ -261,7 +321,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
   } catch (err) {
     console.error('Create user error:', err);
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: 'Email or ID number already exists.', detail: 'Email or ID number already exists.' });
+      return res.status(400).json({ error: 'Username, email, or ID number already exists.', detail: 'Username, email, or ID number already exists.' });
     }
     return res.status(500).json({ error: 'Error creating user: ' + (err.sqlMessage || err.message), detail: 'Error creating user: ' + (err.sqlMessage || err.message) });
   }
@@ -367,7 +427,7 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       return res.status(403).json({ error: 'Permission denied.', detail: 'Permission denied.' });
     }
 
-    let { first_name, last_name, email, role, company, id_number, task_list, password } = req.body;
+    let { first_name, last_name, username, email, role, company, id_number, task_list, password } = req.body;
     let updates = [];
     let params = [];
 
@@ -379,12 +439,34 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       if (!last_name.trim()) return res.status(400).json({ error: 'Last Name cannot be blank.', detail: 'Last Name cannot be blank.' });
       updates.push('last_name = ?'); params.push(last_name.trim());
     }
-    if (email !== undefined) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) return res.status(400).json({ error: 'Please enter a valid email address.', detail: 'Please enter a valid email address.' });
-      const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [email.trim().toLowerCase(), req.params.id]);
-      if (existingEmail.length > 0) return res.status(400).json({ error: `An account with Email "${email.trim().toLowerCase()}" already exists.`, detail: `An account with Email "${email.trim().toLowerCase()}" already exists.` });
-      updates.push('email = ?'); params.push(email.trim().toLowerCase());
+    if (username !== undefined || email !== undefined) {
+      if ((username !== undefined && username !== null && typeof username !== 'string') ||
+          (email !== undefined && email !== null && typeof email !== 'string')) {
+        return res.status(400).json({ error: 'Username and email must be text.', detail: 'Username and email must be text.' });
+      }
+
+      const nextUsername = username === undefined ? targetUser.username : (username || '').trim().toLowerCase() || null;
+      const nextEmail = email === undefined ? targetUser.email : (email || '').trim().toLowerCase() || null;
+      if (!nextUsername && !nextEmail) {
+        return res.status(400).json({ error: 'An account must have a username, an email, or both.', detail: 'An account must have a username, an email, or both.' });
+      }
+
+      if (username !== undefined) {
+        if (nextUsername) {
+          const [existingUsername] = await pool.query('SELECT id FROM users WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND id != ?', [nextUsername, nextUsername, req.params.id]);
+          if (existingUsername.length > 0) return res.status(400).json({ error: `An account with Username "${nextUsername}" already exists.`, detail: `An account with Username "${nextUsername}" already exists.` });
+        }
+        updates.push('username = ?'); params.push(nextUsername);
+      }
+      if (email !== undefined) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (nextEmail && !emailRegex.test(nextEmail)) return res.status(400).json({ error: 'Please enter a valid email address.', detail: 'Please enter a valid email address.' });
+        if (nextEmail) {
+          const [existingEmail] = await pool.query('SELECT id FROM users WHERE (LOWER(email) = ? OR LOWER(username) = ?) AND id != ?', [nextEmail, nextEmail, req.params.id]);
+          if (existingEmail.length > 0) return res.status(400).json({ error: `An account with Email "${nextEmail}" already exists.`, detail: `An account with Email "${nextEmail}" already exists.` });
+        }
+        updates.push('email = ?'); params.push(nextEmail);
+      }
     }
     if (task_list !== undefined) {
       updates.push('task_list = ?'); params.push(JSON.stringify(task_list));
@@ -482,7 +564,7 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
 
     if (req.user.role === 'admin') {
       if (user_id) { query += ' AND r.user_id = ?'; params.push(user_id); }
-    } else if (req.user.role === 'hr' && req.user.company) {
+    } else if ((req.user.role === 'hr' || req.user.role === 'viewer') && req.user.company) {
       query += ' AND u.company = ?'; params.push(req.user.company);
       if (user_id) { query += ' AND r.user_id = ?'; params.push(user_id); }
     } else {
@@ -893,6 +975,97 @@ app.delete(['/api/holidays/:id', '/api/holidays/:id/'], authenticate, async (req
     return res.status(204).send();
   } catch (err) {
     return res.status(500).json({ error: 'Error deleting holiday.' });
+  }
+});
+
+// Admin-only: Live database SQL dump download
+app.get(['/api/admin/backup-sql', '/api/admin/backup-sql/'], authenticate, async (req, res) => {
+  let tempDir;
+  let child;
+  let finished = false;
+
+  const cleanup = async () => {
+    if (!tempDir) return;
+    const directory = tempDir;
+    tempDir = null;
+    await fsPromises.rm(directory, { recursive: true, force: true }).catch(() => {});
+  };
+
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Only administrators can download database backups.' });
+    }
+
+    const dbUser = process.env.DATABASE_USER || 'productivityuser';
+    const dbPass = process.env.DATABASE_PASSWORD;
+    const dbName = process.env.DATABASE_NAME || 'productivity';
+    if (!dbPass || /[\r\n]/.test(dbUser) || /[\r\n]/.test(dbPass) || !/^[A-Za-z0-9_]+$/.test(dbName)) {
+      return res.status(500).json({ error: 'Database backup configuration is invalid.' });
+    }
+
+    const escapeOption = value => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    tempDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'productivity-backup-'));
+    await fsPromises.chmod(tempDir, 0o700);
+    const credentialsPath = path.join(tempDir, 'client.cnf');
+    await fsPromises.writeFile(
+      credentialsPath,
+      `[client]\nhost=127.0.0.1\nuser=${escapeOption(dbUser)}\npassword=${escapeOption(dbPass)}\n`,
+      { mode: 0o600, flag: 'wx' }
+    );
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `productivity_backup_${timestamp}.sql`;
+    child = spawn('mysqldump', [
+      `--defaults-extra-file=${credentialsPath}`,
+      '--single-transaction',
+      '--quick',
+      '--skip-lock-tables',
+      dbName,
+    ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/sql');
+    child.stdout.on('data', chunk => {
+      if (!res.write(chunk)) child.stdout.pause();
+    });
+    res.on('drain', () => child.stdout.resume());
+
+    child.on('error', async err => {
+      if (finished) return;
+      finished = true;
+      console.error('Database backup process failed:', err.message);
+      await cleanup();
+      if (res.headersSent) return res.destroy(err);
+      res.removeHeader('Content-Disposition');
+      res.removeHeader('Content-Type');
+      return res.status(500).json({ error: 'Failed to generate database backup.' });
+    });
+
+    child.on('close', async code => {
+      if (finished) return;
+      finished = true;
+      await cleanup();
+      if (code !== 0) {
+        console.error('Database backup process exited with code:', code);
+        if (res.headersSent) return res.destroy();
+        res.removeHeader('Content-Disposition');
+        res.removeHeader('Content-Type');
+        return res.status(500).json({ error: 'Failed to generate database backup.' });
+      }
+      return res.end();
+    });
+
+    res.on('close', () => {
+      if (!finished) child.kill('SIGTERM');
+      void cleanup();
+    });
+  } catch (err) {
+    console.error('Admin backup route error:', err.message);
+    if (child && !finished) child.kill('SIGTERM');
+    await cleanup();
+    if (res.headersSent) return res.destroy(err);
+    return res.status(500).json({ error: 'Internal server error generating backup.' });
   }
 });
 

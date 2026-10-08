@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import API_BASE_URL from "../config";
 const API = API_BASE_URL;
 const API_URL = API_BASE_URL;
@@ -29,6 +31,7 @@ const ManageAccounts = () => {
         id_number: "",
         first_name: "",
         last_name: "",
+        username: "",
         email: "",
         password: "",
         role: "employee",
@@ -49,7 +52,6 @@ const ManageAccounts = () => {
         "id_number",
         "first_name",
         "last_name",
-        "email",
         "role",
     ];
 
@@ -105,6 +107,154 @@ const ManageAccounts = () => {
         }
     };
 
+    const handleDownloadBackup = async () => {
+        try {
+            Swal.fire({
+                title: 'Generating Full Backup...',
+                text: 'Preparing updated Excel workbooks and live SQL database snapshot.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            const token = localStorage.getItem('token');
+            const [reportsRes, sqlRes] = await Promise.all([
+                axios.get(`${API}/daily-reports/`, { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`${API}/admin/backup-sql/`, { headers: { Authorization: `Bearer ${token}` } })
+            ]);
+
+            if (!sqlRes.ok) {
+                const errorData = await sqlRes.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Could not download database backup.');
+            }
+
+            const allReports = reportsRes.data;
+            const sqlBlob = await sqlRes.blob();
+
+            // 1. Save SQL Dump file
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            saveAs(sqlBlob, `Productivity_Database_Backup_${timestamp}.sql`);
+
+            // 2. Generate and Save Comprehensive Excel Workbook
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = "Productivity System";
+
+            // Group reports by user
+            const reportsByUser = {};
+            allReports.forEach(r => {
+                const uid = r.user || r.user_id;
+                if (!reportsByUser[uid]) reportsByUser[uid] = [];
+                reportsByUser[uid].push(r);
+            });
+
+            const darkGreen = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065D48' } };
+            const whiteFont = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+            const borderStyle = {
+                top: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+                bottom: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+                left: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+                right: { style: 'thin', color: { argb: 'FFD0D5DD' } }
+            };
+
+            const targetUsers = users.filter(u => u.role === 'employee');
+            for (const emp of targetUsers) {
+                const sheetName = `${emp.first_name} ${emp.last_name}`.slice(0, 30);
+                const ws = workbook.addWorksheet(sheetName);
+                const empReports = reportsByUser[emp.id] || [];
+
+                // Header
+                ws.mergeCells('A1:H1');
+                const titleCell = ws.getCell('A1');
+                titleCell.value = `DAILY PRODUCTIVITY REPORT - ${emp.first_name} ${emp.last_name} (${emp.company || 'Gratus Inc.'})`;
+                titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF065D48' } };
+                titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+                const headers = ["Date", "Day", "Category", "Sub Category / Tasks", "# of Tasks", "Time Spent (mins)", "Working Hours (mins)", "Meetings (mins)"];
+                const headerRow = ws.getRow(2);
+                headers.forEach((h, idx) => {
+                    const c = headerRow.getCell(idx + 1);
+                    c.value = h;
+                    c.fill = darkGreen;
+                    c.font = whiteFont;
+                    c.alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+
+                let rIdx = 3;
+                empReports.forEach(r => {
+                    const dStr = String(r.date).slice(0, 10);
+                    const [y, m, d] = dStr.split('-');
+                    const dayStr = new Date(Number(y), Number(m) - 1, Number(d))
+                        .toLocaleDateString('en-US', { weekday: 'long' });
+
+                    const cat = r.task_category || '';
+                    const subcat = r.sub_category || '';
+                    const num = Number(r.number_of_tasks || 0);
+                    const time = Number(r.time_spent || 0);
+                    const isMtg = cat === 'Meeting' || cat === 'Meetings/Training';
+                    const wh = isMtg ? 0 : (num * time);
+                    const mtg = Number(r.meeting_count || 0);
+
+                    let tasksText = subcat;
+                    if (Array.isArray(r.task_list) && r.task_list.length > 0) {
+                        const joined = r.task_list.join(' | ');
+                        if (joined && joined !== subcat) {
+                            tasksText = `${subcat} (${joined})`;
+                        }
+                    }
+
+                    const row = ws.getRow(rIdx);
+                    row.getCell(1).value = dStr;
+                    row.getCell(2).value = dayStr;
+                    row.getCell(3).value = cat;
+                    row.getCell(4).value = tasksText;
+                    row.getCell(5).value = num > 0 ? num : '';
+                    row.getCell(6).value = time > 0 ? time : '';
+                    row.getCell(7).value = wh > 0 ? wh : '';
+                    row.getCell(8).value = mtg > 0 ? mtg : '';
+
+                    for (let col = 1; col <= 8; col++) {
+                        const cell = row.getCell(col);
+                        cell.border = borderStyle;
+                        cell.font = { name: 'Calibri', size: 10 };
+                        if ([1, 2, 3, 5, 6, 7, 8].includes(col)) {
+                            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        } else {
+                            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+                        }
+                    }
+                    rIdx++;
+                });
+
+                // Auto column widths
+                ws.columns.forEach(col => {
+                    let maxL = 12;
+                    col.eachCell({ includeEmpty: false }, c => {
+                        const l = String(c.value || '').length;
+                        if (l > maxL) maxL = l;
+                    });
+                    col.width = Math.min(maxL + 4, 60);
+                });
+            }
+
+            const excelBuffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([excelBuffer]), `Productivity_All_Employees_${timestamp}.xlsx`);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Backup Downloaded!',
+                text: 'Both the live SQL Database dump and the complete Master Excel workbook have been saved to your downloads.'
+            });
+        } catch (err) {
+            console.error('Backup download error:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Backup Failed',
+                text: err.response?.data?.error || err.message || 'Could not download system backup.'
+            });
+        }
+    };
+
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -141,17 +291,19 @@ const ManageAccounts = () => {
             return;
         }
 
-        if (!formData.email || !formData.email.trim()) {
+        const username = formData.username.trim().toLowerCase();
+        const email = formData.email.trim().toLowerCase();
+        if (!username && !email) {
             Swal.fire({
                 icon: "warning",
-                title: "Missing Email",
-                text: "Please enter an Email address.",
+                title: "Missing Login Identifier",
+                text: "Enter a username, an email, or both.",
             });
             return;
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email.trim())) {
+        if (email && !emailRegex.test(email)) {
             Swal.fire({
                 icon: "warning",
                 title: "Invalid Email Format",
@@ -213,8 +365,8 @@ const ManageAccounts = () => {
         }
 
         // Check for duplicate email
-        const duplicateEmail = users.find(
-            u => u.email?.toLowerCase() === formData.email.trim().toLowerCase() && u.id !== editingId
+        const duplicateEmail = email && users.find(
+            u => u.email?.toLowerCase() === email && u.id !== editingId
         );
         if (duplicateEmail) {
             Swal.fire({
@@ -225,13 +377,26 @@ const ManageAccounts = () => {
             return;
         }
 
+        const duplicateUsername = username && users.find(
+            u => u.username?.toLowerCase() === username && u.id !== editingId
+        );
+        if (duplicateUsername) {
+            Swal.fire({
+                icon: "error",
+                title: "Duplicate Username",
+                text: `An account with Username "${formData.username.trim()}" already exists.`,
+            });
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
                 id_number: formData.id_number.trim(),
                 first_name: formData.first_name.trim(),
                 last_name: formData.last_name.trim(),
-                email: formData.email.trim().toLowerCase(),
+                username: username || null,
+                email: email || null,
                 role: formData.role || 'employee',
                 company: formData.company ? formData.company.trim() : "",
             };
@@ -300,7 +465,8 @@ const ManageAccounts = () => {
             id_number: user.id_number,
             first_name: user.first_name,
             last_name: user.last_name,
-            email: user.email,
+            username: user.username || "",
+            email: user.email || "",
             password: "",
             role: user.role,
             company: user.company || "",
@@ -393,8 +559,13 @@ const ManageAccounts = () => {
             sortable: true,
         },
         {
+            name: "Username",
+            selector: row => row.username,
+            sortable: true,
+        },
+        {
             name: "Email",
-            selector: row => row.email,
+            selector: row => row.email || "-",
             sortable: true,
         },
         {
@@ -461,7 +632,7 @@ const ManageAccounts = () => {
     };
     const filteredUsers = useMemo(() => {
         return users.filter(user =>
-            `${user.first_name} ${user.last_name} ${user.id_number} ${user.email}`
+            `${user.first_name} ${user.last_name} ${user.id_number} ${user.username} ${user.email}`
                 .toLowerCase()
                 .includes(search.toLowerCase())
         );
@@ -477,18 +648,31 @@ const ManageAccounts = () => {
     return (
         <div className="container mt-4">
             <div className="card shadow">
-                <div className="card-header main-background text-white d-flex justify-content-between align-items-center">
+                <div className="card-header main-background text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h3 className="mb-0">Account Management</h3>
 
-                    <button className="btn btn-success"
-                        data-bs-toggle="modal" data-bs-target="#userModal"
-                        onClick={() => {
-                            setEditingId(null);
-                            setFormData(emptyUser);
-                        }}
-                    >
-                        <i className="bi bi-plus"></i> Add Account
-                    </button>
+                    <div className="d-flex align-items-center gap-2">
+                        {currentUser?.role === 'admin' && (
+                            <button
+                                className="btn btn-outline-light btn-sm shadow-sm d-flex align-items-center gap-2"
+                                onClick={handleDownloadBackup}
+                                title="Download complete database SQL snapshot and Master Excel workbook"
+                            >
+                                <i className="bi bi-cloud-arrow-down-fill text-warning fs-6"></i>
+                                <span className="fw-semibold">Download Full Backup (SQL + Excel)</span>
+                            </button>
+                        )}
+
+                        <button className="btn btn-success"
+                            data-bs-toggle="modal" data-bs-target="#userModal"
+                            onClick={() => {
+                                setEditingId(null);
+                                setFormData(emptyUser);
+                            }}
+                        >
+                            <i className="bi bi-plus"></i> Add Account
+                        </button>
+                    </div>
                 </div>
 
                 <div className="card-body">
@@ -556,9 +740,16 @@ const ManageAccounts = () => {
                             />
 
                             <input className="form-control mb-2"
+                                name="username"
+                                placeholder="Username (optional)"
+                                value={formData.username}
+                                onChange={handleChange}
+                            />
+
+                            <input className="form-control mb-2"
                                 name="email"
                                 type="email"
-                                placeholder="Email"
+                                placeholder="Email (optional)"
                                 value={formData.email}
                                 onChange={handleChange}
                             />
