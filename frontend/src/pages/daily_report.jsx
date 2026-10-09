@@ -6,7 +6,7 @@ import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
 const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event",]);
-const ADMIN_ROLES = new Set(["admin", "hr"]);
+const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
 
 const DailyReport = () => {
     const navigate = useNavigate();

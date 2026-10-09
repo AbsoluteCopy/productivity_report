@@ -90,9 +90,9 @@ const ManageAccounts = () => {
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
 
-            // If HR role, filter by company
+            // If HR or supervisor role, filter by company
             let filteredUsers = data;
-            if (user?.role === 'hr' && user?.company) {
+            if ((user?.role === 'hr' || user?.role === 'supervisor') && user?.company) {
                 filteredUsers = data.filter(u => u.company === user.company);
             }
 
@@ -405,14 +405,14 @@ const ManageAccounts = () => {
                 payload.password = formData.password.trim();
             }
 
-            // If HR role, ensure company is set to their own company
-            if (user?.role === 'hr' && user?.company) {
+            // If HR or supervisor role, ensure company is set to their own company
+            if ((user?.role === 'hr' || user?.role === 'supervisor') && user?.company) {
                 payload.company = user.company;
             }
 
             // If HR and not editing, default role to employee
             if (user?.role === 'hr' && !editingId) {
-                payload.role = 'employee';
+                payload.role = formData.role || 'employee';
             }
 
             if (editingId) {
@@ -545,7 +545,7 @@ const ManageAccounts = () => {
         });
     };
 
-    const roleOrder = { admin: 0, hr: 1, viewer: 2, employee: 3 };
+    const roleOrder = { admin: 0, hr: 1, supervisor: 2, viewer: 3, employee: 4 };
 
     const columns = [
         {
@@ -579,9 +579,11 @@ const ManageAccounts = () => {
                         ? "bg-danger"
                         : row.role === "hr"
                             ? "bg-warning text-dark"
-                            : row.role === "viewer"
-                                ? "bg-secondary"
-                                : "bg-primary"
+                            : row.role === "supervisor"
+                                ? "bg-info text-dark"
+                                : row.role === "viewer"
+                                    ? "bg-secondary"
+                                    : "bg-primary"
                         }`}
                 >
                     {row.role.toUpperCase()}
@@ -589,38 +591,49 @@ const ManageAccounts = () => {
             ),
             sortable: true,
         },
-        ...(currentUser?.role !== 'hr' ? [{
+        ...(!['hr', 'supervisor'].includes(currentUser?.role) ? [{
             name: "Company",
             selector: row => row.company || '-',
             sortable: true,
         }] : []),
         {
             name: "Actions",
-            cell: row => (
-                <>
-                    {row.role === "employee" && (
-                        <button className="btn btn-info btn-sm me-2"
-                            data-bs-toggle="modal" data-bs-target="#taskModal"
-                            title="Manage task categories"
-                            onClick={() => manageTask(row.id)}
-                        >
-                            <i className="bi bi-list-task"></i>
-                        </button>
-                    )}
-                    <button className="btn btn-primary btn-sm me-2"
-                        data-bs-toggle="modal" data-bs-target="#userModal"
-                        title="Edit User"
-                        onClick={() => editUser(row)}
-                    >
-                        <i className="bi bi-pen"></i>
-                    </button>
+            cell: row => {
+                const isEmployee = row.role === "employee";
+                const isSupervisor = currentUser?.role === "supervisor";
+                const canManageTask = isEmployee && (currentUser?.role === "admin" || currentUser?.role === "hr" || isSupervisor);
+                const canEdit = currentUser?.role === "admin" || currentUser?.role === "hr" || (isSupervisor && isEmployee);
+                const canDelete = currentUser?.role === "admin" || (currentUser?.role === "hr" && !["admin", "hr"].includes(row.role));
 
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(row.id)}
-                        title="Delete User">
-                        <i className="bi bi-trash"></i>
-                    </button>
-                </>
-            ),
+                return (
+                    <>
+                        {canManageTask && (
+                            <button className="btn btn-info btn-sm me-2"
+                                data-bs-toggle="modal" data-bs-target="#taskModal"
+                                title="Manage task categories"
+                                onClick={() => manageTask(row.id)}
+                            >
+                                <i className="bi bi-list-task"></i>
+                            </button>
+                        )}
+                        {canEdit && (
+                            <button className="btn btn-primary btn-sm me-2"
+                                data-bs-toggle="modal" data-bs-target="#userModal"
+                                title="Edit User"
+                                onClick={() => editUser(row)}
+                            >
+                                <i className="bi bi-pen"></i>
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(row.id)}
+                                title="Delete User">
+                                <i className="bi bi-trash"></i>
+                            </button>
+                        )}
+                    </>
+                );
+            },
         },
     ];
     const customStyles = {
@@ -663,15 +676,17 @@ const ManageAccounts = () => {
                             </button>
                         )}
 
-                        <button className="btn btn-success"
-                            data-bs-toggle="modal" data-bs-target="#userModal"
-                            onClick={() => {
-                                setEditingId(null);
-                                setFormData(emptyUser);
-                            }}
-                        >
-                            <i className="bi bi-plus"></i> Add Account
-                        </button>
+                        {['admin', 'hr'].includes(currentUser?.role) && (
+                            <button className="btn btn-success"
+                                data-bs-toggle="modal" data-bs-target="#userModal"
+                                onClick={() => {
+                                    setEditingId(null);
+                                    setFormData(emptyUser);
+                                }}
+                            >
+                                <i className="bi bi-plus"></i> Add Account
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -763,12 +778,19 @@ const ManageAccounts = () => {
                                 onChange={handleChange}
                             />
 
-                            {currentUser?.role !== 'hr' ? (
+                            {currentUser?.role === 'admin' ? (
                                 <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
                                     <option value="admin">Admin</option>
                                     <option value="hr">HR</option>
+                                    <option value="supervisor">Supervisor</option>
                                     <option value="viewer">Viewer</option>
                                     <option value="employee">Employee</option>
+                                </select>
+                            ) : currentUser?.role === 'hr' ? (
+                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
+                                    <option value="employee">Employee</option>
+                                    <option value="supervisor">Supervisor</option>
+                                    <option value="viewer">Viewer</option>
                                 </select>
                             ) : (
                                 <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange} disabled>
@@ -776,7 +798,7 @@ const ManageAccounts = () => {
                                 </select>
                             )}
 
-                            {currentUser?.role !== 'hr' && (
+                            {currentUser?.role === 'admin' && (
                                 <>
                                     <input className="form-control mb-2"
                                         name="company"

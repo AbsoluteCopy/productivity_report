@@ -65,7 +65,7 @@ function Navbar() {
                 <div className="collapse navbar-collapse" id="navbarNav" ref={navbarRef}>
                     <ul className="navbar-nav ms-4">
 
-                        {role === 'admin' || role === 'employee' || role === 'hr' && (
+                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor') && (
                             <>
                                 <li className="nav-item">
                                     <Link
@@ -90,7 +90,7 @@ function Navbar() {
                                 </li>
                             </>
                         )}
-                        {(role === 'admin' || role === 'employee' || role === 'hr') && (
+                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor') && (
                             <>
                                 <li className="nav-item">
                                     <Link
@@ -103,7 +103,7 @@ function Navbar() {
                             </>
                         )}
 
-                        {(role === 'admin' || role === 'viewer' || role === 'hr') && (
+                        {(role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') && (
                             <>
                                 <li className="nav-item">
                                     <Link className={`nav-link ${location.pathname === '/view_utilization_report' ? 'active' : ''}`} to="/view_utilization_report">
@@ -112,13 +112,15 @@ function Navbar() {
                                 </li>
                             </>
                         )}
+                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                            <li className="nav-item">
+                                <Link className={`nav-link ${location.pathname === '/manage_accounts' ? 'active' : ''}`} to="/manage_accounts">
+                                    <i className="bi bi-person-gear"></i> Accounts
+                                </Link>
+                            </li>
+                        )}
                         {(role === 'admin' || role === 'hr') && (
                             <>
-                                <li className="nav-item">
-                                    <Link className={`nav-link ${location.pathname === '/manage_accounts' ? 'active' : ''}`} to="/manage_accounts">
-                                        <i className="bi bi-person-gear"></i> Accounts
-                                    </Link>
-                                </li>
                                 <li className="nav-item">
                                     <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
                                         <i className="bi bi-tags"></i> Task Category
@@ -172,16 +174,18 @@ function Navbar() {
                                                     ? '#ffc107'
                                                     : role === 'hr'
                                                         ? '#0dcaf0'
-                                                        : role === 'viewer'
-                                                            ? '#adb5bd'
-                                                            : '#d1e7dd',
-                                                color: role === 'admin' || role === 'hr' ? '#000' : '#0f5132',
+                                                        : role === 'supervisor'
+                                                            ? '#20c997'
+                                                            : role === 'viewer'
+                                                                ? '#adb5bd'
+                                                                : '#d1e7dd',
+                                                color: role === 'admin' || role === 'hr' ? '#000' : role === 'supervisor' ? '#fff' : '#0f5132',
                                                 fontWeight: 700,
                                                 letterSpacing: '0.3px',
                                                 textTransform: 'uppercase'
                                             }}
                                         >
-                                            {role === 'admin' ? 'Admin' : role === 'hr' ? 'HR' : role === 'viewer' ? 'Viewer' : 'Employee'}
+                                            {role === 'admin' ? 'Admin' : role === 'hr' ? 'HR' : role === 'supervisor' ? 'Supervisor' : role === 'viewer' ? 'Viewer' : 'Employee'}
                                         </span>
                                         {company && (
                                             <span className="text-white-50 text-truncate" style={{ fontSize: '0.72rem', maxWidth: '140px' }} title={company}>
@@ -204,20 +208,24 @@ function Navbar() {
                                                     ? '#fff3cd'
                                                     : role === 'hr'
                                                         ? '#cff4fc'
-                                                        : role === 'viewer'
-                                                            ? '#e2e3e5'
-                                                            : '#d1e7dd',
+                                                        : role === 'supervisor'
+                                                            ? '#d1e7dd'
+                                                            : role === 'viewer'
+                                                                ? '#e2e3e5'
+                                                                : '#d1e7dd',
                                                 color: role === 'admin'
                                                     ? '#664d03'
                                                     : role === 'hr'
                                                         ? '#055160'
-                                                        : role === 'viewer'
-                                                            ? '#41464b'
-                                                            : '#0f5132',
+                                                        : role === 'supervisor'
+                                                            ? '#0f5132'
+                                                            : role === 'viewer'
+                                                                ? '#41464b'
+                                                                : '#0f5132',
                                                 fontWeight: 600
                                             }}
                                         >
-                                            {role === 'admin' ? 'Administrator' : role === 'hr' ? 'HR' : role === 'viewer' ? 'Viewer' : 'Employee'}
+                                            {role === 'admin' ? 'Administrator' : role === 'hr' ? 'HR' : role === 'supervisor' ? 'Supervisor' : role === 'viewer' ? 'Viewer' : 'Employee'}
                                         </span>
                                     </div>
                                     {company && (

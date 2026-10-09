@@ -78,8 +78,8 @@ const NewData = () => {
             });
             const allCategories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
 
-            // If admin, hr, or user has no specific task list assigned, allow all categories
-            if (userData.role === 'admin' || userData.role === 'hr' || userTaskList.length === 0) {
+            // If admin, hr, supervisor, or user has no specific task list assigned, allow all categories
+            if (userData.role === 'admin' || userData.role === 'hr' || userData.role === 'supervisor' || userTaskList.length === 0) {
                 setTaskCategories(allCategories);
             } else {
                 const filteredCategories = allCategories.filter(category =>

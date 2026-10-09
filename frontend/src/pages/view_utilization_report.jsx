@@ -25,13 +25,13 @@ const ViewUtilizationReport = () => {
     const selectedUserObj = selectedUser ? users.find(u => String(u.id) === String(selectedUser)) : null;
     const name = selectedUserObj
         ? `${selectedUserObj.first_name} ${selectedUserObj.last_name}`
-        : (role === 'admin' || role === 'viewer' || role === 'hr')
+        : (role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor')
             ? 'All Users'
             : currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : '';
 
     const employeeCode = selectedUserObj
         ? (selectedUserObj.id_number || '')
-        : (role === 'admin' || role === 'viewer' || role === 'hr') ? 'ALL' : (currentUser?.id_number || '');
+        : (role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') ? 'ALL' : (currentUser?.id_number || '');
     const months = useMemo(
         () =>
             Array.from({ length: 12 }, (_, i) => ({
@@ -50,7 +50,7 @@ const ViewUtilizationReport = () => {
 
         const user = JSON.parse(stored);
         setCurrentUser(user);
-        if (role === "admin" || role === 'viewer' || role === 'hr') {
+        if (role === "admin" || role === 'viewer' || role === 'hr' || role === 'supervisor') {
             fetchUsers();
         }
     }, [role]);
@@ -75,8 +75,8 @@ const ViewUtilizationReport = () => {
                 const userData = localStorage.getItem("user");
                 const user = userData ? JSON.parse(userData) : null;
                 
-                // Viewer and HR roles can only see employees from their own company
-                if ((user?.role === 'hr' || user?.role === 'viewer') && user?.company) {
+                // Viewer, HR, and Supervisor roles can only see employees from their own company
+                if ((user?.role === 'hr' || user?.role === 'viewer' || user?.role === 'supervisor') && user?.company) {
                     filteredUsers = filteredUsers.filter(u => u.company === user.company);
                 }
                 setUsers(filteredUsers);
@@ -96,11 +96,11 @@ const ViewUtilizationReport = () => {
         try {
             const params = new URLSearchParams({ year, month });
 
-            if ((role === "admin" || role === "viewer" || role === "hr") && userId) {
+            if ((role === "admin" || role === "viewer" || role === "hr" || role === "supervisor") && userId) {
                 params.append("user_id", userId);
             }
 
-            const url = (role === "admin" || role === "viewer" || role === "hr")
+            const url = (role === "admin" || role === "viewer" || role === "hr" || role === "supervisor")
                 ? `${API_BASE_URL}/daily-reports/?${params}`
                 : `${API_BASE_URL}/users/${user.id}/reports/?${params}`;
 
@@ -471,7 +471,7 @@ const ViewUtilizationReport = () => {
 
                 <div className="d-flex flex-column flex-md-row align-items-stretch align-items-md-center gap-2 bg-white p-3 rounded-4 shadow-sm w-100 w-lg-auto">
 
-                    {(role === 'admin' || role === 'viewer' || role === 'hr') && (
+                    {(role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') && (
                         <div className="d-flex align-items-center flex-grow-1">
                             <i className="bi bi-person-badge text-muted me-2"></i>
                             <select

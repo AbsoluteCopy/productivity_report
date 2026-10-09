@@ -55,7 +55,7 @@ const ViewReport = () => {
     }, []);
 
     useEffect(() => {
-        if ((role === 'admin' || role === 'viewer' || role === 'hr')) {
+        if ((role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor')) {
             fetchUsers();
         }
     }, [role]);
@@ -141,8 +141,8 @@ const ViewReport = () => {
             const userData = localStorage.getItem("user");
             const loggedInUser = userData ? JSON.parse(userData) : null;
 
-            // Viewer and HR roles can only see employees from their own company
-            if ((loggedInUser?.role === 'hr' || loggedInUser?.role === 'viewer') && loggedInUser?.company) {
+            // Viewer, HR, and Supervisor roles can only see employees from their own company
+            if ((loggedInUser?.role === 'hr' || loggedInUser?.role === 'viewer' || loggedInUser?.role === 'supervisor') && loggedInUser?.company) {
                 filteredUsers = filteredUsers.filter(u => u.company === loggedInUser.company);
             }
 
@@ -158,7 +158,7 @@ const ViewReport = () => {
         try {
             let url;
 
-            if (role === 'admin' || role === 'viewer' || role === 'hr') {
+            if (role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') {
                 if (userId === '') {
                     return;
                 }
@@ -916,7 +916,7 @@ const ViewReport = () => {
                         <h3 className="mb-0">Daily Reports</h3>
 
                         <div className="d-flex flex-column flex-sm-row gap-2 w-100">
-                            {(role === 'admin' || role === 'viewer' || role === 'hr') && (
+                            {(role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') && (
                                 <select
                                     className="form-select flex-fill"
                                     value={selectedUser}

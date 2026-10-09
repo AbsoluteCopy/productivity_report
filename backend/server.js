@@ -77,6 +77,21 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   }
 })();
 
+// Auto-migrate: Ensure role enum includes 'supervisor'
+(async () => {
+  try {
+    const [cols] = await pool.query(
+      "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'"
+    );
+    if (cols.length > 0 && !cols[0].COLUMN_TYPE.includes("'supervisor'")) {
+      await pool.query("ALTER TABLE users MODIFY COLUMN role ENUM('admin','hr','supervisor','employee','viewer') DEFAULT 'employee'");
+      console.log("Updated users.role ENUM to include 'supervisor'.");
+    }
+  } catch (err) {
+    console.error('Migration check error for supervisor role:', err);
+  }
+})();
+
 // Rate limiter for login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -224,7 +239,7 @@ app.get(['/api/users', '/api/users/'], authenticate, async (req, res) => {
 
     if (req.user.role === 'admin') {
       query += ' ORDER BY id ASC';
-    } else if (req.user.role === 'hr' && req.user.company) {
+    } else if (['hr', 'supervisor'].includes(req.user.role) && req.user.company) {
       query += ' WHERE company = ? ORDER BY id ASC';
       params.push(req.user.company);
     } else if (req.user.company) {
@@ -277,7 +292,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Password is required and must be at least 6 characters long.', detail: 'Password must be at least 6 characters long.' });
     }
     
-    const validRoles = ['admin', 'hr', 'employee', 'viewer'];
+    const validRoles = ['admin', 'hr', 'supervisor', 'employee', 'viewer'];
     const chosenRole = (role && validRoles.includes(role)) ? role : 'employee';
 
     if (req.user.role === 'hr') {
@@ -340,8 +355,8 @@ app.post(['/api/users/heartbeat', '/api/users/heartbeat/'], authenticate, async 
 // 6.2. Online Users - Admin and HR multi-company monitor
 app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Permission denied. Only Admin and HR can view online users.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Permission denied. Only Admin, HR, and Supervisor can view online users.' });
     }
 
     // 1. Fetch users active within last 5 minutes
@@ -370,7 +385,9 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
 
     // 4. Multi-company filter support (e.g. ?companies=CompA,CompB or ?company=CompA)
     let selectedCompanies = [];
-    if (req.query.companies) {
+    if (req.user.role === 'supervisor' && req.user.company) {
+      selectedCompanies = [req.user.company.trim().toLowerCase()];
+    } else if (req.query.companies) {
       selectedCompanies = req.query.companies.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
     } else if (req.query.company) {
       selectedCompanies = [req.query.company.trim().toLowerCase()];
@@ -404,7 +421,7 @@ app.get(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
     if (rows.length === 0) return res.status(404).json({ error: 'User not found.', detail: 'User not found.' });
 
     const targetUser = rows[0];
-    if (req.user.role === 'admin' || (req.user.role === 'hr' && req.user.company === targetUser.company) || req.user.id == targetUser.id) {
+    if (req.user.role === 'admin' || (['hr', 'supervisor'].includes(req.user.role) && req.user.company === targetUser.company) || req.user.id == targetUser.id) {
       return res.json(formatUser(targetUser));
     }
     return res.status(403).json({ error: 'Permission denied.', detail: 'Permission denied.' });
@@ -422,9 +439,14 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
     const isSelf = req.user.id == targetUser.id;
     const isAdmin = req.user.role === 'admin';
     const isHR = req.user.role === 'hr' && req.user.company === targetUser.company;
+    const isSupervisor = req.user.role === 'supervisor' && req.user.company === targetUser.company && (targetUser.role === 'employee' || isSelf);
 
-    if (!isAdmin && !isHR && !isSelf) {
+    if (!isAdmin && !isHR && !isSupervisor && !isSelf) {
       return res.status(403).json({ error: 'Permission denied.', detail: 'Permission denied.' });
+    }
+
+    if (isHR && targetUser.role === 'admin') {
+      return res.status(403).json({ error: 'HR cannot edit administrator accounts.', detail: 'HR cannot edit administrator accounts.' });
     }
 
     let { first_name, last_name, username, email, role, company, id_number, task_list, password } = req.body;
@@ -480,7 +502,7 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
 
     if (isAdmin) {
       if (role) {
-        const validRoles = ['admin', 'hr', 'employee', 'viewer'];
+        const validRoles = ['admin', 'hr', 'supervisor', 'employee', 'viewer'];
         if (!validRoles.includes(role)) return res.status(400).json({ error: `Invalid role '${role}'.`, detail: `Invalid role '${role}'.` });
         updates.push('role = ?'); params.push(role);
       }
@@ -493,11 +515,18 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       }
     } else if (isHR) {
       if (role && role !== 'admin') {
-        const validRoles = ['employee', 'viewer', 'hr'];
+        const validRoles = ['employee', 'viewer', 'hr', 'supervisor'];
         if (!validRoles.includes(role)) return res.status(400).json({ error: `Invalid role '${role}'.`, detail: `Invalid role '${role}'.` });
         updates.push('role = ?'); params.push(role);
       }
       updates.push('company = ?'); params.push(req.user.company);
+      if (id_number !== undefined) {
+        if (!id_number.trim()) return res.status(400).json({ error: 'ID Number cannot be blank.', detail: 'ID Number cannot be blank.' });
+        const [existingId] = await pool.query('SELECT id FROM users WHERE id_number = ? AND id != ?', [id_number.trim(), req.params.id]);
+        if (existingId.length > 0) return res.status(400).json({ error: `An account with ID Number "${id_number.trim()}" already exists.`, detail: `An account with ID Number "${id_number.trim()}" already exists.` });
+        updates.push('id_number = ?'); params.push(id_number.trim());
+      }
+    } else if (isSupervisor) {
       if (id_number !== undefined) {
         if (!id_number.trim()) return res.status(400).json({ error: 'ID Number cannot be blank.', detail: 'ID Number cannot be blank.' });
         const [existingId] = await pool.query('SELECT id FROM users WHERE id_number = ? AND id != ?', [id_number.trim(), req.params.id]);
@@ -564,7 +593,7 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
 
     if (req.user.role === 'admin') {
       if (user_id) { query += ' AND r.user_id = ?'; params.push(user_id); }
-    } else if ((req.user.role === 'hr' || req.user.role === 'viewer') && req.user.company) {
+    } else if (['hr', 'viewer', 'supervisor'].includes(req.user.role) && req.user.company) {
       query += ' AND u.company = ?'; params.push(req.user.company);
       if (user_id) { query += ' AND r.user_id = ?'; params.push(user_id); }
     } else {
@@ -623,7 +652,7 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
 
     const r = rows[0];
     if (req.user.role !== 'admin' &&
-        !(req.user.role === 'hr' && req.user.company === r.user_company) &&
+        !(['hr', 'supervisor'].includes(req.user.role) && req.user.company === r.user_company) &&
         req.user.id != r.user_id) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
@@ -663,7 +692,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
 
     if (req.user.role === 'admin' && user) {
       targetUserId = user;
-    } else if (req.user.role === 'hr' && user) {
+    } else if (['hr', 'supervisor'].includes(req.user.role) && user) {
       const [uRows] = await pool.query('SELECT company FROM users WHERE id = ?', [user]);
       if (uRows.length === 0 || uRows[0].company !== req.user.company) {
         return res.status(403).json({ error: 'Cannot submit report for employee in different company.' });
@@ -694,8 +723,9 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     const isOwner = req.user.id == report.user_id;
     const isAdmin = req.user.role === 'admin';
     const isHR = req.user.role === 'hr' && req.user.company === report.company;
+    const isSupervisor = req.user.role === 'supervisor' && req.user.company === report.company;
 
-    if (!isAdmin && !isHR && !isOwner) {
+    if (!isAdmin && !isHR && !isSupervisor && !isOwner) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
@@ -744,8 +774,9 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
     const isOwner = req.user.id == report.user_id;
     const isAdmin = req.user.role === 'admin';
     const isHR = req.user.role === 'hr' && req.user.company === report.company;
+    const isSupervisor = req.user.role === 'supervisor' && req.user.company === report.company;
 
-    if (!isAdmin && !isHR && !isOwner) {
+    if (!isAdmin && !isHR && !isSupervisor && !isOwner) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
@@ -771,7 +802,7 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
     if (uRows.length === 0) return res.status(404).json({ error: 'User not found.' });
 
     const targetUser = uRows[0];
-    if (req.user.role !== 'admin' && !(req.user.role === 'hr' && req.user.company === targetUser.company) && req.user.id != targetUserId) {
+    if (req.user.role !== 'admin' && !(['hr', 'supervisor'].includes(req.user.role) && req.user.company === targetUser.company) && req.user.id != targetUserId) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
