@@ -44,11 +44,20 @@ const DailyReport = () => {
     const fetchReports = useCallback(
         async (user) => {
             if (!user) return; setLoading(true);
-            try { 
-                const endpoint = ADMIN_ROLES.has(user.role) ? `${API_BASE_URL}/daily-reports/` : `${API_BASE_URL}/users/${user.id}/reports/`; 
+            try {
+                const endpoint = ADMIN_ROLES.has(user.role) ? `${API_BASE_URL}/daily-reports/` : `${API_BASE_URL}/users/${user.id}/reports/`;
+                const token = localStorage.getItem('token');
+                const response = await axios.get(endpoint, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
                 const rawReports = Array.isArray(response.data) ? response.data : [];
+                const parseDate = (d) => {
+                    if (!d) return 0;
+                    const t = new Date(d).getTime();
+                    return Number.isNaN(t) ? 0 : t;
+                };
                 const sortedReports = [...rawReports].sort((a, b) => {
-                    const diff = new Date(b.date || 0) - new Date(a.date || 0);
+                    const diff = parseDate(b.date) - parseDate(a.date);
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
                 setDailyReports(sortedReports); 
