@@ -74,7 +74,7 @@ const Home = () => {
     };
 
     useEffect(() => {
-        if (role === 'admin' || role === 'hr') {
+        if (role === 'admin' || role === 'hr' || role === 'supervisor') {
             fetchOnlineUsers();
             const interval = setInterval(fetchOnlineUsers, 30000);
             return () => clearInterval(interval);
@@ -106,8 +106,8 @@ const Home = () => {
 
     useEffect(() => {
         if (user) {
-            fetchRecentReports(user.id);
-            if (role === 'employee') {
+            fetchRecentReports(user);
+            if ((user.role || role) === 'employee') {
                 fetchMonthlyData(user.id);
             }
         }
@@ -121,17 +121,25 @@ const Home = () => {
         return () => clearInterval(timer);
     }, []);
 
-    const fetchRecentReports = async (userId) => {
+    const fetchRecentReports = async (currentUser) => {
         try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+            const userRole = currentUser?.role || role;
+            const userId = currentUser?.id || user?.id;
             let response;
-            if (role === 'admin') {
-                response = await fetch(`${API_BASE_URL}/daily-reports/`);
+            if (['admin', 'hr', 'supervisor'].includes(userRole)) {
+                response = await fetch(`${API_BASE_URL}/daily-reports/`, { headers });
             } else {
-                response = await fetch(`${API_BASE_URL}/users/${userId}/reports/`);
+                response = await fetch(`${API_BASE_URL}/users/${userId}/reports/`, { headers });
             }
             if (response.ok) {
                 const data = await response.json();
-                const lastThree = data.slice(0, 3);
+                const sorted = (Array.isArray(data) ? data : []).sort((a, b) => {
+                    const diff = new Date(b.date || 0) - new Date(a.date || 0);
+                    return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
+                });
+                const lastThree = sorted.slice(0, 3);
                 setRecentReports(lastThree);
             }
         } catch (error) {
@@ -251,11 +259,15 @@ const Home = () => {
                             <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
                                 <i className="bi bi-journal-text me-2"></i>Recent Reports
                             </h5>
-                            {role === 'employee' && (
+                            {['admin', 'hr', 'supervisor'].includes(role) ? (
+                                <Link to="/daily_report" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                                    View All <i className="bi bi-arrow-right ms-1"></i>
+                                </Link>
+                            ) : role === 'employee' ? (
                                 <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
                                     <i className="bi bi-plus-lg me-1"></i> New
                                 </Link>
-                            )}
+                            ) : null}
                         </div>
                         <div className="card-body p-4">
                             {loading ? (
@@ -275,7 +287,7 @@ const Home = () => {
                                                 <div>
                                                     <h6 className="mb-1 fw-bold text-dark">{report.task_category}</h6>
                                                     <small className="text-muted fw-medium">
-                                                        {role === 'admin' && report.user_name && (
+                                                        {['admin', 'hr', 'supervisor'].includes(role) && report.user_name && (
                                                             <span className="me-2">
                                                                 <i className="bi bi-person me-1"></i>
                                                                 {report.user_name}
@@ -322,8 +334,8 @@ const Home = () => {
                     </div>
                 </div>
 
-                {/* Online Users Tracker (Admin & HR) */}
-                {(role === 'admin' || role === 'hr') && (
+                {/* Online Users Tracker (Admin & HR & Supervisor) */}
+                {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
                     <div className="col-12 mt-4">
                         <div className="card shadow-sm border-0 rounded-4">
                             <div className="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">

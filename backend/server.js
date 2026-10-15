@@ -603,7 +603,8 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
     if (year) { query += ' AND YEAR(r.date) = ?'; params.push(year); }
     if (month) { query += ' AND MONTH(r.date) = ?'; params.push(month); }
 
-    query += ' ORDER BY r.date ASC';
+    const sortOrder = req.query.order === 'asc' ? 'ASC' : 'DESC';
+    query += ` ORDER BY r.date ${sortOrder}, r.id ${sortOrder}`;
     const [rows] = await pool.query(query, params);
 
     const formatted = rows.map(r => {
@@ -812,7 +813,9 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
 
     if (year) { query += ' AND YEAR(date) = ?'; params.push(year); }
     if (month) { query += ' AND MONTH(date) = ?'; params.push(month); }
-    query += ' ORDER BY date ASC';
+
+    const sortOrder = req.query.order === 'asc' ? 'ASC' : 'DESC';
+    query += ` ORDER BY date ${sortOrder}, id ${sortOrder}`;
 
     const [rows] = await pool.query(query, params);
     return res.json(rows);
