@@ -285,7 +285,7 @@ const Home = () => {
                                                     <i className="bi bi-check2-all fs-5"></i>
                                                 </div>
                                                 <div>
-                                                    <h6 className="mb-1 fw-bold text-dark">{report.task_category}</h6>
+                                                    <h6 className="mb-1 fw-bold text-dark">{report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category}</h6>
                                                     <small className="text-muted fw-medium">
                                                         {['admin', 'hr', 'supervisor'].includes(role) && report.user_name && (
                                                             <span className="me-2">

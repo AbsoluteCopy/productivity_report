@@ -324,7 +324,17 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const taskListJson = JSON.stringify(task_list || []);
+    // Strict exact case-insensitive match deduplication (preserves SUB10498-3 vs SUB104983)
+    let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+    const seenPostTasks = new Set();
+    cleanTaskList = cleanTaskList.filter(t => {
+      if (typeof t !== 'string') return true;
+      const key = t.trim().toLowerCase();
+      if (seenPostTasks.has(key)) return false;
+      seenPostTasks.add(key);
+      return true;
+    });
+    const taskListJson = JSON.stringify(cleanTaskList);
 
     const [result] = await pool.query(
       'INSERT INTO users (id_number, first_name, last_name, username, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
@@ -638,6 +648,60 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
   }
 });
 
+// 8a-2. Check duplicate task across system for category (Strict exact case-insensitive match)
+app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplicate/'], authenticate, async (req, res) => {
+  try {
+    const { task, category, exclude_id } = req.query;
+    if (!task || !category || !task.trim() || !category.trim()) {
+      return res.json({ duplicate: false });
+    }
+
+    const trimmedTask = task.trim();
+    const trimmedCategory = category.trim();
+
+    let query = `
+      SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+      FROM daily_reports r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE LOWER(r.task_category) = LOWER(?)
+        AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+    `;
+    const params = [trimmedCategory, trimmedTask];
+
+    if (exclude_id) {
+      query += ` AND r.id != ?`;
+      params.push(exclude_id);
+    }
+
+    query += ` ORDER BY r.date DESC, r.id DESC LIMIT 1`;
+
+    const [rows] = await pool.query(query, params);
+
+    if (rows.length > 0) {
+      const match = rows[0];
+      const person = (match.first_name || match.last_name)
+        ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+        : (match.username || 'another user');
+      const formattedDate = match.date instanceof Date 
+        ? match.date.toISOString().split('T')[0] 
+        : String(match.date).split('T')[0];
+
+      return res.json({
+        duplicate: true,
+        task: trimmedTask,
+        category: match.task_category,
+        date: formattedDate,
+        submitted_by: person
+      });
+    }
+
+    return res.json({ duplicate: false });
+  } catch (err) {
+    console.error('Check duplicate task error:', err);
+    return res.status(500).json({ error: 'Error checking duplicate task.' });
+  }
+});
+
 // 8b. Single Daily Report by ID (View & Edit)
 app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, async (req, res) => {
   try {
@@ -701,7 +765,54 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
       targetUserId = user;
     }
 
-    const taskListJson = JSON.stringify(task_list || []);
+    // Strict exact case-insensitive match deduplication (preserves SUB10498-3 vs SUB104983)
+    let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+    const seenPostTasks = new Set();
+    cleanTaskList = cleanTaskList.filter(t => {
+      if (typeof t !== 'string') return true;
+      const key = t.trim().toLowerCase();
+      if (seenPostTasks.has(key)) return false;
+      seenPostTasks.add(key);
+      return true;
+    });
+    const taskListJson = JSON.stringify(cleanTaskList);
+    // Validate non-empty task_list for working categories
+    if (work_type === 'Working' && task_category && task_category !== 'Meeting') {
+      const isOthersNoTime = (task_category === 'Others' && Number(time_spent) === 0);
+      if (!isOthersNoTime && cleanTaskList.length === 0) {
+        return res.status(400).json({ error: `Tasks cannot be empty for category "${task_category}".` });
+      }
+    }
+
+    // System-wide duplicate check for each task in this category
+    if (task_category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(task_category)) {
+      for (const t of cleanTaskList) {
+        if (typeof t !== 'string' || !t.trim()) continue;
+        const [dupRows] = await pool.query(`
+          SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+          FROM daily_reports r
+          LEFT JOIN users u ON r.user_id = u.id
+          WHERE LOWER(r.task_category) = LOWER(?)
+            AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+          LIMIT 1
+        `, [task_category.trim(), t.trim()]);
+
+        if (dupRows.length > 0) {
+          const match = dupRows[0];
+          const person = (match.first_name || match.last_name)
+            ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+            : (match.username || 'another user');
+          const formattedDate = match.date instanceof Date 
+            ? match.date.toISOString().split('T')[0] 
+            : String(match.date).split('T')[0];
+
+          return res.status(400).json({
+            error: `Task "${t.trim()}" has already been submitted for category "${match.task_category}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+          });
+        }
+      }
+    }
+
     const [result] = await pool.query(
       'INSERT INTO daily_reports (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
       [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson, number_of_tasks || 0, time_spent || 0, meeting_count || 0]
@@ -745,10 +856,53 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (task_category) { updates.push('task_category = ?'); params.push(task_category); }
     if (sub_category !== undefined) { updates.push('sub_category = ?'); params.push(sub_category); }
     if (work_type !== undefined) { updates.push('work_type = ?'); params.push(work_type); }
-    if (task_list !== undefined) { updates.push('task_list = ?'); params.push(JSON.stringify(task_list)); }
+    if (task_list !== undefined) {
+      let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+      const seenPutTasks = new Set();
+      cleanTaskList = cleanTaskList.filter(t => {
+        if (typeof t !== 'string') return true;
+        const key = t.trim().toLowerCase();
+        if (seenPutTasks.has(key)) return false;
+        seenPutTasks.add(key);
+        return true;
+      });
+      updates.push('task_list = ?');
+      params.push(JSON.stringify(cleanTaskList));
+    }
     if (number_of_tasks !== undefined) { updates.push('number_of_tasks = ?'); params.push(number_of_tasks); }
     if (time_spent !== undefined) { updates.push('time_spent = ?'); params.push(time_spent); }
     if (meeting_count !== undefined) { updates.push('meeting_count = ?'); params.push(meeting_count); }
+
+    // System-wide duplicate check for each task in this category (excluding this report)
+    const targetCategory = task_category || report.task_category;
+    if (cleanTaskList.length > 0 && targetCategory && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCategory)) {
+      for (const t of cleanTaskList) {
+        if (typeof t !== 'string' || !t.trim()) continue;
+        const [dupRows] = await pool.query(`
+          SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+          FROM daily_reports r
+          LEFT JOIN users u ON r.user_id = u.id
+          WHERE LOWER(r.task_category) = LOWER(?)
+            AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+            AND r.id != ?
+          LIMIT 1
+        `, [targetCategory.trim(), t.trim(), req.params.id]);
+
+        if (dupRows.length > 0) {
+          const match = dupRows[0];
+          const person = (match.first_name || match.last_name)
+            ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+            : (match.username || 'another user');
+          const formattedDate = match.date instanceof Date 
+            ? match.date.toISOString().split('T')[0] 
+            : String(match.date).split('T')[0];
+
+          return res.status(400).json({
+            error: `Task "${t.trim()}" has already been submitted for category "${match.task_category}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+          });
+        }
+      }
+    }
 
     if (updates.length === 0) {
       return res.json(report);

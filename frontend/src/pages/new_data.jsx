@@ -179,22 +179,136 @@ const NewData = () => {
         }
     };
 
-    const handleCategoryChange = (id, value) => {
+    const promptForOtherName = async (id, currentVal = '') => {
+        const { value: taskName, isConfirmed } = await Swal.fire({
+            title: 'Name This Task / Category',
+            input: 'text',
+            inputValue: currentVal,
+            inputLabel: 'Please enter the name of this task or category:',
+            inputPlaceholder: 'e.g. Special Project, Inventory Audit, etc.',
+            showCancelButton: true,
+            confirmButtonColor: '#065d48',
+            confirmButtonText: 'Save',
+            cancelButtonColor: '#6c757d',
+            inputValidator: (val) => {
+                if (!val || !val.trim()) {
+                    return 'Task / Category name cannot be empty!';
+                }
+            }
+        });
+
+        if (isConfirmed && taskName && taskName.trim()) {
+            const trimmed = taskName.trim();
+            setCategories(prev => prev.map(cat =>
+                cat.id === id ? { ...cat, category: 'Others', sub_category: trimmed } : cat
+            ));
+            return trimmed;
+        }
+        return null;
+    };
+
+    const handleCategoryChange = async (id, value) => {
+        if (value === 'Others') {
+            const currentSub = categories.find(c => c.id === id)?.sub_category || '';
+            const newName = await promptForOtherName(id, currentSub);
+            if (!newName && !currentSub) {
+                // If cancelled and no existing custom name, do not change category
+                return;
+            }
+            return;
+        }
+
         setCategories(prev => prev.map(cat =>
-            cat.id === id ? { ...cat, category: value } : cat
+            cat.id === id ? { ...cat, category: value, sub_category: '' } : cat
         ));
     };
 
-    const handleTaskKeyDown = (e, id) => {
-        if (e.key === 'Enter' && e.target.value.trim()) {
-            e.preventDefault();
-            setCategories(prev => prev.map(cat => {
-                if (cat.id === id) {
-                    const newTasks = [...cat.tasks, e.target.value.trim()];
-                    return { ...cat, tasks: newTasks, currentTask: '' };
+    const addTask = async (id, taskValue) => {
+        if (!taskValue || !taskValue.trim()) return;
+        const newTask = taskValue.trim();
+
+        const targetCat = categories.find(cat => cat.id === id);
+        if (!targetCat) return;
+
+        if (!targetCat.category) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Category Required',
+                text: 'Please select a Task Category before adding tasks.',
+                confirmButtonColor: '#065d48',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        // 1. Check duplicate in current form state (across rows sharing this category)
+        const sameCatRows = categories.filter(c =>
+            c.id === id || (targetCat.category && c.category && c.category.trim().toLowerCase() === targetCat.category.trim().toLowerCase())
+        );
+        const allTasksInCat = sameCatRows.flatMap(c => c.tasks);
+
+        const isLocalDuplicate = allTasksInCat.some(
+            t => t.trim().toLowerCase() === newTask.toLowerCase()
+        );
+
+        if (isLocalDuplicate) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Duplicate Task',
+                text: `"${newTask}" has already been added for "${targetCat.category}" in this form.`,
+                confirmButtonColor: '#065d48',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        // 2. Check system-wide database duplicate across all users and dates
+        if (targetCat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCat.category)) {
+            try {
+                const token = localStorage.getItem('token');
+                const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                    params: {
+                        task: newTask,
+                        category: targetCat.category,
+                        exclude_id: editId || undefined
+                    },
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+
+                if (checkRes.data && checkRes.data.duplicate) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Duplicate Task (System-Wide)',
+                        text: `"${newTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
                 }
-                return cat;
-            }));
+            } catch (err) {
+                console.error('Error checking duplicate task with server:', err);
+            }
+        }
+
+        // Add task to category and clear currentTask
+        setCategories(prev => prev.map(cat => {
+            if (cat.id === id) {
+                return {
+                    ...cat,
+                    tasks: [...cat.tasks, newTask],
+                    currentTask: ''
+                };
+            }
+            return cat;
+        }));
+    };
+
+    const handleTaskKeyDown = (e, id) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (e.target.value && e.target.value.trim()) {
+                addTask(id, e.target.value);
+            }
         }
     };
 
@@ -375,13 +489,138 @@ const NewData = () => {
             }
         }
 
-        console.log(categories);
-        const reports = categories
+        // Process any pending text typed in currentTask that was not added via Enter/Add button
+        const processedCategories = [];
+        for (let cat of categories) {
+            let catTasks = [...cat.tasks];
+            if (cat.currentTask && cat.currentTask.trim()) {
+                const pendingTask = cat.currentTask.trim();
+                if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                    // Check duplicate in local form
+                    const isLocalDup = catTasks.some(t => t.trim().toLowerCase() === pendingTask.toLowerCase());
+                    if (isLocalDup) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Duplicate Task Detected',
+                            text: `"${pendingTask}" in category "${cat.category}" is already added. Please remove it before submitting.`,
+                            confirmButtonColor: '#065d48',
+                            confirmButtonText: 'OK'
+                        });
+                        return;
+                    }
+
+                    // Check system-wide duplicate
+                    try {
+                        const token = localStorage.getItem('token');
+                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                            params: {
+                                task: pendingTask,
+                                category: cat.category,
+                                exclude_id: editId || undefined
+                            },
+                            headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (checkRes.data && checkRes.data.duplicate) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Duplicate Task Detected (System-Wide)',
+                                text: `Cannot submit: "${pendingTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                                confirmButtonColor: '#065d48',
+                                confirmButtonText: 'OK'
+                            });
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('Error checking duplicate in handleSubmit:', err);
+                    }
+
+                    catTasks.push(pendingTask);
+                }
+            }
+            processedCategories.push({ ...cat, tasks: catTasks });
+        }
+
+        // Check for duplicate tasks across rows of the same category
+        const catTaskMap = {};
+        for (let cat of processedCategories) {
+            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                const catKey = cat.category.trim().toLowerCase();
+                if (!catTaskMap[catKey]) catTaskMap[catKey] = new Set();
+                for (let t of cat.tasks) {
+                    const taskKey = t.trim().toLowerCase();
+                    if (catTaskMap[catKey].has(taskKey)) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Duplicate Task Detected',
+                            text: `Duplicate task "${t}" found in category "${cat.category}". Please remove the duplicate before submitting.`,
+                            confirmButtonColor: '#065d48',
+                            confirmButtonText: 'OK'
+                        });
+                        return;
+                    }
+                    catTaskMap[catKey].add(taskKey);
+                }
+            }
+        }
+
+        // System-wide duplicate check for all tasks in all categories
+        for (let cat of processedCategories) {
+            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                for (let t of cat.tasks) {
+                    try {
+                        const token = localStorage.getItem('token');
+                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                            params: {
+                                task: t,
+                                category: cat.category,
+                                exclude_id: editId || undefined
+                            },
+                            headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (checkRes.data && checkRes.data.duplicate) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Duplicate Task Detected (System-Wide)',
+                                text: `Cannot submit: "${t}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                                confirmButtonColor: '#065d48',
+                                confirmButtonText: 'OK'
+                            });
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('Error checking duplicate in handleSubmit:', err);
+                    }
+                }
+            }
+        }
+
+        // Ensure every working category has at least one task (unless Others with "No Time Spent")
+        for (let cat of processedCategories) {
+            if (cat.category && cat.category !== 'Meeting') {
+                if (cat.category === 'Others' && hasTimeSpent) {
+                    // No Time Spent checked for Others, allowed without tasks
+                    continue;
+                }
+                if (cat.tasks.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Tasks Required',
+                        text: `Please add at least one valid task for "${cat.category}". Tasks cannot be empty.`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+            }
+        }
+
+        console.log(processedCategories);
+        const reports = processedCategories
             .filter(cat =>
                 cat.category &&
                 (
                     cat.tasks.length > 0 ||
-                    cat.category === 'Others' ||
+                    (cat.category === 'Others' && hasTimeSpent) ||
                     (cat.category === 'Meeting' && cat.meetingTitle.trim() !== '')
                 )
             )
@@ -391,14 +630,10 @@ const NewData = () => {
                 task_category: cat.category,
                 task_list: cat.category === 'Meeting'
                     ? [cat.meetingTitle]
-                    : (cat.category === 'Others' && cat.tasks.length === 0
-                        ? ['']
-                        : cat.tasks),
+                    : cat.tasks,
                 number_of_tasks: cat.category === 'Meeting'
                     ? (cat.meetingTitle.trim() ? 1 : 0)
-                    : cat.category === 'Others'
-                        ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
-                        : cat.tasks.length,
+                    : cat.tasks.length,
                 time_spent: hasTimeSpent && cat.category === 'Others'
                     ? 0
                     : parseInt(cat.timeSpent, 10) || 0,
@@ -690,9 +925,21 @@ const NewData = () => {
 
                                                     <div className="row">
                                                         <div className="mb-3 col-lg-6">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Task Category *
-                                                            </label>
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                    Task Category *
+                                                                </label>
+                                                                {cat.category === 'Others' && cat.sub_category && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
+                                                                        style={{ color: '#065d48', fontSize: '0.82rem' }}
+                                                                        onClick={() => promptForOtherName(cat.id, cat.sub_category)}
+                                                                    >
+                                                                        <i className="bi bi-pencil-square me-1"></i>Rename
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                             <select value={cat.category}
                                                                 onChange={(e) => handleCategoryChange(cat.id, e.target.value)}
                                                                 required
@@ -706,51 +953,79 @@ const NewData = () => {
                                                                     <option value={cat.category}>{cat.category}</option>
                                                                 )}
                                                                 <option value="Meeting">Meeting</option>
-                                                                <option value="Others">Others</option>
+                                                                <option value="Others">
+                                                                    {cat.category === 'Others' && cat.sub_category ? cat.sub_category : 'Others'}
+                                                                </option>
                                                             </select>
                                                         </div>
-                                                        {cat.category === 'Others' && (
-                                                            <div className="col-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Other Category
-                                                                </label>
-                                                                <input type="text" name='sub_category' value={cat.sub_category}
-                                                                    onChange={(e) => handleSubCategoryChange(cat.id, e.target.value)}
-                                                                    className="form-control" placeholder="Enter other category"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                        {cat.category === 'Others' && (
-                                                            <div className="col-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    No Time Spent
-                                                                </label>
-                                                                <br />
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={hasTimeSpent}
-                                                                    onChange={(e) => setHasTimeSpent(e.target.checked)}
-                                                                    className="form-check-input"
-                                                                />
-                                                            </div>
-                                                        )}
+
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes) *
-                                                                </label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={cat.timeSpent}
-                                                                    onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                    onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
-                                                                    min="0"
-                                                                    step="1"
-                                                                    placeholder="Enter minutes (e.g. 15)"
-                                                                    className="form-control"
-                                                                    disabled={cat.category === 'Others' && hasTimeSpent}
-                                                                    required={!(cat.category === 'Others' && hasTimeSpent)}
-                                                                />
+                                                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                    <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                        Time Spent (Minutes) *
+                                                                    </label>
+                                                                    {cat.category === 'Others' && (
+                                                                        <div className="form-check mb-0">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={hasTimeSpent}
+                                                                                onChange={(e) => setHasTimeSpent(e.target.checked)}
+                                                                                className="form-check-input"
+                                                                                id={`noTimeSpent-${cat.id}`}
+                                                                            />
+                                                                            <label className="form-check-label small fw-semibold text-muted" htmlFor={`noTimeSpent-${cat.id}`}>
+                                                                                No Time Spent
+                                                                            </label>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="d-flex gap-2 align-items-center">
+                                                                    <select
+                                                                        value={
+                                                                            ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
+                                                                                ? String(cat.timeSpent)
+                                                                                : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
+                                                                        }
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (val === 'custom') {
+                                                                                if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
+                                                                                    handleTimeSpentChange(cat.id, '');
+                                                                                }
+                                                                            } else {
+                                                                                handleTimeSpentChange(cat.id, val);
+                                                                            }
+                                                                        }}
+                                                                        className="form-select"
+                                                                        style={{ minWidth: '150px' }}
+                                                                        disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                        required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                    >
+                                                                        <option value="">Select Time</option>
+                                                                        <option value="15">15 mins</option>
+                                                                        <option value="30">30 mins</option>
+                                                                        <option value="45">45 mins</option>
+                                                                        <option value="60">60 mins</option>
+                                                                        <option value="90">90 mins</option>
+                                                                        <option value="120">120 mins</option>
+                                                                        <option value="custom">Custom Time...</option>
+                                                                    </select>
+                                                                    {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
+                                                                        <input
+                                                                            type="number"
+                                                                            value={cat.timeSpent}
+                                                                            onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                            onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                            min="0"
+                                                                            step="1"
+                                                                            placeholder="Enter minutes"
+                                                                            className="form-control"
+                                                                            disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                            required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                        />
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         )}
                                                         {cat.category === 'Meeting' && (
@@ -759,17 +1034,50 @@ const NewData = () => {
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Time Spent (Minutes) *
                                                                     </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={cat.timeSpent}
-                                                                        onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                        onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
-                                                                        min="0"
-                                                                        step="1"
-                                                                        placeholder="Enter minutes (e.g. 30)"
-                                                                        className="form-control"
-                                                                        required
-                                                                    />
+                                                                    <div className="d-flex gap-2 align-items-center">
+                                                                        <select
+                                                                            value={
+                                                                                ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
+                                                                                    ? String(cat.timeSpent)
+                                                                                    : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
+                                                                            }
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                if (val === 'custom') {
+                                                                                    if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
+                                                                                        handleTimeSpentChange(cat.id, '');
+                                                                                    }
+                                                                                } else {
+                                                                                    handleTimeSpentChange(cat.id, val);
+                                                                                }
+                                                                            }}
+                                                                            className="form-select"
+                                                                            style={{ minWidth: '150px' }}
+                                                                            required
+                                                                        >
+                                                                            <option value="">Select Time</option>
+                                                                            <option value="15">15 mins</option>
+                                                                            <option value="30">30 mins</option>
+                                                                            <option value="45">45 mins</option>
+                                                                            <option value="60">60 mins</option>
+                                                                            <option value="90">90 mins</option>
+                                                                            <option value="120">120 mins</option>
+                                                                            <option value="custom">Custom Time...</option>
+                                                                        </select>
+                                                                        {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
+                                                                            <input
+                                                                                type="number"
+                                                                                value={cat.timeSpent}
+                                                                                onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                                onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                                min="0"
+                                                                                step="1"
+                                                                                placeholder="Enter minutes"
+                                                                                className="form-control"
+                                                                                required
+                                                                            />
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 {/* <div className="mb-3 col-lg-3">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
@@ -805,14 +1113,23 @@ const NewData = () => {
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Task List *
                                                                     </label>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={cat.currentTask}
-                                                                        onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                        onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                        placeholder="Type task and press Enter to add"
-                                                                        className="form-control"
-                                                                    />
+                                                                    <div className="input-group">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={cat.currentTask}
+                                                                            onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                            onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                            placeholder="Type task and press Enter or click Add"
+                                                                            className="form-control"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-outline-success"
+                                                                            onClick={() => addTask(cat.id, cat.currentTask)}
+                                                                        >
+                                                                            Add
+                                                                        </button>
+                                                                    </div>
                                                                     {cat.tasks.length > 0 && (
                                                                         <div className="mt-2">
                                                                             <ul className="list-group">
@@ -925,7 +1242,7 @@ const NewData = () => {
                                     {previousReports.map(report => {
                                         const isSelected = selectedCopyIds.has(report.id);
                                         const displayCat = report.task_category === 'Others' && report.sub_category
-                                            ? `Others (${report.sub_category})`
+                                            ? report.sub_category
                                             : report.task_category;
                                         const taskList = Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [];
 

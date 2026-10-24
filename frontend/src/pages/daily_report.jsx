@@ -186,14 +186,8 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                         </div>
                         <div className="col-md-6">
                             <small className="text-muted d-block"> Category </small>
-                            <span className="badge bg-primary fs-6"> {report.task_category || "—"} </span>
+                            <span className="badge bg-primary fs-6"> {getDisplayCategory(report) || "—"} </span>
                         </div>
-                        {report.task_category === "Others" && (
-                            <div className="col-md-6">
-                                <small className="text-muted d-block"> Sub Category </small>
-                                <div className="fw-semibold"> {report.sub_category || "—"} </div>
-                            </div>
-                        )}
                         <div className="col-md-6">
                             <small className="text-muted d-block"> Work Type </small>
                             <span className="badge bg-success fs-6"> {report.work_type || "—"} </span>
