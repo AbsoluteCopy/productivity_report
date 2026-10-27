@@ -101,12 +101,16 @@ const ViewReport = () => {
             });
             const allCategories = categoriesRes.data;
 
-            // Filter categories to only include those in user's task_list
-            const filteredCategories = allCategories.filter(category =>
-                userTaskList.includes(category.id)
-            );
-
-            setTaskCategories(filteredCategories);
+            // If admin, hr, supervisor, or user has no specific task list assigned, allow all categories
+            if (user.role === 'admin' || user.role === 'hr' || user.role === 'supervisor' || userTaskList.length === 0) {
+                setTaskCategories(allCategories);
+            } else {
+                const filteredCategories = allCategories.filter(category =>
+                    userTaskList.includes(category.id)
+                );
+                // If user's assigned categories don't match active categories, fallback to all
+                setTaskCategories(filteredCategories.length > 0 ? filteredCategories : allCategories);
+            }
         } catch (err) {
             console.error(err);
             Swal.fire({
