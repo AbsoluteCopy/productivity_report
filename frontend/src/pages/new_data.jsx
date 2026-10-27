@@ -461,6 +461,14 @@ const NewData = () => {
         }));
     };
 
+    const getEffectiveCatName = (c) => {
+        if (!c) return '';
+        if (c.category === 'Others' && c.sub_category && c.sub_category.trim()) {
+            return c.sub_category.trim();
+        }
+        return (c.category || '').trim();
+    };
+
     const addTask = async (id, taskValue) => {
         if (!taskValue || !taskValue.trim()) return;
         const newTask = taskValue.trim();
@@ -479,9 +487,11 @@ const NewData = () => {
             return;
         }
 
+        const targetCatName = getEffectiveCatName(targetCat);
+
         // 1. Check duplicate in current form state (across rows sharing this category)
         const sameCatRows = categories.filter(c =>
-            c.id === id || (targetCat.category && c.category && c.category.trim().toLowerCase() === targetCat.category.trim().toLowerCase())
+            c.id === id || (targetCatName && getEffectiveCatName(c).toLowerCase() === targetCatName.toLowerCase())
         );
         const allTasksInCat = sameCatRows.flatMap(c => c.tasks);
 
@@ -493,7 +503,7 @@ const NewData = () => {
             Swal.fire({
                 icon: 'warning',
                 title: 'Duplicate Task',
-                text: `"${newTask}" has already been added for "${targetCat.category}" in this form.`,
+                text: `"${newTask}" has already been added for "${targetCatName}" in this form.`,
                 confirmButtonColor: '#065d48',
                 confirmButtonText: 'OK'
             });
@@ -508,6 +518,7 @@ const NewData = () => {
                     params: {
                         task: newTask,
                         category: targetCat.category,
+                        sub_category: targetCat.sub_category || undefined,
                         exclude_id: editId || undefined
                     },
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -740,7 +751,7 @@ const NewData = () => {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Duplicate Task Detected',
-                            text: `"${pendingTask}" in category "${cat.category}" is already added. Please remove it before submitting.`,
+                            text: `"${pendingTask}" in category "${getEffectiveCatName(cat)}" is already added. Please remove it before submitting.`,
                             confirmButtonColor: '#065d48',
                             confirmButtonText: 'OK'
                         });
@@ -754,6 +765,7 @@ const NewData = () => {
                             params: {
                                 task: pendingTask,
                                 category: cat.category,
+                                sub_category: cat.sub_category || undefined,
                                 exclude_id: editId || undefined
                             },
                             headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -782,7 +794,7 @@ const NewData = () => {
         const catTaskMap = {};
         for (let cat of processedCategories) {
             if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
-                const catKey = cat.category.trim().toLowerCase();
+                const catKey = getEffectiveCatName(cat).toLowerCase();
                 if (!catTaskMap[catKey]) catTaskMap[catKey] = new Set();
                 for (let t of cat.tasks) {
                     const taskKey = t.trim().toLowerCase();
@@ -790,7 +802,7 @@ const NewData = () => {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Duplicate Task Detected',
-                            text: `Duplicate task "${t}" found in category "${cat.category}". Please remove the duplicate before submitting.`,
+                            text: `Duplicate task "${t}" found in category "${getEffectiveCatName(cat)}". Please remove the duplicate before submitting.`,
                             confirmButtonColor: '#065d48',
                             confirmButtonText: 'OK'
                         });
@@ -811,6 +823,7 @@ const NewData = () => {
                             params: {
                                 task: t,
                                 category: cat.category,
+                                sub_category: cat.sub_category || undefined,
                                 exclude_id: editId || undefined
                             },
                             headers: token ? { Authorization: `Bearer ${token}` } : {}

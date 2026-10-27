@@ -651,22 +651,30 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
 // 8a-2. Check duplicate task across system for category (Strict exact case-insensitive match)
 app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplicate/'], authenticate, async (req, res) => {
   try {
-    const { task, category, exclude_id } = req.query;
+    const { task, category, sub_category, exclude_id } = req.query;
     if (!task || !category || !task.trim() || !category.trim()) {
       return res.json({ duplicate: false });
     }
 
     const trimmedTask = task.trim();
-    const trimmedCategory = category.trim();
+    const effectiveCategory = (category.toLowerCase() === 'others' && sub_category && sub_category.trim())
+      ? sub_category.trim()
+      : category.trim();
 
     let query = `
-      SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+      SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
       FROM daily_reports r
       LEFT JOIN users u ON r.user_id = u.id
-      WHERE LOWER(r.task_category) = LOWER(?)
+      WHERE (
+        CASE 
+          WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+          THEN LOWER(TRIM(r.sub_category)) 
+          ELSE LOWER(TRIM(r.task_category)) 
+        END
+      ) = LOWER(?)
         AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
     `;
-    const params = [trimmedCategory, trimmedTask];
+    const params = [effectiveCategory, trimmedTask];
 
     if (exclude_id) {
       query += ` AND r.id != ?`;
@@ -679,6 +687,9 @@ app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplica
 
     if (rows.length > 0) {
       const match = rows[0];
+      const matchCat = (match.task_category === 'Others' && match.sub_category)
+        ? match.sub_category
+        : match.task_category;
       const person = (match.first_name || match.last_name)
         ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
         : (match.username || 'another user');
@@ -689,7 +700,7 @@ app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplica
       return res.json({
         duplicate: true,
         task: trimmedTask,
-        category: match.task_category,
+        category: matchCat,
         date: formattedDate,
         submitted_by: person
       });
@@ -785,20 +796,33 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
     }
 
     // System-wide duplicate check for each task in this category
+    const effectiveCategory = (task_category === 'Others' && sub_category && sub_category.trim())
+      ? sub_category.trim()
+      : (task_category || '').trim();
+
     if (task_category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(task_category)) {
       for (const t of cleanTaskList) {
         if (typeof t !== 'string' || !t.trim()) continue;
         const [dupRows] = await pool.query(`
-          SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+          SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
           FROM daily_reports r
           LEFT JOIN users u ON r.user_id = u.id
-          WHERE LOWER(r.task_category) = LOWER(?)
+          WHERE (
+            CASE 
+              WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+              THEN LOWER(TRIM(r.sub_category)) 
+              ELSE LOWER(TRIM(r.task_category)) 
+            END
+          ) = LOWER(?)
             AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
           LIMIT 1
-        `, [task_category.trim(), t.trim()]);
+        `, [effectiveCategory, t.trim()]);
 
         if (dupRows.length > 0) {
           const match = dupRows[0];
+          const matchCat = (match.task_category === 'Others' && match.sub_category)
+            ? match.sub_category
+            : match.task_category;
           const person = (match.first_name || match.last_name)
             ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
             : (match.username || 'another user');
@@ -807,7 +831,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
             : String(match.date).split('T')[0];
 
           return res.status(400).json({
-            error: `Task "${t.trim()}" has already been submitted for category "${match.task_category}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+            error: `Task "${t.trim()}" has already been submitted for category "${matchCat}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
           });
         }
       }
@@ -887,21 +911,35 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;
+    const targetSubCategory = sub_category !== undefined ? sub_category : report.sub_category;
+    const effectiveCategory = (targetCategory === 'Others' && targetSubCategory && targetSubCategory.trim())
+      ? targetSubCategory.trim()
+      : (targetCategory || '').trim();
+
     if (cleanTaskList.length > 0 && targetCategory && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCategory)) {
       for (const t of cleanTaskList) {
         if (typeof t !== 'string' || !t.trim()) continue;
         const [dupRows] = await pool.query(`
-          SELECT r.id, r.date, r.task_category, u.first_name, u.last_name, u.username
+          SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
           FROM daily_reports r
           LEFT JOIN users u ON r.user_id = u.id
-          WHERE LOWER(r.task_category) = LOWER(?)
+          WHERE (
+            CASE 
+              WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+              THEN LOWER(TRIM(r.sub_category)) 
+              ELSE LOWER(TRIM(r.task_category)) 
+            END
+          ) = LOWER(?)
             AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
             AND r.id != ?
           LIMIT 1
-        `, [targetCategory.trim(), t.trim(), req.params.id]);
+        `, [effectiveCategory, t.trim(), req.params.id]);
 
         if (dupRows.length > 0) {
           const match = dupRows[0];
+          const matchCat = (match.task_category === 'Others' && match.sub_category)
+            ? match.sub_category
+            : match.task_category;
           const person = (match.first_name || match.last_name)
             ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
             : (match.username || 'another user');
@@ -910,7 +948,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
             : String(match.date).split('T')[0];
 
           return res.status(400).json({
-            error: `Task "${t.trim()}" has already been submitted for category "${match.task_category}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+            error: `Task "${t.trim()}" has already been submitted for category "${matchCat}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
           });
         }
       }
