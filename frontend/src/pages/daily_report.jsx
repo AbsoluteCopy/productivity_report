@@ -5,8 +5,91 @@ import Swal from 'sweetalert2';
 import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
-const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event",]);
+
+const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event"]);
 const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
+
+const getDisplayCategory = (report) => {
+    if (!report) return "";
+    if (report.task_category === "Others" && report.sub_category && report.sub_category.trim()) {
+        return report.sub_category.trim();
+    }
+    return report.task_category || "";
+};
+
+const TaskListCell = ({ rawTaskList }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    const tasks = useMemo(() => {
+        let list = [];
+        if (Array.isArray(rawTaskList)) {
+            list = rawTaskList;
+        } else if (typeof rawTaskList === "string") {
+            try {
+                const parsed = JSON.parse(rawTaskList);
+                if (Array.isArray(parsed)) list = parsed;
+                else list = rawTaskList.split(",");
+            } catch {
+                list = rawTaskList.split(",");
+            }
+        }
+        return list
+            .map((t) => (t !== null && t !== undefined ? String(t).trim() : ""))
+            .filter(Boolean);
+    }, [rawTaskList]);
+
+    if (tasks.length === 0) {
+        return <span className="text-muted">—</span>;
+    }
+
+    const maxVisible = 3;
+    const hasMore = tasks.length > maxVisible;
+    const visibleTasks = expanded ? tasks : tasks.slice(0, maxVisible);
+
+    return (
+        <div className="py-1 d-flex flex-wrap align-items-center gap-1" style={{ maxWidth: "100%" }}>
+            {visibleTasks.map((task, idx) => (
+                <span
+                    key={idx}
+                    className="badge bg-light text-dark border px-2 py-1"
+                    style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 500,
+                        letterSpacing: "0.2px",
+                        borderRadius: "4px",
+                        whiteSpace: "normal",
+                        wordBreak: "break-word",
+                        maxWidth: "240px",
+                    }}
+                    title={task}
+                >
+                    {task}
+                </span>
+            ))}
+            {hasMore && (
+                <button
+                    type="button"
+                    className="btn btn-xs py-0 px-2 rounded-pill border"
+                    style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        backgroundColor: expanded ? "#f8f9fa" : "#e8f5e9",
+                        color: expanded ? "#6c757d" : "#065d48",
+                        borderColor: expanded ? "#dee2e6" : "#c8e6c9",
+                        cursor: "pointer",
+                        lineHeight: "1.5",
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setExpanded(!expanded);
+                    }}
+                >
+                    {expanded ? "Show less" : `+${tasks.length - maxVisible} more`}
+                </button>
+            )}
+        </div>
+    );
+};
 
 const DailyReport = () => {
     const navigate = useNavigate();
@@ -41,12 +124,6 @@ const DailyReport = () => {
         if (Number.isNaN(timeToCompare)) return false;
         const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
         return hoursAgo > 24;
-    }, []);
-    const getDisplayCategory = useCallback((report) => { 
-        if (report.task_category === "Others" && report.sub_category && report.sub_category.trim()) { 
-            return report.sub_category.trim(); 
-        } 
-        return report.task_category || ""; 
     }, []);
 
 
@@ -244,7 +321,8 @@ const DailyReport = () => {
             },
             {
                 name: "Task List",
-                selector: (row) => Array.isArray(row.task_list) ? row.task_list.join(", ") : "",
+                selector: (row) => Array.isArray(row.task_list) ? row.task_list.join(", ") : (row.task_list || ""),
+                cell: (row) => <TaskListCell rawTaskList={row.task_list} />,
                 wrap: true,
                 grow: 2,
             },
