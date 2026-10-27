@@ -188,9 +188,25 @@ const NewData = () => {
     const handleTaskKeyDown = (e, id) => {
         if (e.key === 'Enter' && e.target.value.trim()) {
             e.preventDefault();
+            const taskValue = e.target.value.trim();
+
             setCategories(prev => prev.map(cat => {
                 if (cat.id === id) {
-                    const newTasks = [...cat.tasks, e.target.value.trim()];
+                    const isDuplicate = cat.tasks.some(task => 
+                        task.toLowerCase() === taskValue.toLowerCase()
+                    );
+
+                    if (isDuplicate) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Duplicate Task',
+                            text: 'This task already exists in the list.',
+                            confirmButtonColor: '#065d48',
+                        });
+                        return cat;
+                    }
+
+                    const newTasks = [...cat.tasks, taskValue];
                     return { ...cat, tasks: newTasks, currentTask: '' };
                 }
                 return cat;
