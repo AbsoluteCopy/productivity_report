@@ -116,7 +116,22 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                                     }}
                                 >
                                     <span>{category.name}</span>
-                                    {isSelected && <i className="bi bi-check-lg ms-2"></i>}
+                                    <div className="d-flex align-items-center gap-2">
+                                        {category.default_time ? (
+                                            <span
+                                                className="badge rounded-pill"
+                                                style={{
+                                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(6, 93, 72, 0.1)',
+                                                    color: isSelected ? '#ffffff' : '#065d48',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '600'
+                                                }}
+                                            >
+                                                <i className="bi bi-clock me-1"></i>{category.default_time} min{category.default_time > 1 ? 's' : ''}
+                                            </span>
+                                        ) : null}
+                                        {isSelected && <i className="bi bi-check-lg"></i>}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -428,9 +443,22 @@ const NewData = () => {
             return;
         }
 
-        setCategories(prev => prev.map(cat =>
-            cat.id === id ? { ...cat, category: value, sub_category: '' } : cat
-        ));
+        const matchedCategory = taskCategories.find(c => c.name === value);
+        const defaultTime = matchedCategory?.default_time;
+
+        setCategories(prev => prev.map(cat => {
+            if (cat.id === id) {
+                return {
+                    ...cat,
+                    category: value,
+                    sub_category: '',
+                    timeSpent: (defaultTime !== null && defaultTime !== undefined && defaultTime !== '')
+                        ? String(defaultTime)
+                        : cat.timeSpent
+                };
+            }
+            return cat;
+        }));
     };
 
     const addTask = async (id, taskValue) => {
@@ -1160,9 +1188,22 @@ const NewData = () => {
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
                                                                 <div className="d-flex justify-content-between align-items-center mb-1">
-                                                                    <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
-                                                                        Time Spent (Minutes) *
-                                                                    </label>
+                                                                    <div className="d-flex align-items-center">
+                                                                        <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                            Time Spent (Minutes) *
+                                                                        </label>
+                                                                        {(() => {
+                                                                            const matched = taskCategories.find(c => c.name === cat.category);
+                                                                            if (matched?.default_time) {
+                                                                                return (
+                                                                                    <span className="badge rounded-pill ms-2" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.75rem', fontWeight: '600' }}>
+                                                                                        <i className="bi bi-clock me-1"></i>Standard: {matched.default_time} min{matched.default_time > 1 ? 's' : ''}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
+                                                                    </div>
                                                                     {cat.category === 'Others' && (
                                                                         <div className="form-check mb-0">
                                                                             <input

@@ -1021,44 +1021,54 @@ app.get(['/api/task-categories', '/api/task-categories/'], authenticate, async (
 
 app.post(['/api/task-categories', '/api/task-categories/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can create task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can create task categories.' });
     }
-    let { name, status, company } = req.body;
+    let { name, status, company, default_time } = req.body;
     if (!name) return res.status(400).json({ error: 'Category name is required.' });
-    if (req.user.role === 'hr') company = req.user.company;
+    if (['hr', 'supervisor'].includes(req.user.role)) company = req.user.company;
+
+    let parsedDefaultTime = default_time !== undefined && default_time !== null && default_time !== '' ? parseInt(default_time, 10) : null;
+    if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
 
     const [result] = await pool.query(
-      'INSERT INTO task_categories (name, status, company, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-      [name, status || 'active', company || null]
+      'INSERT INTO task_categories (name, status, company, default_time, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+      [name.trim(), status || 'active', company || null, parsedDefaultTime]
     );
     const [created] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [result.insertId]);
     return res.status(201).json(created[0]);
   } catch (err) {
-    return res.status(500).json({ error: 'Error creating task category.' });
+    console.error('Error creating task category:', err);
+    return res.status(500).json({ error: 'Error creating task category: ' + (err.sqlMessage || err.message) });
   }
 });
 
 app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can edit task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can edit task categories.' });
     }
     const [rows] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (req.user.role === 'hr' && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
       return res.status(403).json({ error: 'Cannot modify categories belonging to another company.' });
     }
 
-    let { name, status, company } = req.body;
+    let { name, status, company, default_time } = req.body;
     let updates = [];
     let params = [];
-    if (name) { updates.push('name = ?'); params.push(name); }
+    if (name) { updates.push('name = ?'); params.push(name.trim()); }
     if (status) { updates.push('status = ?'); params.push(status); }
     if (req.user.role === 'admin' && company !== undefined) { updates.push('company = ?'); params.push(company); }
-    if (req.user.role === 'hr') { updates.push('company = ?'); params.push(req.user.company); }
+    if (['hr', 'supervisor'].includes(req.user.role)) { updates.push('company = ?'); params.push(req.user.company); }
+    if (default_time !== undefined) {
+      let parsedDefaultTime = default_time !== null && default_time !== '' ? parseInt(default_time, 10) : null;
+      if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
+      updates.push('default_time = ?');
+      params.push(parsedDefaultTime);
+    }
 
     if (updates.length === 0) {
       return res.json(cat);
@@ -1072,27 +1082,29 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
     const [updated] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     return res.json(updated[0]);
   } catch (err) {
-    return res.status(500).json({ error: 'Error updating task category.' });
+    console.error('Error updating task category:', err);
+    return res.status(500).json({ error: 'Error updating task category: ' + (err.sqlMessage || err.message) });
   }
 });
 
 app.delete(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can delete task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can delete task categories.' });
     }
     const [rows] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (req.user.role === 'hr' && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
       return res.status(403).json({ error: 'Cannot delete categories belonging to another company.' });
     }
 
     await pool.query('DELETE FROM task_categories WHERE id = ?', [req.params.id]);
     return res.status(204).send();
   } catch (err) {
-    return res.status(500).json({ error: 'Error deleting task category.' });
+    console.error('Error deleting task category:', err);
+    return res.status(500).json({ error: 'Error deleting task category: ' + (err.sqlMessage || err.message) });
   }
 });
 

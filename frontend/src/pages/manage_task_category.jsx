@@ -10,6 +10,7 @@ const EMPTY_CATEGORY = {
     name: "",
     status: "active",
     company: "",
+    default_time: "",
 };
 
 const customStyles = {
@@ -61,9 +62,9 @@ const ManageTaskCategory = () => {
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
             
-            // If HR role, filter by company
+            // If HR or supervisor role, filter by company
             let filteredCategories = data;
-            if (user?.role === 'hr' && user?.company) {
+            if (['hr', 'supervisor'].includes(user?.role) && user?.company) {
                 filteredCategories = data.filter(category => category.company === user.company);
             }
             
@@ -111,10 +112,13 @@ const ManageTaskCategory = () => {
         const payload = {
             ...formData,
             name: formData.name.trim(),
+            default_time: formData.default_time !== '' && formData.default_time !== null && formData.default_time !== undefined
+                ? parseInt(formData.default_time, 10)
+                : null
         };
         
-        // If HR role, ensure company is set to their own company
-        if (currentUser?.role === 'hr' && currentUser?.company) {
+        // If HR or supervisor role, ensure company is set to their own company
+        if (['hr', 'supervisor'].includes(currentUser?.role) && currentUser?.company) {
             payload.company = currentUser.company;
         }
         
@@ -177,6 +181,7 @@ const ManageTaskCategory = () => {
             name: category.name,
             status: category.status,
             company: category.company || "",
+            default_time: category.default_time !== null && category.default_time !== undefined ? category.default_time : "",
         });
     };
 
@@ -234,6 +239,11 @@ const ManageTaskCategory = () => {
             sortable: true,
         },
         {
+            name: "Standard Time",
+            selector: row => row.default_time ? `${row.default_time} min${row.default_time > 1 ? 's' : ''}` : "-",
+            sortable: true,
+        },
+        {
             name: "Created At",
             selector: row => new Intl.DateTimeFormat("en-PH", {
                 year: "numeric",
@@ -242,7 +252,7 @@ const ManageTaskCategory = () => {
             }).format(new Date(row.created_at)),
             sortable: true,
         },
-        ...(currentUser?.role !== 'hr' ? [{
+        ...(currentUser?.role === 'admin' ? [{
             name: "Company",
             selector: row => row.company || '-',
             sortable: true,
@@ -316,15 +326,41 @@ const ManageTaskCategory = () => {
                         </div>
 
                         <div className="modal-body">
-                            <input className="form-control mb-2" name="name" placeholder="Category Name" value={formData.name} onChange={handleChange} />
+                            <div className="mb-3">
+                                <label className="form-label fw-semibold small text-muted mb-1">Category Name *</label>
+                                <input className="form-control" name="name" placeholder="e.g. Commercial Auto Endorsement" value={formData.name} onChange={handleChange} required />
+                            </div>
 
-                            <select className="form-select" name="status" value={formData.status} onChange={handleChange}>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            <div className="mb-3">
+                                <label className="form-label fw-semibold small text-muted mb-1">Standard Time / Duration (Minutes - Optional)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    className="form-control"
+                                    name="default_time"
+                                    placeholder="e.g. 30"
+                                    value={formData.default_time || ''}
+                                    onChange={handleChange}
+                                />
+                                <small className="text-muted" style={{ fontSize: '0.8rem' }}>
+                                    When selected on Daily Report, Time Spent will automatically default to this duration.
+                                </small>
+                            </div>
 
-                            {currentUser?.role !== 'hr' && (
-                                <input className="form-control mb-2 mt-2" name="company" placeholder="Company (optional)" value={formData.company} onChange={handleChange} />
+                            <div className="mb-3">
+                                <label className="form-label fw-semibold small text-muted mb-1">Status</label>
+                                <select className="form-select" name="status" value={formData.status} onChange={handleChange}>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+
+                            {currentUser?.role === 'admin' && (
+                                <div className="mb-3">
+                                    <label className="form-label fw-semibold small text-muted mb-1">Company (Optional)</label>
+                                    <input className="form-control" name="company" placeholder="Leave empty for all companies" value={formData.company} onChange={handleChange} />
+                                </div>
                             )}
                         </div>
 
