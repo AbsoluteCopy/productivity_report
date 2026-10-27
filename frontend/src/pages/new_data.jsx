@@ -910,7 +910,8 @@ const NewData = () => {
                     icon: 'success',
                 });
                 // Navigate back so the list refreshes and user can't re-submit
-                navigate('/daily_report');
+                const fromPage = searchParams.get('from');
+                navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
             } else {
                 // Create new reports
                 const promises = reports.map(report =>
@@ -1061,7 +1062,8 @@ const NewData = () => {
     };
 
     const handleBack = () => {
-        navigate('/daily_report');
+        const fromPage = searchParams.get('from');
+        navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
     };
 
     return (
