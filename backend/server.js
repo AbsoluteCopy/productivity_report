@@ -841,11 +841,23 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const reportDate = new Date(report.date);
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-    if (reportDate < oneMonthAgo) {
-      return res.status(403).json({ error: 'Cannot edit records older than 1 month.' });
+    // 24-hour edit window for employees on their tasks
+    if (req.user.role === 'employee') {
+      const createdTime = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
+      const hoursAgo = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        return res.status(403).json({ error: 'Employees can only edit tasks within a 24-hour window.' });
+      }
+    }
+
+    // 1-month window for HR/Supervisor (Admin can edit older)
+    if (!isAdmin) {
+      const reportDate = new Date(report.date);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      if (reportDate < oneMonthAgo) {
+        return res.status(403).json({ error: 'Cannot edit records older than 1 month.' });
+      }
     }
 
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
@@ -935,11 +947,23 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const reportDate = new Date(report.date);
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-    if (reportDate < oneMonthAgo) {
-      return res.status(403).json({ error: 'Cannot delete records older than 1 month.' });
+    // 24-hour delete window for employees on their tasks
+    if (req.user.role === 'employee') {
+      const createdTime = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
+      const hoursAgo = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        return res.status(403).json({ error: 'Employees can only delete tasks within a 24-hour window.' });
+      }
+    }
+
+    // 1-month window for HR/Supervisor (Admin can delete older)
+    if (!isAdmin) {
+      const reportDate = new Date(report.date);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      if (reportDate < oneMonthAgo) {
+        return res.status(403).json({ error: 'Cannot delete records older than 1 month.' });
+      }
     }
 
     await pool.query('DELETE FROM daily_reports WHERE id = ?', [req.params.id]);

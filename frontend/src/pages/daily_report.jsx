@@ -33,6 +33,15 @@ const DailyReport = () => {
         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); 
         return reportDate < oneMonthAgo; 
     }, []);
+
+    // Check if report is more than 24 hours old (for employees)
+    const isMoreThan24HoursOld = useCallback((report) => {
+        if (!report) return false;
+        const timeToCompare = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
+        if (Number.isNaN(timeToCompare)) return false;
+        const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
+        return hoursAgo > 24;
+    }, []);
     const getDisplayCategory = useCallback((report) => { 
         if (report.task_category === "Others" && report.sub_category && report.sub_category.trim()) { 
             return report.sub_category.trim(); 
@@ -126,9 +135,208 @@ const DailyReport = () => {
         }
     };
 
-    const handleEdit = useCallback((id) => { const report = dailyReports.find((item) => item.id === id); if (!report) { return; } if (isMoreThanOneMonthOld(report.date)) { Swal.fire({ icon: "warning", title: "Cannot Edit", text: "Records older than 1 month cannot be edited.", }); return; } navigate(`/new_data?edit=${id}`); }, [dailyReports, isMoreThanOneMonthOld, navigate]); /** * --------------------------------------------------------- * Delete Report * --------------------------------------------------------- */ const handleDeleteReport = useCallback(async (id) => { const report = dailyReports.find((item) => item.id === id); if (!report) { return; } if (isMoreThanOneMonthOld(report.date)) { Swal.fire({ icon: "warning", title: "Cannot Delete", text: "Records older than 1 month cannot be deleted.", }); return; } const result = await Swal.fire({ title: "Delete Report?", text: "This action cannot be undone.", icon: "warning", showCancelButton: true, confirmButtonColor: "#3085d6", cancelButtonColor: "#b44141", confirmButtonText: "Yes, delete it!", reverseButtons: true, }); if (!result.isConfirmed) { return; } try { await axios.delete(`${API_BASE_URL}/daily-reports/${id}/`); setDailyReports((previousReports) => previousReports.filter((item) => item.id !== id)); Swal.fire({ icon: "success", title: "Deleted!", text: "The report has been deleted.", timer: 1500, showConfirmButton: false, }); } catch (error) { console.error("Error deleting report:", error); Swal.fire({ icon: "error", title: "Delete Failed", text: "Unable to delete the report.", }); } }, [dailyReports, isMoreThanOneMonthOld]);
+    const handleEdit = useCallback((id) => {
+        const report = dailyReports.find((item) => item.id === id);
+        if (!report) return;
 
-    const columns = useMemo(() => { const baseColumns = []; if (isAdminOrHR) { baseColumns.push({ name: "User", selector: (row) => row.user_name || "", sortable: true, grow: 1.2, }); } baseColumns.push({ id: "date", name: "Date", selector: (row) => row.date || "", sortable: true, sortFunction: (rowA, rowB) => { const diff = new Date(rowA.date || 0) - new Date(rowB.date || 0); return diff !== 0 ? diff : ((rowA.id || 0) - (rowB.id || 0)); }, }, { name: "Category", selector: (row) => getDisplayCategory(row), sortable: true, wrap: true, }, { name: "Task List", selector: (row) => Array.isArray(row.task_list) ? row.task_list.join(", ") : "", wrap: true, grow: 2, }, { name: "Task Count", selector: (row) => { if (isRestrictedCategory(row.task_category)) { return ""; } return row.number_of_tasks > 0 ? row.number_of_tasks : ""; }, sortable: true, center: true, }, { name: "Time Spent", selector: (row) => { if (isRestrictedCategory(row.task_category)) { return ""; } return row.time_spent > 0 ? row.time_spent : ""; }, sortable: true, center: true, }, { name: "Options", cell: (row) => { const isOldRecord = isMoreThanOneMonthOld(row.date); const canEdit = isEmployee || isAdminOrHR; return (<div className="d-flex gap-1"> {/* View */} <button type="button" className="btn btn-primary btn-sm" title="View Report" aria-label="View Report" onClick={() => handleView(row.id)} > <EyeIcon /> </button> {/* Edit */} {canEdit && (<button type="button" className="btn btn-info btn-sm" title={isOldRecord ? "Cannot edit records older than 1 month" : "Edit Report"} aria-label="Edit Report" onClick={() => handleEdit(row.id)} disabled={isOldRecord} style={{ opacity: isOldRecord ? 0.5 : 1, cursor: isOldRecord ? "not-allowed" : "pointer", }} > <PencilIcon /> </button>)} {/* Delete */} {canEdit && (<button type="button" className="btn btn-danger btn-sm" title={isOldRecord ? "Cannot delete records older than 1 month" : "Delete Report"} aria-label="Delete Report" onClick={() => handleDeleteReport(row.id)} disabled={isOldRecord} style={{ opacity: isOldRecord ? 0.5 : 1, cursor: isOldRecord ? "not-allowed" : "pointer", }} > <TrashIcon /> </button>)} </div>); }, ignoreRowClick: true, allowOverflow: true, button: true, width: "130px", }); return baseColumns; }, [getDisplayCategory, handleDeleteReport, handleEdit, handleView, isAdminOrHR, isEmployee, isMoreThanOneMonthOld, isRestrictedCategory,]);
+        if (isEmployee && isMoreThan24HoursOld(report)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Edit Window Expired",
+                text: "Employees can only edit their tasks within a 24-hour window.",
+            });
+            return;
+        }
+
+        if (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Cannot Edit",
+                text: "Records older than 1 month cannot be edited.",
+            });
+            return;
+        }
+
+        navigate(`/new_data?edit=${id}`);
+    }, [dailyReports, isEmployee, isMoreThan24HoursOld, currentUser, isMoreThanOneMonthOld, navigate]);
+
+    const handleDeleteReport = useCallback(async (id) => {
+        const report = dailyReports.find((item) => item.id === id);
+        if (!report) return;
+
+        if (isEmployee && isMoreThan24HoursOld(report)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Delete Window Expired",
+                text: "Employees can only delete their tasks within a 24-hour window.",
+            });
+            return;
+        }
+
+        if (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Cannot Delete",
+                text: "Records older than 1 month cannot be deleted.",
+            });
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: "Delete Report?",
+            text: "This action cannot be undone.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#3085d6",
+            cancelButtonColor: "#b44141",
+            confirmButtonText: "Yes, delete it!",
+            reverseButtons: true,
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await axios.delete(`${API_BASE_URL}/daily-reports/${id}/`);
+            setDailyReports((previousReports) => previousReports.filter((item) => item.id !== id));
+            Swal.fire({
+                icon: "success",
+                title: "Deleted!",
+                text: "The report has been deleted.",
+                timer: 1500,
+                showConfirmButton: false,
+            });
+        } catch (error) {
+            console.error("Error deleting report:", error);
+            Swal.fire({
+                icon: "error",
+                title: "Delete Failed",
+                text: error.response?.data?.error || "Unable to delete the report.",
+            });
+        }
+    }, [dailyReports, isEmployee, isMoreThan24HoursOld, currentUser, isMoreThanOneMonthOld]);
+
+    const columns = useMemo(() => {
+        const baseColumns = [];
+        if (isAdminOrHR) {
+            baseColumns.push({
+                name: "User",
+                selector: (row) => row.user_name || "",
+                sortable: true,
+                grow: 1.2,
+            });
+        }
+        baseColumns.push(
+            {
+                id: "date",
+                name: "Date",
+                selector: (row) => row.date || "",
+                sortable: true,
+                sortFunction: (rowA, rowB) => {
+                    const diff = new Date(rowA.date || 0) - new Date(rowB.date || 0);
+                    return diff !== 0 ? diff : ((rowA.id || 0) - (rowB.id || 0));
+                },
+            },
+            {
+                name: "Category",
+                selector: (row) => getDisplayCategory(row),
+                sortable: true,
+                wrap: true,
+            },
+            {
+                name: "Task List",
+                selector: (row) => Array.isArray(row.task_list) ? row.task_list.join(", ") : "",
+                wrap: true,
+                grow: 2,
+            },
+            {
+                name: "Task Count",
+                selector: (row) => {
+                    if (isRestrictedCategory(row.task_category)) return "";
+                    return row.number_of_tasks > 0 ? row.number_of_tasks : "";
+                },
+                sortable: true,
+                center: true,
+            },
+            {
+                name: "Time Spent",
+                selector: (row) => {
+                    if (isRestrictedCategory(row.task_category)) return "";
+                    return row.time_spent > 0 ? row.time_spent : "";
+                },
+                sortable: true,
+                center: true,
+            },
+            {
+                name: "Options",
+                cell: (row) => {
+                    const is24hOld = isEmployee && isMoreThan24HoursOld(row);
+                    const isMonthOld = isMoreThanOneMonthOld(row.date);
+                    const isOldRecord = isEmployee ? is24hOld : (currentUser?.role !== 'admin' && isMonthOld);
+                    const canEdit = isEmployee || isAdminOrHR;
+                    const editTitle = isEmployee
+                        ? (is24hOld ? "Employees can only edit tasks within 24 hours" : "Edit Report")
+                        : (isOldRecord ? "Cannot edit records older than 1 month" : "Edit Report");
+                    const deleteTitle = isEmployee
+                        ? (is24hOld ? "Employees can only delete tasks within 24 hours" : "Delete Report")
+                        : (isOldRecord ? "Cannot delete records older than 1 month" : "Delete Report");
+
+                    return (
+                        <div className="d-flex gap-1">
+                            {/* View */}
+                            <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                title="View Report"
+                                aria-label="View Report"
+                                onClick={() => handleView(row.id)}
+                            >
+                                <EyeIcon />
+                            </button>
+                            {/* Edit */}
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    className="btn btn-info btn-sm"
+                                    title={editTitle}
+                                    aria-label="Edit Report"
+                                    onClick={() => handleEdit(row.id)}
+                                    disabled={isOldRecord}
+                                    style={{
+                                        opacity: isOldRecord ? 0.5 : 1,
+                                        cursor: isOldRecord ? "not-allowed" : "pointer",
+                                    }}
+                                >
+                                    <PencilIcon />
+                                </button>
+                            )}
+                            {/* Delete */}
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    className="btn btn-danger btn-sm"
+                                    title={deleteTitle}
+                                    aria-label="Delete Report"
+                                    onClick={() => handleDeleteReport(row.id)}
+                                    disabled={isOldRecord}
+                                    style={{
+                                        opacity: isOldRecord ? 0.5 : 1,
+                                        cursor: isOldRecord ? "not-allowed" : "pointer",
+                                    }}
+                                >
+                                    <TrashIcon />
+                                </button>
+                            )}
+                        </div>
+                    );
+                },
+                ignoreRowClick: true,
+                allowOverflow: true,
+                button: true,
+                width: "130px",
+            }
+        );
+        return baseColumns;
+    }, [getDisplayCategory, handleDeleteReport, handleEdit, handleView, isAdminOrHR, isEmployee, isMoreThanOneMonthOld, isMoreThan24HoursOld, isRestrictedCategory, currentUser]);
 
     const customStyles = useMemo(() => ({ headCells: { style: { fontWeight: "700", backgroundColor: "#f8f9fa", fontSize: "14px", }, }, cells: { style: { fontSize: "14px", }, }, rows: { style: { minHeight: "55px", }, }, }), []);
 

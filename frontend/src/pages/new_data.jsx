@@ -100,10 +100,44 @@ const NewData = () => {
     const fetchReportForEdit = async (id) => {
         try {
             const token = localStorage.getItem('token');
+            const currentUser = JSON.parse(localStorage.getItem('user'));
             const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = response.data;
+
+            // Check 24-hour edit window for employees
+            if (currentUser && currentUser.role === 'employee') {
+                const timeToCompare = data.created_at ? new Date(data.created_at).getTime() : new Date(data.date).getTime();
+                const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
+                if (hoursAgo > 24) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: 'Edit Window Expired',
+                        text: 'Employees can only edit their tasks within a 24-hour window.',
+                        confirmButtonColor: '#065d48'
+                    });
+                    navigate('/daily_report');
+                    return;
+                }
+            }
+
+            // Check 1-month limit for HR / Supervisor (Admin can edit older)
+            if (currentUser && currentUser.role !== 'admin') {
+                const reportDate = new Date(data.date);
+                const oneMonthAgo = new Date();
+                oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+                if (reportDate < oneMonthAgo) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: 'Cannot Edit',
+                        text: 'Records older than 1 month cannot be edited.',
+                        confirmButtonColor: '#065d48'
+                    });
+                    navigate('/daily_report');
+                    return;
+                }
+            }
 
             setFormData({
                 date: data.date,
