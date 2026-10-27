@@ -21,6 +21,15 @@ import { useEffect } from 'react';
 import axios from 'axios';
 import API_BASE_URL from './config';
 
+// Attach auth token to all axios requests if present
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 function App() {
   return (
     <>

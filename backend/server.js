@@ -324,7 +324,17 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const taskListJson = JSON.stringify(task_list || []);
+    // Strict exact case-insensitive match deduplication (preserves SUB10498-3 vs SUB104983)
+    let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+    const seenPostTasks = new Set();
+    cleanTaskList = cleanTaskList.filter(t => {
+      if (typeof t !== 'string') return true;
+      const key = t.trim().toLowerCase();
+      if (seenPostTasks.has(key)) return false;
+      seenPostTasks.add(key);
+      return true;
+    });
+    const taskListJson = JSON.stringify(cleanTaskList);
 
     const [result] = await pool.query(
       'INSERT INTO users (id_number, first_name, last_name, username, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
@@ -603,7 +613,8 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
     if (year) { query += ' AND YEAR(r.date) = ?'; params.push(year); }
     if (month) { query += ' AND MONTH(r.date) = ?'; params.push(month); }
 
-    query += ' ORDER BY r.date ASC';
+    const sortOrder = req.query.order === 'asc' ? 'ASC' : 'DESC';
+    query += ` ORDER BY r.date ${sortOrder}, r.id ${sortOrder}`;
     const [rows] = await pool.query(query, params);
 
     const formatted = rows.map(r => {
@@ -634,6 +645,71 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
   } catch (err) {
     console.error('Fetch reports error:', err);
     return res.status(500).json({ error: 'Error fetching daily reports.' });
+  }
+});
+
+// 8a-2. Check duplicate task across system for category (Strict exact case-insensitive match)
+app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplicate/'], authenticate, async (req, res) => {
+  try {
+    const { task, category, sub_category, exclude_id } = req.query;
+    if (!task || !category || !task.trim() || !category.trim()) {
+      return res.json({ duplicate: false });
+    }
+
+    const trimmedTask = task.trim();
+    const effectiveCategory = (category.toLowerCase() === 'others' && sub_category && sub_category.trim())
+      ? sub_category.trim()
+      : category.trim();
+
+    let query = `
+      SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
+      FROM daily_reports r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE (
+        CASE 
+          WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+          THEN LOWER(TRIM(r.sub_category)) 
+          ELSE LOWER(TRIM(r.task_category)) 
+        END
+      ) = LOWER(?)
+        AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+    `;
+    const params = [effectiveCategory, trimmedTask];
+
+    if (exclude_id) {
+      query += ` AND r.id != ?`;
+      params.push(exclude_id);
+    }
+
+    query += ` ORDER BY r.date DESC, r.id DESC LIMIT 1`;
+
+    const [rows] = await pool.query(query, params);
+
+    if (rows.length > 0) {
+      const match = rows[0];
+      const matchCat = (match.task_category === 'Others' && match.sub_category)
+        ? match.sub_category
+        : match.task_category;
+      const person = (match.first_name || match.last_name)
+        ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+        : (match.username || 'another user');
+      const formattedDate = match.date instanceof Date 
+        ? match.date.toISOString().split('T')[0] 
+        : String(match.date).split('T')[0];
+
+      return res.json({
+        duplicate: true,
+        task: trimmedTask,
+        category: matchCat,
+        date: formattedDate,
+        submitted_by: person
+      });
+    }
+
+    return res.json({ duplicate: false });
+  } catch (err) {
+    console.error('Check duplicate task error:', err);
+    return res.status(500).json({ error: 'Error checking duplicate task.' });
   }
 });
 
@@ -700,7 +776,67 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
       targetUserId = user;
     }
 
-    const taskListJson = JSON.stringify(task_list || []);
+    // Strict exact case-insensitive match deduplication (preserves SUB10498-3 vs SUB104983)
+    let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+    const seenPostTasks = new Set();
+    cleanTaskList = cleanTaskList.filter(t => {
+      if (typeof t !== 'string') return true;
+      const key = t.trim().toLowerCase();
+      if (seenPostTasks.has(key)) return false;
+      seenPostTasks.add(key);
+      return true;
+    });
+    const taskListJson = JSON.stringify(cleanTaskList);
+    // Validate non-empty task_list for working categories
+    if (work_type === 'Working' && task_category && task_category !== 'Meeting') {
+      const isOthersNoTime = (task_category === 'Others' && Number(time_spent) === 0);
+      if (!isOthersNoTime && cleanTaskList.length === 0) {
+        return res.status(400).json({ error: `Tasks cannot be empty for category "${task_category}".` });
+      }
+    }
+
+    // System-wide duplicate check for each task in this category
+    const effectiveCategory = (task_category === 'Others' && sub_category && sub_category.trim())
+      ? sub_category.trim()
+      : (task_category || '').trim();
+
+    if (task_category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(task_category)) {
+      for (const t of cleanTaskList) {
+        if (typeof t !== 'string' || !t.trim()) continue;
+        const [dupRows] = await pool.query(`
+          SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
+          FROM daily_reports r
+          LEFT JOIN users u ON r.user_id = u.id
+          WHERE (
+            CASE 
+              WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+              THEN LOWER(TRIM(r.sub_category)) 
+              ELSE LOWER(TRIM(r.task_category)) 
+            END
+          ) = LOWER(?)
+            AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+          LIMIT 1
+        `, [effectiveCategory, t.trim()]);
+
+        if (dupRows.length > 0) {
+          const match = dupRows[0];
+          const matchCat = (match.task_category === 'Others' && match.sub_category)
+            ? match.sub_category
+            : match.task_category;
+          const person = (match.first_name || match.last_name)
+            ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+            : (match.username || 'another user');
+          const formattedDate = match.date instanceof Date 
+            ? match.date.toISOString().split('T')[0] 
+            : String(match.date).split('T')[0];
+
+          return res.status(400).json({
+            error: `Task "${t.trim()}" has already been submitted for category "${matchCat}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+          });
+        }
+      }
+    }
+
     const [result] = await pool.query(
       'INSERT INTO daily_reports (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
       [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson, number_of_tasks || 0, time_spent || 0, meeting_count || 0]
@@ -729,11 +865,23 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const reportDate = new Date(report.date);
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-    if (reportDate < oneMonthAgo) {
-      return res.status(403).json({ error: 'Cannot edit records older than 1 month.' });
+    // 24-hour edit window for employees on their tasks
+    if (req.user.role === 'employee') {
+      const createdTime = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
+      const hoursAgo = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        return res.status(403).json({ error: 'Employees can only edit tasks within a 24-hour window.' });
+      }
+    }
+
+    // 1-month window for HR/Supervisor (Admin can edit older)
+    if (!isAdmin) {
+      const reportDate = new Date(report.date);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      if (reportDate < oneMonthAgo) {
+        return res.status(403).json({ error: 'Cannot edit records older than 1 month.' });
+      }
     }
 
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
@@ -744,10 +892,67 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (task_category) { updates.push('task_category = ?'); params.push(task_category); }
     if (sub_category !== undefined) { updates.push('sub_category = ?'); params.push(sub_category); }
     if (work_type !== undefined) { updates.push('work_type = ?'); params.push(work_type); }
-    if (task_list !== undefined) { updates.push('task_list = ?'); params.push(JSON.stringify(task_list)); }
+    if (task_list !== undefined) {
+      let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+      const seenPutTasks = new Set();
+      cleanTaskList = cleanTaskList.filter(t => {
+        if (typeof t !== 'string') return true;
+        const key = t.trim().toLowerCase();
+        if (seenPutTasks.has(key)) return false;
+        seenPutTasks.add(key);
+        return true;
+      });
+      updates.push('task_list = ?');
+      params.push(JSON.stringify(cleanTaskList));
+    }
     if (number_of_tasks !== undefined) { updates.push('number_of_tasks = ?'); params.push(number_of_tasks); }
     if (time_spent !== undefined) { updates.push('time_spent = ?'); params.push(time_spent); }
     if (meeting_count !== undefined) { updates.push('meeting_count = ?'); params.push(meeting_count); }
+
+    // System-wide duplicate check for each task in this category (excluding this report)
+    const targetCategory = task_category || report.task_category;
+    const targetSubCategory = sub_category !== undefined ? sub_category : report.sub_category;
+    const effectiveCategory = (targetCategory === 'Others' && targetSubCategory && targetSubCategory.trim())
+      ? targetSubCategory.trim()
+      : (targetCategory || '').trim();
+
+    if (cleanTaskList.length > 0 && targetCategory && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCategory)) {
+      for (const t of cleanTaskList) {
+        if (typeof t !== 'string' || !t.trim()) continue;
+        const [dupRows] = await pool.query(`
+          SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
+          FROM daily_reports r
+          LEFT JOIN users u ON r.user_id = u.id
+          WHERE (
+            CASE 
+              WHEN LOWER(r.task_category) = 'others' AND r.sub_category IS NOT NULL AND TRIM(r.sub_category) != '' 
+              THEN LOWER(TRIM(r.sub_category)) 
+              ELSE LOWER(TRIM(r.task_category)) 
+            END
+          ) = LOWER(?)
+            AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+            AND r.id != ?
+          LIMIT 1
+        `, [effectiveCategory, t.trim(), req.params.id]);
+
+        if (dupRows.length > 0) {
+          const match = dupRows[0];
+          const matchCat = (match.task_category === 'Others' && match.sub_category)
+            ? match.sub_category
+            : match.task_category;
+          const person = (match.first_name || match.last_name)
+            ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
+            : (match.username || 'another user');
+          const formattedDate = match.date instanceof Date 
+            ? match.date.toISOString().split('T')[0] 
+            : String(match.date).split('T')[0];
+
+          return res.status(400).json({
+            error: `Task "${t.trim()}" has already been submitted for category "${matchCat}" by ${person} on ${formattedDate}. Duplicates are not allowed across the system.`
+          });
+        }
+      }
+    }
 
     if (updates.length === 0) {
       return res.json(report);
@@ -780,11 +985,23 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const reportDate = new Date(report.date);
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-    if (reportDate < oneMonthAgo) {
-      return res.status(403).json({ error: 'Cannot delete records older than 1 month.' });
+    // 24-hour delete window for employees on their tasks
+    if (req.user.role === 'employee') {
+      const createdTime = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
+      const hoursAgo = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        return res.status(403).json({ error: 'Employees can only delete tasks within a 24-hour window.' });
+      }
+    }
+
+    // 1-month window for HR/Supervisor (Admin can delete older)
+    if (!isAdmin) {
+      const reportDate = new Date(report.date);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      if (reportDate < oneMonthAgo) {
+        return res.status(403).json({ error: 'Cannot delete records older than 1 month.' });
+      }
     }
 
     await pool.query('DELETE FROM daily_reports WHERE id = ?', [req.params.id]);
@@ -812,7 +1029,9 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
 
     if (year) { query += ' AND YEAR(date) = ?'; params.push(year); }
     if (month) { query += ' AND MONTH(date) = ?'; params.push(month); }
-    query += ' ORDER BY date ASC';
+
+    const sortOrder = req.query.order === 'asc' ? 'ASC' : 'DESC';
+    query += ` ORDER BY date ${sortOrder}, id ${sortOrder}`;
 
     const [rows] = await pool.query(query, params);
     return res.json(rows);
@@ -840,44 +1059,54 @@ app.get(['/api/task-categories', '/api/task-categories/'], authenticate, async (
 
 app.post(['/api/task-categories', '/api/task-categories/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can create task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can create task categories.' });
     }
-    let { name, status, company } = req.body;
+    let { name, status, company, default_time } = req.body;
     if (!name) return res.status(400).json({ error: 'Category name is required.' });
-    if (req.user.role === 'hr') company = req.user.company;
+    if (['hr', 'supervisor'].includes(req.user.role)) company = req.user.company;
+
+    let parsedDefaultTime = default_time !== undefined && default_time !== null && default_time !== '' ? parseInt(default_time, 10) : null;
+    if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
 
     const [result] = await pool.query(
-      'INSERT INTO task_categories (name, status, company, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-      [name, status || 'active', company || null]
+      'INSERT INTO task_categories (name, status, company, default_time, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+      [name.trim(), status || 'active', company || null, parsedDefaultTime]
     );
     const [created] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [result.insertId]);
     return res.status(201).json(created[0]);
   } catch (err) {
-    return res.status(500).json({ error: 'Error creating task category.' });
+    console.error('Error creating task category:', err);
+    return res.status(500).json({ error: 'Error creating task category: ' + (err.sqlMessage || err.message) });
   }
 });
 
 app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can edit task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can edit task categories.' });
     }
     const [rows] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (req.user.role === 'hr' && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
       return res.status(403).json({ error: 'Cannot modify categories belonging to another company.' });
     }
 
-    let { name, status, company } = req.body;
+    let { name, status, company, default_time } = req.body;
     let updates = [];
     let params = [];
-    if (name) { updates.push('name = ?'); params.push(name); }
+    if (name) { updates.push('name = ?'); params.push(name.trim()); }
     if (status) { updates.push('status = ?'); params.push(status); }
     if (req.user.role === 'admin' && company !== undefined) { updates.push('company = ?'); params.push(company); }
-    if (req.user.role === 'hr') { updates.push('company = ?'); params.push(req.user.company); }
+    if (['hr', 'supervisor'].includes(req.user.role)) { updates.push('company = ?'); params.push(req.user.company); }
+    if (default_time !== undefined) {
+      let parsedDefaultTime = default_time !== null && default_time !== '' ? parseInt(default_time, 10) : null;
+      if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
+      updates.push('default_time = ?');
+      params.push(parsedDefaultTime);
+    }
 
     if (updates.length === 0) {
       return res.json(cat);
@@ -891,27 +1120,29 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
     const [updated] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     return res.json(updated[0]);
   } catch (err) {
-    return res.status(500).json({ error: 'Error updating task category.' });
+    console.error('Error updating task category:', err);
+    return res.status(500).json({ error: 'Error updating task category: ' + (err.sqlMessage || err.message) });
   }
 });
 
 app.delete(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only Admin or HR can delete task categories.' });
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can delete task categories.' });
     }
     const [rows] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (req.user.role === 'hr' && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
       return res.status(403).json({ error: 'Cannot delete categories belonging to another company.' });
     }
 
     await pool.query('DELETE FROM task_categories WHERE id = ?', [req.params.id]);
     return res.status(204).send();
   } catch (err) {
-    return res.status(500).json({ error: 'Error deleting task category.' });
+    console.error('Error deleting task category:', err);
+    return res.status(500).json({ error: 'Error deleting task category: ' + (err.sqlMessage || err.message) });
   }
 });
 

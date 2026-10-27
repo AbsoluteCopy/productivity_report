@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -14,6 +14,196 @@ const categoryOptions = [
     'Meeting',
     'Others',
 ];
+
+const CategorySelect = ({ cat, taskCategories, onSelect }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const displayLabel = cat.category === 'Others'
+        ? (cat.sub_category || 'Others')
+        : (cat.category || '');
+
+    const filteredCategories = taskCategories.filter(category =>
+        category.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="position-relative" ref={dropdownRef}>
+            <div
+                className={`form-select d-flex justify-content-between align-items-center ${!displayLabel ? 'text-muted' : ''}`}
+                style={{
+                    cursor: 'pointer',
+                    backgroundColor: '#fff',
+                    minHeight: '38px',
+                    borderColor: isOpen ? '#065d48' : '#dee2e6',
+                    boxShadow: isOpen ? '0 0 0 0.25rem rgba(6, 93, 72, 0.25)' : 'none',
+                    userSelect: 'none'
+                }}
+                onClick={() => setIsOpen(prev => !prev)}
+            >
+                <span className="text-truncate me-2" style={{ color: displayLabel ? '#212529' : '#6c757d' }}>
+                    {displayLabel || 'Select a category'}
+                </span>
+                <i className={`bi ${isOpen ? 'bi-chevron-up' : 'bi-chevron-down'} text-muted`} style={{ fontSize: '0.85rem' }}></i>
+            </div>
+
+            {/* Hidden input for HTML5 form required validation */}
+            <input
+                type="text"
+                value={cat.category || ''}
+                required
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ opacity: 0, position: 'absolute', height: 0, width: 0, pointerEvents: 'none' }}
+                onChange={() => {}}
+            />
+
+            {isOpen && (
+                <div
+                    className="dropdown-menu show shadow-lg w-100 p-2 mt-1"
+                    style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        zIndex: 1050,
+                        borderRadius: '8px',
+                        border: '1px solid #ced4da',
+                        backgroundColor: '#ffffff'
+                    }}
+                >
+                    {taskCategories.length > 5 && (
+                        <div className="mb-2">
+                            <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="Search category..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                            />
+                        </div>
+                    )}
+
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {filteredCategories.map(category => {
+                            const isSelected = cat.category === category.name;
+                            return (
+                                <div
+                                    key={category.id}
+                                    className={`dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${isSelected ? 'active text-white' : ''}`}
+                                    style={{
+                                        cursor: 'pointer',
+                                        backgroundColor: isSelected ? '#065d48' : undefined,
+                                        fontSize: '0.9rem'
+                                    }}
+                                    onClick={() => {
+                                        onSelect(category.name);
+                                        setIsOpen(false);
+                                        setSearchTerm('');
+                                    }}
+                                >
+                                    <span>{category.name}</span>
+                                    <div className="d-flex align-items-center gap-2">
+                                        {category.default_time ? (
+                                            <span
+                                                className="badge rounded-pill"
+                                                style={{
+                                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(6, 93, 72, 0.1)',
+                                                    color: isSelected ? '#ffffff' : '#065d48',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '600'
+                                                }}
+                                            >
+                                                <i className="bi bi-clock me-1"></i>{category.default_time} min{category.default_time > 1 ? 's' : ''}
+                                            </span>
+                                        ) : null}
+                                        {isSelected && <i className="bi bi-check-lg"></i>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {filteredCategories.length === 0 && searchTerm && (
+                            <div className="text-muted small px-3 py-2 text-center">
+                                No matching categories
+                            </div>
+                        )}
+
+                        {cat.category && !taskCategories.some(c => c.name === cat.category) && !['Meeting', 'Others'].includes(cat.category) && (
+                            <div
+                                className="dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center active text-white"
+                                style={{ cursor: 'pointer', backgroundColor: '#065d48', fontSize: '0.9rem' }}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    setSearchTerm('');
+                                }}
+                            >
+                                <span>{cat.category}</span>
+                                <i className="bi bi-check-lg ms-2"></i>
+                            </div>
+                        )}
+
+                        <hr className="my-1 dropdown-divider" />
+
+                        {(!searchTerm || 'meeting'.includes(searchTerm.toLowerCase())) && (
+                            <div
+                                className={`dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Meeting' ? 'active text-white' : ''}`}
+                                style={{
+                                    cursor: 'pointer',
+                                    backgroundColor: cat.category === 'Meeting' ? '#065d48' : undefined,
+                                    fontSize: '0.9rem'
+                                }}
+                                onClick={() => {
+                                    onSelect('Meeting');
+                                    setIsOpen(false);
+                                    setSearchTerm('');
+                                }}
+                            >
+                                <span><i className="bi bi-people me-2"></i>Meeting</span>
+                                {cat.category === 'Meeting' && <i className="bi bi-check-lg ms-2"></i>}
+                            </div>
+                        )}
+
+                        {(!searchTerm || 'others'.includes(searchTerm.toLowerCase()) || (cat.sub_category && cat.sub_category.toLowerCase().includes(searchTerm.toLowerCase()))) && (
+                            <div
+                                className={`dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Others' ? 'active text-white' : ''}`}
+                                style={{
+                                    cursor: 'pointer',
+                                    backgroundColor: cat.category === 'Others' ? '#065d48' : undefined,
+                                    fontSize: '0.9rem'
+                                }}
+                                onClick={() => {
+                                    onSelect('Others');
+                                    setIsOpen(false);
+                                    setSearchTerm('');
+                                }}
+                            >
+                                <span>
+                                    <i className="bi bi-plus-circle me-2"></i>
+                                    {cat.category === 'Others' && cat.sub_category ? cat.sub_category : 'Others (Custom Task...)'}
+                                </span>
+                                {cat.category === 'Others' && <i className="bi bi-check-lg ms-2"></i>}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const NewData = () => {
     const [searchParams] = useSearchParams();
@@ -85,7 +275,8 @@ const NewData = () => {
                 const filteredCategories = allCategories.filter(category =>
                     userTaskList.includes(category.id)
                 );
-                setTaskCategories(filteredCategories);
+                // If the user's assigned categories don't match any active categories (e.g. stale/deleted IDs), fallback to all categories
+                setTaskCategories(filteredCategories.length > 0 ? filteredCategories : allCategories);
             }
         } catch (err) {
             console.error(err);
@@ -100,10 +291,44 @@ const NewData = () => {
     const fetchReportForEdit = async (id) => {
         try {
             const token = localStorage.getItem('token');
+            const currentUser = JSON.parse(localStorage.getItem('user'));
             const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = response.data;
+
+            // Check 24-hour edit window for employees
+            if (currentUser && currentUser.role === 'employee') {
+                const timeToCompare = data.created_at ? new Date(data.created_at).getTime() : new Date(data.date).getTime();
+                const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
+                if (hoursAgo > 24) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: 'Edit Window Expired',
+                        text: 'Employees can only edit their tasks within a 24-hour window.',
+                        confirmButtonColor: '#065d48'
+                    });
+                    navigate('/daily_report');
+                    return;
+                }
+            }
+
+            // Check 1-month limit for HR / Supervisor (Admin can edit older)
+            if (currentUser && currentUser.role !== 'admin') {
+                const reportDate = new Date(data.date);
+                const oneMonthAgo = new Date();
+                oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+                if (reportDate < oneMonthAgo) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: 'Cannot Edit',
+                        text: 'Records older than 1 month cannot be edited.',
+                        confirmButtonColor: '#065d48'
+                    });
+                    navigate('/daily_report');
+                    return;
+                }
+            }
 
             setFormData({
                 date: data.date,
@@ -179,38 +404,160 @@ const NewData = () => {
         }
     };
 
-    const handleCategoryChange = (id, value) => {
-        setCategories(prev => prev.map(cat =>
-            cat.id === id ? { ...cat, category: value } : cat
-        ));
+    const promptForOtherName = async (id, currentVal = '') => {
+        const { value: taskName, isConfirmed } = await Swal.fire({
+            title: 'Name This Task / Category',
+            input: 'text',
+            inputValue: currentVal,
+            inputLabel: 'Please enter the name of this task or category:',
+            inputPlaceholder: 'e.g. Special Project, Inventory Audit, etc.',
+            showCancelButton: true,
+            confirmButtonColor: '#065d48',
+            confirmButtonText: 'Save',
+            cancelButtonColor: '#6c757d',
+            inputValidator: (val) => {
+                if (!val || !val.trim()) {
+                    return 'Task / Category name cannot be empty!';
+                }
+            }
+        });
+
+        if (isConfirmed && taskName && taskName.trim()) {
+            const trimmed = taskName.trim();
+            setCategories(prev => prev.map(cat =>
+                cat.id === id ? { ...cat, category: 'Others', sub_category: trimmed } : cat
+            ));
+            return trimmed;
+        }
+        return null;
+    };
+
+    const handleCategoryChange = async (id, value) => {
+        if (value === 'Others') {
+            const currentSub = categories.find(c => c.id === id)?.sub_category || '';
+            const newName = await promptForOtherName(id, currentSub);
+            if (!newName && !currentSub) {
+                // If cancelled and no existing custom name, do not change category
+                return;
+            }
+            return;
+        }
+
+        const matchedCategory = taskCategories.find(c => c.name === value);
+        const defaultTime = matchedCategory?.default_time;
+
+        setCategories(prev => prev.map(cat => {
+            if (cat.id === id) {
+                return {
+                    ...cat,
+                    category: value,
+                    sub_category: '',
+                    timeSpent: (defaultTime !== null && defaultTime !== undefined && defaultTime !== '')
+                        ? String(defaultTime)
+                        : cat.timeSpent
+                };
+            }
+            return cat;
+        }));
+    };
+
+    const getEffectiveCatName = (c) => {
+        if (!c) return '';
+        if (c.category === 'Others' && c.sub_category && c.sub_category.trim()) {
+            return c.sub_category.trim();
+        }
+        return (c.category || '').trim();
+    };
+
+    const addTask = async (id, taskValue) => {
+        if (!taskValue || !taskValue.trim()) return;
+        const newTask = taskValue.trim();
+
+        const targetCat = categories.find(cat => cat.id === id);
+        if (!targetCat) return;
+
+        if (!targetCat.category) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Category Required',
+                text: 'Please select a Task Category before adding tasks.',
+                confirmButtonColor: '#065d48',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        const targetCatName = getEffectiveCatName(targetCat);
+
+        // 1. Check duplicate in current form state (across rows sharing this category)
+        const sameCatRows = categories.filter(c =>
+            c.id === id || (targetCatName && getEffectiveCatName(c).toLowerCase() === targetCatName.toLowerCase())
+        );
+        const allTasksInCat = sameCatRows.flatMap(c => c.tasks);
+
+        const isLocalDuplicate = allTasksInCat.some(
+            t => t.trim().toLowerCase() === newTask.toLowerCase()
+        );
+
+        if (isLocalDuplicate) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Duplicate Task',
+                text: `"${newTask}" has already been added for "${targetCatName}" in this form.`,
+                confirmButtonColor: '#065d48',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        // 2. Check system-wide database duplicate across all users and dates
+        if (targetCat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCat.category)) {
+            try {
+                const token = localStorage.getItem('token');
+                const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                    params: {
+                        task: newTask,
+                        category: targetCat.category,
+                        sub_category: targetCat.sub_category || undefined,
+                        exclude_id: editId || undefined
+                    },
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+
+                if (checkRes.data && checkRes.data.duplicate) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Duplicate Task (System-Wide)',
+                        text: `"${newTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+            } catch (err) {
+                console.error('Error checking duplicate task with server:', err);
+            }
+        }
+
+        // Add task to category and clear currentTask
+        setCategories(prev => prev.map(cat => {
+            if (cat.id === id) {
+                return {
+                    ...cat,
+                    tasks: [...cat.tasks, newTask],
+                    currentTask: ''
+                };
+            }
+            return cat;
+        }));
     };
 
     const handleTaskKeyDown = (e, id) => {
-        if (e.key === 'Enter' && e.target.value.trim()) {
+        if (e.key === 'Enter') {
             e.preventDefault();
-            const taskValue = e.target.value.trim();
-
-            setCategories(prev => prev.map(cat => {
-                if (cat.id === id) {
-                    const isDuplicate = cat.tasks.some(task => 
-                        task.toLowerCase() === taskValue.toLowerCase()
-                    );
-
-                    if (isDuplicate) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Duplicate Task',
-                            text: 'This task already exists in the list.',
-                            confirmButtonColor: '#065d48',
-                        });
-                        return cat;
-                    }
-
-                    const newTasks = [...cat.tasks, taskValue];
-                    return { ...cat, tasks: newTasks, currentTask: '' };
-                }
-                return cat;
-            }));
+            if (e.target.value && e.target.value.trim()) {
+                addTask(id, e.target.value);
+            }
         }
     };
 
@@ -391,13 +738,140 @@ const NewData = () => {
             }
         }
 
-        console.log(categories);
-        const reports = categories
+        // Process any pending text typed in currentTask that was not added via Enter/Add button
+        const processedCategories = [];
+        for (let cat of categories) {
+            let catTasks = [...cat.tasks];
+            if (cat.currentTask && cat.currentTask.trim()) {
+                const pendingTask = cat.currentTask.trim();
+                if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                    // Check duplicate in local form
+                    const isLocalDup = catTasks.some(t => t.trim().toLowerCase() === pendingTask.toLowerCase());
+                    if (isLocalDup) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Duplicate Task Detected',
+                            text: `"${pendingTask}" in category "${getEffectiveCatName(cat)}" is already added. Please remove it before submitting.`,
+                            confirmButtonColor: '#065d48',
+                            confirmButtonText: 'OK'
+                        });
+                        return;
+                    }
+
+                    // Check system-wide duplicate
+                    try {
+                        const token = localStorage.getItem('token');
+                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                            params: {
+                                task: pendingTask,
+                                category: cat.category,
+                                sub_category: cat.sub_category || undefined,
+                                exclude_id: editId || undefined
+                            },
+                            headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (checkRes.data && checkRes.data.duplicate) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Duplicate Task Detected (System-Wide)',
+                                text: `Cannot submit: "${pendingTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                                confirmButtonColor: '#065d48',
+                                confirmButtonText: 'OK'
+                            });
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('Error checking duplicate in handleSubmit:', err);
+                    }
+
+                    catTasks.push(pendingTask);
+                }
+            }
+            processedCategories.push({ ...cat, tasks: catTasks });
+        }
+
+        // Check for duplicate tasks across rows of the same category
+        const catTaskMap = {};
+        for (let cat of processedCategories) {
+            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                const catKey = getEffectiveCatName(cat).toLowerCase();
+                if (!catTaskMap[catKey]) catTaskMap[catKey] = new Set();
+                for (let t of cat.tasks) {
+                    const taskKey = t.trim().toLowerCase();
+                    if (catTaskMap[catKey].has(taskKey)) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Duplicate Task Detected',
+                            text: `Duplicate task "${t}" found in category "${getEffectiveCatName(cat)}". Please remove the duplicate before submitting.`,
+                            confirmButtonColor: '#065d48',
+                            confirmButtonText: 'OK'
+                        });
+                        return;
+                    }
+                    catTaskMap[catKey].add(taskKey);
+                }
+            }
+        }
+
+        // System-wide duplicate check for all tasks in all categories
+        for (let cat of processedCategories) {
+            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+                for (let t of cat.tasks) {
+                    try {
+                        const token = localStorage.getItem('token');
+                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                            params: {
+                                task: t,
+                                category: cat.category,
+                                sub_category: cat.sub_category || undefined,
+                                exclude_id: editId || undefined
+                            },
+                            headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (checkRes.data && checkRes.data.duplicate) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Duplicate Task Detected (System-Wide)',
+                                text: `Cannot submit: "${t}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
+                                confirmButtonColor: '#065d48',
+                                confirmButtonText: 'OK'
+                            });
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('Error checking duplicate in handleSubmit:', err);
+                    }
+                }
+            }
+        }
+
+        // Ensure every working category has at least one task (unless Others with "No Time Spent")
+        for (let cat of processedCategories) {
+            if (cat.category && cat.category !== 'Meeting') {
+                if (cat.category === 'Others' && hasTimeSpent) {
+                    // No Time Spent checked for Others, allowed without tasks
+                    continue;
+                }
+                if (cat.tasks.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Tasks Required',
+                        text: `Please add at least one valid task for "${cat.category}". Tasks cannot be empty.`,
+                        confirmButtonColor: '#065d48',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+            }
+        }
+
+        console.log(processedCategories);
+        const reports = processedCategories
             .filter(cat =>
                 cat.category &&
                 (
                     cat.tasks.length > 0 ||
-                    cat.category === 'Others' ||
+                    (cat.category === 'Others' && hasTimeSpent) ||
                     (cat.category === 'Meeting' && cat.meetingTitle.trim() !== '')
                 )
             )
@@ -407,14 +881,10 @@ const NewData = () => {
                 task_category: cat.category,
                 task_list: cat.category === 'Meeting'
                     ? [cat.meetingTitle]
-                    : (cat.category === 'Others' && cat.tasks.length === 0
-                        ? ['']
-                        : cat.tasks),
+                    : cat.tasks,
                 number_of_tasks: cat.category === 'Meeting'
                     ? (cat.meetingTitle.trim() ? 1 : 0)
-                    : cat.category === 'Others'
-                        ? (cat.tasks.length === 0 ? 0 : cat.tasks.length)
-                        : cat.tasks.length,
+                    : cat.tasks.length,
                 time_spent: hasTimeSpent && cat.category === 'Others'
                     ? 0
                     : parseInt(cat.timeSpent, 10) || 0,
@@ -453,7 +923,8 @@ const NewData = () => {
                     icon: 'success',
                 });
                 // Navigate back so the list refreshes and user can't re-submit
-                navigate('/daily_report');
+                const fromPage = searchParams.get('from');
+                navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
             } else {
                 // Create new reports
                 const promises = reports.map(report =>
@@ -604,7 +1075,8 @@ const NewData = () => {
     };
 
     const handleBack = () => {
-        navigate('/daily_report');
+        const fromPage = searchParams.get('from');
+        navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
     };
 
     return (
@@ -706,67 +1178,108 @@ const NewData = () => {
 
                                                     <div className="row">
                                                         <div className="mb-3 col-lg-6">
-                                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                Task Category *
-                                                            </label>
-                                                            <select value={cat.category}
-                                                                onChange={(e) => handleCategoryChange(cat.id, e.target.value)}
-                                                                required
-                                                                className="form-select"
-                                                            >
-                                                                <option value="" disabled>Select a category</option>
-                                                                {taskCategories.map(category => (
-                                                                    <option key={category.id} value={category.name}>{category.name}</option>
-                                                                ))}
-                                                                {cat.category && !taskCategories.some(c => c.name === cat.category) && !['Meeting', 'Others'].includes(cat.category) && (
-                                                                    <option value={cat.category}>{cat.category}</option>
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                    Task Category *
+                                                                </label>
+                                                                {cat.category === 'Others' && cat.sub_category && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
+                                                                        style={{ color: '#065d48', fontSize: '0.82rem' }}
+                                                                        onClick={() => promptForOtherName(cat.id, cat.sub_category)}
+                                                                    >
+                                                                        <i className="bi bi-pencil-square me-1"></i>Rename
+                                                                    </button>
                                                                 )}
-                                                                <option value="Meeting">Meeting</option>
-                                                                <option value="Others">Others</option>
-                                                            </select>
+                                                            </div>
+                                                            <CategorySelect
+                                                                cat={cat}
+                                                                taskCategories={taskCategories}
+                                                                onSelect={(val) => handleCategoryChange(cat.id, val)}
+                                                            />
                                                         </div>
-                                                        {cat.category === 'Others' && (
-                                                            <div className="col-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Other Category
-                                                                </label>
-                                                                <input type="text" name='sub_category' value={cat.sub_category}
-                                                                    onChange={(e) => handleSubCategoryChange(cat.id, e.target.value)}
-                                                                    className="form-control" placeholder="Enter other category"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                        {cat.category === 'Others' && (
-                                                            <div className="col-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    No Time Spent
-                                                                </label>
-                                                                <br />
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={hasTimeSpent}
-                                                                    onChange={(e) => setHasTimeSpent(e.target.checked)}
-                                                                    className="form-check-input"
-                                                                />
-                                                            </div>
-                                                        )}
+
                                                         {cat.category !== 'Meeting' && (
                                                             <div className="mb-3 col-lg-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Time Spent (Minutes) *
-                                                                </label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={cat.timeSpent}
-                                                                    onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                    onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
-                                                                    min="0"
-                                                                    step="1"
-                                                                    placeholder="Enter minutes (e.g. 15)"
-                                                                    className="form-control"
-                                                                    disabled={cat.category === 'Others' && hasTimeSpent}
-                                                                    required={!(cat.category === 'Others' && hasTimeSpent)}
-                                                                />
+                                                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                    <div className="d-flex align-items-center">
+                                                                        <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                            Time Spent (Minutes) *
+                                                                        </label>
+                                                                        {(() => {
+                                                                            const matched = taskCategories.find(c => c.name === cat.category);
+                                                                            if (matched?.default_time) {
+                                                                                return (
+                                                                                    <span className="badge rounded-pill ms-2" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.75rem', fontWeight: '600' }}>
+                                                                                        <i className="bi bi-clock me-1"></i>Standard: {matched.default_time} min{matched.default_time > 1 ? 's' : ''}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
+                                                                    </div>
+                                                                    {cat.category === 'Others' && (
+                                                                        <div className="form-check mb-0">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={hasTimeSpent}
+                                                                                onChange={(e) => setHasTimeSpent(e.target.checked)}
+                                                                                className="form-check-input"
+                                                                                id={`noTimeSpent-${cat.id}`}
+                                                                            />
+                                                                            <label className="form-check-label small fw-semibold text-muted" htmlFor={`noTimeSpent-${cat.id}`}>
+                                                                                No Time Spent
+                                                                            </label>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="d-flex gap-2 align-items-center">
+                                                                    <select
+                                                                        value={
+                                                                            ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
+                                                                                ? String(cat.timeSpent)
+                                                                                : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
+                                                                        }
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (val === 'custom') {
+                                                                                if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
+                                                                                    handleTimeSpentChange(cat.id, '');
+                                                                                }
+                                                                            } else {
+                                                                                handleTimeSpentChange(cat.id, val);
+                                                                            }
+                                                                        }}
+                                                                        className="form-select"
+                                                                        style={{ minWidth: '150px' }}
+                                                                        disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                        required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                    >
+                                                                        <option value="">Select Time</option>
+                                                                        <option value="15">15 mins</option>
+                                                                        <option value="30">30 mins</option>
+                                                                        <option value="45">45 mins</option>
+                                                                        <option value="60">60 mins</option>
+                                                                        <option value="90">90 mins</option>
+                                                                        <option value="120">120 mins</option>
+                                                                        <option value="custom">Custom Time...</option>
+                                                                    </select>
+                                                                    {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
+                                                                        <input
+                                                                            type="number"
+                                                                            value={cat.timeSpent}
+                                                                            onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                            onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                            min="0"
+                                                                            step="1"
+                                                                            placeholder="Enter minutes"
+                                                                            className="form-control"
+                                                                            disabled={cat.category === 'Others' && hasTimeSpent}
+                                                                            required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                        />
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         )}
                                                         {cat.category === 'Meeting' && (
@@ -775,17 +1288,50 @@ const NewData = () => {
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Time Spent (Minutes) *
                                                                     </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={cat.timeSpent}
-                                                                        onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                        onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
-                                                                        min="0"
-                                                                        step="1"
-                                                                        placeholder="Enter minutes (e.g. 30)"
-                                                                        className="form-control"
-                                                                        required
-                                                                    />
+                                                                    <div className="d-flex gap-2 align-items-center">
+                                                                        <select
+                                                                            value={
+                                                                                ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
+                                                                                    ? String(cat.timeSpent)
+                                                                                    : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
+                                                                            }
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                if (val === 'custom') {
+                                                                                    if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
+                                                                                        handleTimeSpentChange(cat.id, '');
+                                                                                    }
+                                                                                } else {
+                                                                                    handleTimeSpentChange(cat.id, val);
+                                                                                }
+                                                                            }}
+                                                                            className="form-select"
+                                                                            style={{ minWidth: '150px' }}
+                                                                            required
+                                                                        >
+                                                                            <option value="">Select Time</option>
+                                                                            <option value="15">15 mins</option>
+                                                                            <option value="30">30 mins</option>
+                                                                            <option value="45">45 mins</option>
+                                                                            <option value="60">60 mins</option>
+                                                                            <option value="90">90 mins</option>
+                                                                            <option value="120">120 mins</option>
+                                                                            <option value="custom">Custom Time...</option>
+                                                                        </select>
+                                                                        {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
+                                                                            <input
+                                                                                type="number"
+                                                                                value={cat.timeSpent}
+                                                                                onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                                onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                                min="0"
+                                                                                step="1"
+                                                                                placeholder="Enter minutes"
+                                                                                className="form-control"
+                                                                                required
+                                                                            />
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 {/* <div className="mb-3 col-lg-3">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
@@ -821,23 +1367,34 @@ const NewData = () => {
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Task List *
                                                                     </label>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={cat.currentTask}
-                                                                        onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                        onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                        placeholder="Type task and press Enter to add"
-                                                                        className="form-control"
-                                                                    />
+                                                                    <div className="input-group">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={cat.currentTask}
+                                                                            onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                            onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                            placeholder="Type task and press Enter or click Add"
+                                                                            className="form-control"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-outline-success"
+                                                                            onClick={() => addTask(cat.id, cat.currentTask)}
+                                                                        >
+                                                                            Add
+                                                                        </button>
+                                                                    </div>
                                                                     {cat.tasks.length > 0 && (
-                                                                        <div className="mt-2">
-                                                                            <ul className="list-group">
+                                                                        <div className="mt-2 shadow-sm" style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}>
+                                                                            <ul className="list-group list-group-flush mb-0">
                                                                                 {cat.tasks.map((task, taskIndex) => (
-                                                                                    <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center">
-                                                                                        {task}
+                                                                                    <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
+                                                                                        <span className="text-break" style={{ fontSize: '0.9rem', color: '#333' }}>{task}</span>
                                                                                         <button
                                                                                             type="button"
-                                                                                            className="btn btn-sm btn-outline-danger"
+                                                                                            className="btn btn-sm btn-outline-danger py-0 px-2 ms-2"
+                                                                                            style={{ fontSize: '1.1rem', lineHeight: '1.2' }}
+                                                                                            title="Remove task"
                                                                                             onClick={() => removeTask(cat.id, taskIndex)}
                                                                                         >
                                                                                             ×
@@ -941,7 +1498,7 @@ const NewData = () => {
                                     {previousReports.map(report => {
                                         const isSelected = selectedCopyIds.has(report.id);
                                         const displayCat = report.task_category === 'Others' && report.sub_category
-                                            ? `Others (${report.sub_category})`
+                                            ? report.sub_category
                                             : report.task_category;
                                         const taskList = Array.isArray(report.task_list) ? report.task_list.filter(t => t) : [];
 
@@ -971,11 +1528,13 @@ const NewData = () => {
                                                             <div>
                                                                 <span className="fw-semibold" style={{ color: '#065d48' }}>{displayCat}</span>
                                                                 {taskList.length > 0 && (
-                                                                    <ul className="mb-0 mt-1 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
-                                                                        {taskList.map((task, i) => (
-                                                                            <li key={i}>{task}</li>
-                                                                        ))}
-                                                                    </ul>
+                                                                    <div className="mt-1 ps-1 pe-2" style={{ maxHeight: '130px', overflowY: 'auto' }}>
+                                                                        <ul className="mb-0 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
+                                                                            {taskList.map((task, i) => (
+                                                                                <li key={i}>{task}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </div>
                                                                 )}
                                                             </div>
                                                         </div>

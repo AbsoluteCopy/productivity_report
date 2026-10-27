@@ -101,12 +101,16 @@ const ViewReport = () => {
             });
             const allCategories = categoriesRes.data;
 
-            // Filter categories to only include those in user's task_list
-            const filteredCategories = allCategories.filter(category =>
-                userTaskList.includes(category.id)
-            );
-
-            setTaskCategories(filteredCategories);
+            // If admin, hr, supervisor, or user has no specific task list assigned, allow all categories
+            if (user.role === 'admin' || user.role === 'hr' || user.role === 'supervisor' || userTaskList.length === 0) {
+                setTaskCategories(allCategories);
+            } else {
+                const filteredCategories = allCategories.filter(category =>
+                    userTaskList.includes(category.id)
+                );
+                // If user's assigned categories don't match active categories, fallback to all
+                setTaskCategories(filteredCategories.length > 0 ? filteredCategories : allCategories);
+            }
         } catch (err) {
             console.error(err);
             Swal.fire({
@@ -122,6 +126,30 @@ const ViewReport = () => {
             ...prev,
             [key]: !prev[key]
         }));
+    };
+
+    const canEdit = ['admin', 'hr', 'supervisor'].includes(currentUser?.role);
+
+    const isMoreThanOneMonthOld = (reportDate) => {
+        if (!reportDate) return false;
+        const report = new Date(reportDate);
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+        return report < oneMonthAgo;
+    };
+
+    const handleEdit = (report) => {
+        if (!report || !report.id) return;
+        if (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Cannot Edit",
+                text: "HR and Supervisors cannot edit records older than 1 month.",
+                confirmButtonColor: "#065d48"
+            });
+            return;
+        }
+        navigate(`/new_data?edit=${report.id}&from=view_report`);
     };
 
     const fetchUsers = async () => {
@@ -1057,6 +1085,9 @@ const ViewReport = () => {
                                                 <th className='main-background text-white py-2'>Time Spent(mins)</th>
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
+                                                {canEdit && (
+                                                    <th className='main-background text-white py-2 text-center' style={{ width: '85px' }}>Action</th>
+                                                )}
                                             </tr>
                                         </thead>
 
@@ -1073,6 +1104,7 @@ const ViewReport = () => {
                                                                 <td></td>
                                                                 <td>{report.working_hours_total}</td>
                                                                 <td>{report.meeting_total}</td>
+                                                                {canEdit && <td></td>}
                                                             </tr>
                                                         );
                                                     }
@@ -1163,7 +1195,30 @@ const ViewReport = () => {
                                                             </td>
 
                                                             <td>{isMeeting ? (Number(report.meeting_count || 0) * Number(report.time_spent || 0) || '') : (report.meeting_count || '')}</td>
-
+                                                            {canEdit && (
+                                                                <td className="text-center align-middle">
+                                                                    {report.id && !report.isWeekend ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-sm btn-outline-primary py-0 px-2"
+                                                                            title={
+                                                                                currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)
+                                                                                    ? "Cannot edit records older than 1 month"
+                                                                                    : "Edit Report"
+                                                                            }
+                                                                            onClick={() => handleEdit(report)}
+                                                                            disabled={currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)}
+                                                                            style={{
+                                                                                fontSize: '0.8rem',
+                                                                                opacity: (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) ? 0.5 : 1,
+                                                                                cursor: (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) ? 'not-allowed' : 'pointer'
+                                                                            }}
+                                                                        >
+                                                                            <i className="bi bi-pencil-square me-1"></i>Edit
+                                                                        </button>
+                                                                    ) : null}
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     );
                                                 })

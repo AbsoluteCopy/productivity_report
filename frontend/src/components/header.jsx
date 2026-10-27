@@ -119,19 +119,19 @@ function Navbar() {
                                 </Link>
                             </li>
                         )}
+                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                            <li className="nav-item">
+                                <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
+                                    <i className="bi bi-tags"></i> Task Category
+                                </Link>
+                            </li>
+                        )}
                         {(role === 'admin' || role === 'hr') && (
-                            <>
-                                <li className="nav-item">
-                                    <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
-                                        <i className="bi bi-tags"></i> Task Category
-                                    </Link>
-                                </li>
-                                <li className="nav-item">
-                                    <Link className={`nav-link ${location.pathname === '/manage_holiday' ? 'active' : ''}`} to="/manage_holiday">
-                                        <i className="bi bi-calendar-event"></i> Holiday
-                                    </Link>
-                                </li>
-                            </>
+                            <li className="nav-item">
+                                <Link className={`nav-link ${location.pathname === '/manage_holiday' ? 'active' : ''}`} to="/manage_holiday">
+                                    <i className="bi bi-calendar-event"></i> Holiday
+                                </Link>
+                            </li>
                         )}
                     </ul>
                     <ul className="navbar-nav ms-auto align-items-lg-center">
