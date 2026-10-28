@@ -62,11 +62,9 @@ const ManageTaskCategory = () => {
             const userData = localStorage.getItem("user");
             const user = userData ? JSON.parse(userData) : null;
             
-            // If HR or supervisor role, filter by company
+            // The backend already returns only global (NULL/empty company) + this user's company categories.
+            // No extra filtering needed here — just display everything returned.
             let filteredCategories = data;
-            if (['hr', 'supervisor'].includes(user?.role) && user?.company) {
-                filteredCategories = data.filter(category => category.company === user.company);
-            }
             
             // Sort categories in ascending order by name
             const sortedCategories = filteredCategories.sort((a, b) => 

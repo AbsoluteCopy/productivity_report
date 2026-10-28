@@ -8,20 +8,25 @@ const API_URL = API_BASE_URL;
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
 
+const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+};
+
 export const getUsers = () =>
-    axios.get(`${API}/users/`);
+    axios.get(`${API}/users/`, getAuthHeaders());
 
 export const createUser = (data) =>
-    axios.post(`${API}/users/`, data);
+    axios.post(`${API}/users/`, data, getAuthHeaders());
 
 export const updateUser = (id, data) =>
-    axios.put(`${API}/users/${id}/`, data);
+    axios.put(`${API}/users/${id}/`, data, getAuthHeaders());
 
 export const deleteUser = (id) =>
-    axios.delete(`${API}/users/${id}/`);
+    axios.delete(`${API}/users/${id}/`, getAuthHeaders());
 
 export const getTaskCategories = () =>
-    axios.get(`${API}/task-categories/`);
+    axios.get(`${API}/task-categories/`, getAuthHeaders());
 
 const ManageAccounts = () => {
 
@@ -669,6 +674,7 @@ const ManageAccounts = () => {
     }, [users, search]);
 
     const sortedAndFilteredCategories = useMemo(() => {
+        // Backend already filters to global + this user's company — just search/sort here.
         const filtered = taskCategories.filter(category =>
             category.name.toLowerCase().includes(categorySearch.toLowerCase())
         );

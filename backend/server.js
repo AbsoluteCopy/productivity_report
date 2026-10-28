@@ -1071,7 +1071,7 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company.trim().toLowerCase() !== (req.user.company || '').trim().toLowerCase()) {
       return res.status(403).json({ error: 'Cannot modify categories belonging to another company.' });
     }
 
@@ -1081,7 +1081,8 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
     if (name) { updates.push('name = ?'); params.push(name.trim()); }
     if (status) { updates.push('status = ?'); params.push(status); }
     if (req.user.role === 'admin' && company !== undefined) { updates.push('company = ?'); params.push(company); }
-    if (['hr', 'supervisor'].includes(req.user.role)) { updates.push('company = ?'); params.push(req.user.company); }
+    // Only tag company if the category already belongs to a company (preserve global categories as global)
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company.trim() !== '') { updates.push('company = ?'); params.push(req.user.company); }
     if (default_time !== undefined) {
       let parsedDefaultTime = default_time !== null && default_time !== '' ? parseInt(default_time, 10) : null;
       if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
@@ -1115,7 +1116,7 @@ app.delete(['/api/task-categories/:id', '/api/task-categories/:id/'], authentica
     if (rows.length === 0) return res.status(404).json({ error: 'Task category not found.' });
 
     const cat = rows[0];
-    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company !== req.user.company) {
+    if (['hr', 'supervisor'].includes(req.user.role) && cat.company && cat.company.trim().toLowerCase() !== (req.user.company || '').trim().toLowerCase()) {
       return res.status(403).json({ error: 'Cannot delete categories belonging to another company.' });
     }
 
