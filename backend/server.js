@@ -874,16 +874,6 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       }
     }
 
-    // 1-month window for HR/Supervisor (Admin can edit older)
-    if (!isAdmin) {
-      const reportDate = new Date(report.date);
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-      if (reportDate < oneMonthAgo) {
-        return res.status(403).json({ error: 'Cannot edit records older than 1 month.' });
-      }
-    }
-
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
     let updates = [];
     let params = [];
@@ -994,16 +984,6 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
       }
     }
 
-    // 1-month window for HR/Supervisor (Admin can delete older)
-    if (!isAdmin) {
-      const reportDate = new Date(report.date);
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-      if (reportDate < oneMonthAgo) {
-        return res.status(403).json({ error: 'Cannot delete records older than 1 month.' });
-      }
-    }
-
     await pool.query('DELETE FROM daily_reports WHERE id = ?', [req.params.id]);
     return res.status(204).send();
   } catch (err) {
@@ -1023,10 +1003,11 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const { year, month } = req.query;
+    const { year, month, date } = req.query;
     let query = 'SELECT * FROM daily_reports WHERE user_id = ?';
     let params = [targetUserId];
 
+    if (date) { query += ' AND date = ?'; params.push(date); }
     if (year) { query += ' AND YEAR(date) = ?'; params.push(year); }
     if (month) { query += ' AND MONTH(date) = ?'; params.push(month); }
 

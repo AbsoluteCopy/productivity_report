@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import axios from "axios";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -42,6 +42,7 @@ const ManageAccounts = () => {
     const [formData, setFormData] = useState(emptyUser);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState("");
+    const searchInputRef = useRef(null);
     const [loading, setLoading] = useState(false);
     const [taskCategories, setTaskCategories] = useState([]);
     const [showTaskModal, setShowTaskModal] = useState(false);
@@ -65,8 +66,24 @@ const ManageAccounts = () => {
             const user = JSON.parse(userData);
             setCurrentUser(user);
         }
+        setSearch("");
+        if (searchInputRef.current) {
+            searchInputRef.current.value = "";
+        }
         fetchUsers();
         fetchTaskCategories();
+
+        const modalEl = document.getElementById("userModal");
+        if (modalEl) {
+            const handleHidden = () => {
+                setEditingId(null);
+                setFormData(emptyUser);
+            };
+            modalEl.addEventListener("hidden.bs.modal", handleHidden);
+            return () => {
+                modalEl.removeEventListener("hidden.bs.modal", handleHidden);
+            };
+        }
     }, []);
 
     const fetchTaskCategories = async () => {
@@ -692,11 +709,34 @@ const ManageAccounts = () => {
 
                 <div className="card-body">
 
-                    <input type="text" className="form-control mb-3"
-                        placeholder="Search employee..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
+                    <div className="position-relative mb-3">
+                        <i className="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" style={{ pointerEvents: "none" }}></i>
+                        <input
+                            ref={searchInputRef}
+                            type="search"
+                            id="employeeSearchInput"
+                            name="search_employee_filter"
+                            autoComplete="off"
+                            className="form-control ps-5 pe-5"
+                            placeholder="Search employee..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-link text-muted position-absolute end-0 top-50 translate-middle-y me-2 text-decoration-none"
+                                onClick={() => {
+                                    setSearch("");
+                                    if (searchInputRef.current) searchInputRef.current.value = "";
+                                }}
+                                title="Clear search"
+                                style={{ zIndex: 5 }}
+                            >
+                                <i className="bi bi-x-circle-fill fs-5"></i>
+                            </button>
+                        )}
+                    </div>
 
                     <DataTable
                         columns={columns}
@@ -731,108 +771,142 @@ const ManageAccounts = () => {
 
                         </div>
 
-                        <div className="modal-body">
+                        <form
+                            autoComplete="off"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSubmit();
+                            }}
+                        >
+                            <div className="modal-body">
+                                {/* Honeypots to absorb aggressive browser autofill prompts */}
+                                <input
+                                    type="text"
+                                    name="prevent_autofill_username_honeypot"
+                                    tabIndex={-1}
+                                    autoComplete="off"
+                                    style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, height: 0, width: 0, pointerEvents: "none" }}
+                                    readOnly
+                                />
+                                <input
+                                    type="password"
+                                    name="prevent_autofill_password_honeypot"
+                                    tabIndex={-1}
+                                    autoComplete="new-password"
+                                    style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, height: 0, width: 0, pointerEvents: "none" }}
+                                    readOnly
+                                />
 
-                            <input className="form-control mb-2"
-                                name="first_name"
-                                placeholder="First Name"
-                                value={formData.first_name}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="first_name"
+                                    placeholder="First Name"
+                                    value={formData.first_name}
+                                    onChange={handleChange}
+                                    autoComplete="off"
+                                />
 
-                            <input className="form-control mb-2"
-                                name="last_name"
-                                placeholder="Last Name"
-                                value={formData.last_name}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="last_name"
+                                    placeholder="Last Name"
+                                    value={formData.last_name}
+                                    onChange={handleChange}
+                                    autoComplete="off"
+                                />
 
-                            <input className="form-control mb-2"
-                                name="id_number"
-                                placeholder="ID Number"
-                                value={formData.id_number}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="id_number"
+                                    placeholder="ID Number"
+                                    value={formData.id_number}
+                                    onChange={handleChange}
+                                    autoComplete="off"
+                                />
 
-                            <input className="form-control mb-2"
-                                name="username"
-                                placeholder="Username (optional)"
-                                value={formData.username}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="username"
+                                    placeholder="Username (optional)"
+                                    value={formData.username}
+                                    onChange={handleChange}
+                                    autoComplete="off"
+                                />
 
-                            <input className="form-control mb-2"
-                                name="email"
-                                type="email"
-                                placeholder="Email (optional)"
-                                value={formData.email}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="email"
+                                    type="email"
+                                    placeholder="Email (optional)"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    autoComplete="off"
+                                />
 
-                            <input className="form-control mb-2" name="password" type="password" placeholder={
-                                editingId
-                                    ? "Leave blank to keep current password"
-                                    : "Password"
-                            }
-                                value={formData.password}
-                                onChange={handleChange}
-                            />
+                                <input className="form-control mb-2"
+                                    name="password"
+                                    type="password"
+                                    placeholder={
+                                        editingId
+                                            ? "Leave blank to keep current password"
+                                            : "Password"
+                                    }
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    autoComplete="new-password"
+                                />
 
-                            {currentUser?.role === 'admin' ? (
-                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
-                                    <option value="admin">Admin</option>
-                                    <option value="hr">HR</option>
-                                    <option value="supervisor">Supervisor</option>
-                                    <option value="viewer">Viewer</option>
-                                    <option value="employee">Employee</option>
-                                </select>
-                            ) : currentUser?.role === 'hr' ? (
-                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
-                                    <option value="employee">Employee</option>
-                                    <option value="supervisor">Supervisor</option>
-                                    <option value="viewer">Viewer</option>
-                                </select>
-                            ) : (
-                                <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange} disabled>
-                                    <option value="employee">Employee</option>
-                                </select>
-                            )}
+                                {currentUser?.role === 'admin' ? (
+                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
+                                        <option value="admin">Admin</option>
+                                        <option value="hr">HR</option>
+                                        <option value="supervisor">Supervisor</option>
+                                        <option value="viewer">Viewer</option>
+                                        <option value="employee">Employee</option>
+                                    </select>
+                                ) : currentUser?.role === 'hr' ? (
+                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
+                                        <option value="employee">Employee</option>
+                                        <option value="supervisor">Supervisor</option>
+                                        <option value="viewer">Viewer</option>
+                                    </select>
+                                ) : (
+                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange} disabled>
+                                        <option value="employee">Employee</option>
+                                    </select>
+                                )}
 
-                            {currentUser?.role === 'admin' && (
-                                <>
-                                    <input className="form-control mb-2"
-                                        name="company"
-                                        placeholder="Company (optional)"
-                                        value={formData.company}
-                                        onChange={handleChange}
-                                        list="company-suggestions"
-                                        autoComplete="off"
-                                    />
-                                    <datalist id="company-suggestions">
-                                        {[...new Set(users.map(u => u.company).filter(Boolean))].sort().map(c => (
-                                            <option key={c} value={c} />
-                                        ))}
-                                    </datalist>
-                                </>
-                            )}
+                                {currentUser?.role === 'admin' && (
+                                    <>
+                                        <input className="form-control mb-2"
+                                            name="company"
+                                            placeholder="Company (optional)"
+                                            value={formData.company}
+                                            onChange={handleChange}
+                                            list="company-suggestions"
+                                            autoComplete="off"
+                                        />
+                                        <datalist id="company-suggestions">
+                                            {[...new Set(users.map(u => u.company).filter(Boolean))].sort().map(c => (
+                                                <option key={c} value={c} />
+                                            ))}
+                                        </datalist>
+                                    </>
+                                )}
 
-                        </div>
+                            </div>
 
-                        <div className="modal-footer">
+                            <div className="modal-footer">
 
-                            <button className="btn btn-secondary" data-bs-dismiss="modal" id="closeModal">
-                                Cancel
-                            </button>
+                                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal" id="closeModal">
+                                    Cancel
+                                </button>
 
-                            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-                                {loading
-                                    ? "Saving..."
-                                    : editingId
-                                        ? "Update"
-                                        : "Create"}
-                            </button>
+                                <button type="submit" className="btn btn-primary" disabled={loading}>
+                                    {loading
+                                        ? "Saving..."
+                                        : editingId
+                                            ? "Update"
+                                            : "Create"}
+                                </button>
 
-                        </div>
+                            </div>
+                        </form>
 
                     </div>
 
@@ -857,7 +931,8 @@ const ManageAccounts = () => {
                         </div>
                         <div className="modal-body">
                             <input
-                                type="text"
+                                type="search"
+                                autoComplete="off"
                                 className="form-control mb-3"
                                 placeholder="Search categories..."
                                 value={categorySearch}

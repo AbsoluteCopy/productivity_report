@@ -105,6 +105,80 @@ const DailyReport = () => {
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
     const isRestrictedCategory = useCallback((category) => { return RESTRICTED_CATEGORIES.has(category); }, []);
 
+    const [teamSnapshotDate, setTeamSnapshotDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+    useEffect(() => {
+        if (dailyReports.length > 0) {
+            const dates = dailyReports.map(r => r.date).filter(Boolean);
+            if (dates.length > 0) {
+                const today = new Date().toISOString().split('T')[0];
+                const hasToday = dates.includes(today);
+                if (!hasToday) {
+                    setTeamSnapshotDate(dates[0]);
+                }
+            }
+        }
+    }, [dailyReports]);
+
+    const teamSummary = useMemo(() => {
+        if (!isAdminOrHR || !teamSnapshotDate || dailyReports.length === 0) return [];
+
+        const dayReports = dailyReports.filter(r => r.date === teamSnapshotDate);
+        const empMap = {};
+
+        dayReports.forEach(r => {
+            const userName = r.user_name || `User #${r.user_id || 'Unknown'}`;
+            if (!empMap[userName]) {
+                empMap[userName] = {
+                    userName,
+                    userId: r.user_id,
+                    totalTasks: 0,
+                    totalMinutes: 0,
+                    isPTO: false,
+                    isHoliday: false,
+                    holidayName: '',
+                    isCompanyEvent: false,
+                    eventName: '',
+                };
+            }
+
+            const isPTO = r.work_type === 'PTO' || r.task_category === 'PTO';
+            const isHoliday = r.work_type === 'Holiday' || r.task_category === 'Holiday';
+            const isCompanyEvent = r.work_type === 'Company Event' || r.task_category === 'Company Event';
+
+            if (isPTO) {
+                empMap[userName].isPTO = true;
+            } else if (isHoliday) {
+                empMap[userName].isHoliday = true;
+                const hName = (Array.isArray(r.task_list) ? r.task_list[0] : r.task_list) || r.sub_category || 'Holiday';
+                empMap[userName].holidayName = hName;
+            } else if (isCompanyEvent) {
+                empMap[userName].isCompanyEvent = true;
+                const eName = (Array.isArray(r.task_list) ? r.task_list[0] : r.task_list) || r.sub_category || 'Company Event';
+                empMap[userName].eventName = eName;
+            } else {
+                if (r.task_category === 'Meeting') {
+                    const mCount = Number(r.meeting_count || r.number_of_tasks || 1);
+                    const mTime = Number(r.time_spent || 0);
+                    empMap[userName].totalMinutes += mCount * mTime;
+                    empMap[userName].totalTasks += mCount;
+                } else {
+                    const count = Number(r.number_of_tasks || (Array.isArray(r.task_list) ? r.task_list.length : 0));
+                    const time = Number(r.time_spent || 0);
+                    empMap[userName].totalTasks += count;
+                    empMap[userName].totalMinutes += count > 0 ? (count * time) : time;
+                }
+            }
+        });
+
+        return Object.values(empMap).sort((a, b) => {
+            if (b.totalMinutes !== a.totalMinutes) {
+                return b.totalMinutes - a.totalMinutes;
+            }
+            return a.userName.localeCompare(b.userName);
+        });
+    }, [isAdminOrHR, teamSnapshotDate, dailyReports]);
+
     // Check if date is more than 1 month old
     const isMoreThanOneMonthOld = useCallback((dateString) => { 
         if (!dateString) return false; 
@@ -348,15 +422,10 @@ const DailyReport = () => {
                 name: "Options",
                 cell: (row) => {
                     const is24hOld = isEmployee && isMoreThan24HoursOld(row);
-                    const isMonthOld = isMoreThanOneMonthOld(row.date);
-                    const isOldRecord = isEmployee ? is24hOld : (currentUser?.role !== 'admin' && isMonthOld);
+                    const isOldRecord = isEmployee && is24hOld;
                     const canEdit = isEmployee || isAdminOrHR;
-                    const editTitle = isEmployee
-                        ? (is24hOld ? "Employees can only edit tasks within 24 hours" : "Edit Report")
-                        : (isOldRecord ? "Cannot edit records older than 1 month" : "Edit Report");
-                    const deleteTitle = isEmployee
-                        ? (is24hOld ? "Employees can only delete tasks within 24 hours" : "Delete Report")
-                        : (isOldRecord ? "Cannot delete records older than 1 month" : "Delete Report");
+                    const editTitle = isOldRecord ? "Employees can only edit tasks within 24 hours" : "Edit Report";
+                    const deleteTitle = isOldRecord ? "Employees can only delete tasks within 24 hours" : "Delete Report";
 
                     return (
                         <div className="d-flex gap-1">
@@ -443,6 +512,180 @@ const DailyReport = () => {
                                 <button type="button" className="btn btn-secondary" onClick={() => navigate("/new_data")} > Add Report </button>)}
                             </div>
                         </div> {/* Body */}
+                        {/* Team Shift Progress Snapshot for Admin, HR & Supervisor */}
+                        {isAdminOrHR && (
+                            <div className="p-3 border-bottom" style={{ backgroundColor: "#fafdfb" }}>
+                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                    <div className="d-flex align-items-center gap-2">
+                                        <i className="bi bi-clock-history fs-5" style={{ color: "#065d48" }}></i>
+                                        <span className="fw-bold" style={{ color: "#065d48", fontSize: "0.95rem" }}>
+                                            Team Shift Audit &amp; Progress
+                                        </span>
+                                        <span className="badge bg-light text-dark border ms-1" style={{ fontSize: "0.75rem" }}>
+                                            {teamSnapshotDate}
+                                        </span>
+                                    </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <label className="small text-muted mb-0 fw-semibold">Audit Date:</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            style={{ width: "150px" }}
+                                            value={teamSnapshotDate}
+                                            onChange={(e) => setTeamSnapshotDate(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {teamSummary.length === 0 ? (
+                                    <div className="small text-muted py-1">No reports found for {teamSnapshotDate}.</div>
+                                ) : (
+                                    <div className="d-flex flex-wrap gap-2 pt-1">
+                                        {teamSummary.map((emp) => {
+                                            const hasWorked = emp.totalMinutes > 0;
+                                            const isPurePTO = emp.isPTO && !hasWorked;
+                                            const isPureHoliday = emp.isHoliday && !hasWorked;
+                                            const isPureEvent = emp.isCompanyEvent && !hasWorked;
+
+                                            let ringColor = "#10b981";
+                                            let badgeBg = "#e8f5e9";
+                                            let badgeBorder = "#a5d6a7";
+                                            let badgeText = "#1b5e20";
+                                            let statusIcon = "bi-check-circle-fill";
+                                            let circleContent = null;
+                                            let subText = null;
+
+                                            if (isPurePTO) {
+                                                ringColor = "#0284c7";
+                                                badgeBg = "#f0f9ff";
+                                                badgeBorder = "#bae6fd";
+                                                badgeText = "#0369a1";
+                                                statusIcon = "bi-sun-fill";
+                                                circleContent = "PTO";
+                                                subText = <span className="fw-semibold text-primary">Paid Time Off (Covered)</span>;
+                                            } else if (isPureHoliday) {
+                                                ringColor = "#8b5cf6";
+                                                badgeBg = "#f5f3ff";
+                                                badgeBorder = "#ddd6fe";
+                                                badgeText = "#6d28d9";
+                                                statusIcon = "bi-calendar-heart-fill";
+                                                circleContent = "HOL";
+                                                subText = <span className="fw-semibold" style={{ color: "#6d28d9" }}>{emp.holidayName || "Holiday"} (Covered)</span>;
+                                            } else if (isPureEvent) {
+                                                ringColor = "#f97316";
+                                                badgeBg = "#fff7ed";
+                                                badgeBorder = "#fed7aa";
+                                                badgeText = "#c2410c";
+                                                statusIcon = "bi-building-fill";
+                                                circleContent = "EVT";
+                                                subText = <span className="fw-semibold" style={{ color: "#c2410c" }}>{emp.eventName || "Company Event"}</span>;
+                                            } else {
+                                                const pct = Math.min(Math.round((emp.totalMinutes / 480) * 100), 999);
+                                                const hours = Math.floor(emp.totalMinutes / 60);
+                                                const mins = emp.totalMinutes % 60;
+
+                                                if (emp.totalMinutes < 450) {
+                                                    ringColor = "#f59e0b";
+                                                    badgeBg = "#fffbeb";
+                                                    badgeBorder = "#fde68a";
+                                                    badgeText = "#b45309";
+                                                    statusIcon = "bi-hourglass-split";
+                                                } else if (emp.totalMinutes > 540) {
+                                                    ringColor = "#ef4444";
+                                                    badgeBg = "#fef2f2";
+                                                    badgeBorder = "#fecaca";
+                                                    badgeText = "#b91c1c";
+                                                    statusIcon = "bi-exclamation-triangle-fill";
+                                                }
+
+                                                circleContent = `${pct}%`;
+                                                subText = (
+                                                    <>
+                                                        <span className="fw-semibold text-dark">
+                                                            {hours > 0 ? `${hours}h ` : ""}{mins}m
+                                                        </span>{" "}
+                                                        &bull; {emp.totalTasks} task{emp.totalTasks !== 1 ? "s" : ""}
+                                                        {emp.isPTO && <span className="badge bg-primary-subtle text-primary border ms-1" style={{ fontSize: '0.65rem' }}>+PTO</span>}
+                                                        {emp.isHoliday && <span className="badge bg-purple-subtle text-purple border ms-1" style={{ fontSize: '0.65rem' }}>+Holiday</span>}
+                                                    </>
+                                                );
+                                            }
+
+                                            const isSpecial = isPurePTO || isPureHoliday || isPureEvent;
+                                            const isCurrentSearch = search.toLowerCase() === emp.userName.toLowerCase();
+
+                                            return (
+                                                <div
+                                                    key={emp.userName}
+                                                    className="d-flex align-items-center gap-2 px-2 py-1 rounded border shadow-sm"
+                                                    style={{
+                                                        backgroundColor: isCurrentSearch ? "#e0f2fe" : badgeBg,
+                                                        borderColor: isCurrentSearch ? "#0284c7" : badgeBorder,
+                                                        cursor: "pointer",
+                                                        transition: "all 0.2s ease",
+                                                    }}
+                                                    title={`Click to filter table for ${emp.userName}`}
+                                                    onClick={() => {
+                                                        if (isCurrentSearch) {
+                                                            setSearch("");
+                                                        } else {
+                                                            setSearch(emp.userName);
+                                                        }
+                                                    }}
+                                                >
+                                                    {/* Mini SVG Progress Ring */}
+                                                    <div style={{ position: "relative", width: "32px", height: "32px", flexShrink: 0 }}>
+                                                        <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: "rotate(-90deg)" }}>
+                                                            <circle cx="16" cy="16" r="13" stroke="#e2e8f0" strokeWidth="3" fill="transparent" />
+                                                            <circle
+                                                                cx="16"
+                                                                cy="16"
+                                                                r="13"
+                                                                stroke={ringColor}
+                                                                strokeWidth="3"
+                                                                strokeDasharray={81.68}
+                                                                strokeDashoffset={isSpecial ? 0 : 81.68 - (81.68 * Math.min(emp.totalMinutes / 480, 1))}
+                                                                strokeLinecap="round"
+                                                                fill="transparent"
+                                                            />
+                                                        </svg>
+                                                        <div
+                                                            style={{
+                                                                position: "absolute",
+                                                                top: 0,
+                                                                left: 0,
+                                                                width: "32px",
+                                                                height: "32px",
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                fontSize: isSpecial ? "0.52rem" : "0.58rem",
+                                                                fontWeight: 700,
+                                                                color: badgeText,
+                                                            }}
+                                                        >
+                                                            {circleContent}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="d-flex align-items-center gap-1">
+                                                            <span className="fw-bold" style={{ fontSize: "0.82rem", color: "#1e293b" }}>
+                                                                {emp.userName}
+                                                            </span>
+                                                            <i className={`bi ${statusIcon}`} style={{ fontSize: "0.75rem", color: badgeText }}></i>
+                                                        </div>
+                                                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                            {subText}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <div className="card-body"> {/* Search */}
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div className="text-muted small"> {loading ? "Loading reports..." : `${filteredReports.length} report${filteredReports.length !== 1 ? "s" : ""} found`} </div>

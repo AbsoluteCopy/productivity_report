@@ -140,16 +140,44 @@ const ViewReport = () => {
 
     const handleEdit = (report) => {
         if (!report || !report.id) return;
-        if (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) {
-            Swal.fire({
-                icon: "warning",
-                title: "Cannot Edit",
-                text: "HR and Supervisors cannot edit records older than 1 month.",
-                confirmButtonColor: "#065d48"
-            });
-            return;
-        }
         navigate(`/new_data?edit=${report.id}&from=view_report`);
+    };
+
+    const handleDelete = async (report) => {
+        if (!report || !report.id) return;
+        const confirmResult = await Swal.fire({
+            title: 'Delete this Report?',
+            text: `Are you sure you want to permanently delete this report for ${report.date}? This action cannot be undone.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Delete',
+            cancelButtonText: 'Cancel'
+        });
+        if (!confirmResult.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_BASE_URL}/daily-reports/${report.id}/`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            await Swal.fire({
+                title: 'Deleted!',
+                text: 'The report has been deleted.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            fetchReports(currentUser, selectedYear, selectedMonth, selectedUser);
+        } catch (err) {
+            console.error('Error deleting report:', err);
+            Swal.fire({
+                title: 'Error',
+                text: err.response?.data?.error || 'Failed to delete report.',
+                icon: 'error'
+            });
+        }
     };
 
     const fetchUsers = async () => {
@@ -1086,7 +1114,7 @@ const ViewReport = () => {
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
                                                 {canEdit && (
-                                                    <th className='main-background text-white py-2 text-center' style={{ width: '85px' }}>Action</th>
+                                                    <th className='main-background text-white py-2 text-center' style={{ width: '120px' }}>Action</th>
                                                 )}
                                             </tr>
                                         </thead>
@@ -1095,15 +1123,57 @@ const ViewReport = () => {
                                             {
                                                 displayReports.map((report, index) => {
                                                     if (report.isTotal) {
+                                                        const totalMins = Number(report.working_hours_total || 0) + Number(report.meeting_total || 0);
+                                                        const pct = Math.round((totalMins / 480) * 100);
+
+                                                        let badgeClass = 'bg-success text-white';
+                                                        let statusLabel = 'Full Shift';
+
+                                                        if (totalMins < 450) {
+                                                            badgeClass = 'bg-warning text-dark';
+                                                            statusLabel = 'Under 8h';
+                                                        } else if (totalMins > 540) {
+                                                            badgeClass = 'bg-danger text-white';
+                                                            statusLabel = totalMins > 600 ? 'Over 8h (Check)' : 'Overtime';
+                                                        }
+
+                                                        const workHrs = Math.floor(Number(report.working_hours_total || 0) / 60);
+                                                        const workMins = Number(report.working_hours_total || 0) % 60;
+                                                        const meetHrs = Math.floor(Number(report.meeting_total || 0) / 60);
+                                                        const meetMins = Number(report.meeting_total || 0) % 60;
+
                                                         return (
-                                                            <tr key={report.id} className="fw-bold table-success">
+                                                            <tr key={report.id} className="fw-bold table-success" style={{ backgroundColor: '#f0fdf4' }}>
                                                                 <td></td>
                                                                 <td></td>
-                                                                <td>Daily Total</td>
+                                                                <td>
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <span>Daily Total</span>
+                                                                        <span className={`badge ${badgeClass} rounded-pill px-2 py-1`} style={{ fontSize: '0.72rem', fontWeight: 600 }}>
+                                                                            {statusLabel} ({pct}%)
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
                                                                 <td></td>
                                                                 <td></td>
-                                                                <td>{report.working_hours_total}</td>
-                                                                <td>{report.meeting_total}</td>
+                                                                <td>
+                                                                    <div>
+                                                                        <span>{report.working_hours_total}</span>
+                                                                        <small className="text-muted d-block fw-normal" style={{ fontSize: '0.75rem' }}>
+                                                                            {workHrs > 0 ? `${workHrs}h ` : ''}{workMins}m
+                                                                        </small>
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    <div>
+                                                                        <span>{report.meeting_total || 0}</span>
+                                                                        {Number(report.meeting_total || 0) > 0 && (
+                                                                            <small className="text-muted d-block fw-normal" style={{ fontSize: '0.75rem' }}>
+                                                                                {meetHrs > 0 ? `${meetHrs}h ` : ''}{meetMins}m
+                                                                            </small>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
                                                                 {canEdit && <td></td>}
                                                             </tr>
                                                         );
@@ -1198,24 +1268,26 @@ const ViewReport = () => {
                                                             {canEdit && (
                                                                 <td className="text-center align-middle">
                                                                     {report.id && !report.isWeekend ? (
-                                                                        <button
-                                                                            type="button"
-                                                                            className="btn btn-sm btn-outline-primary py-0 px-2"
-                                                                            title={
-                                                                                currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)
-                                                                                    ? "Cannot edit records older than 1 month"
-                                                                                    : "Edit Report"
-                                                                            }
-                                                                            onClick={() => handleEdit(report)}
-                                                                            disabled={currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)}
-                                                                            style={{
-                                                                                fontSize: '0.8rem',
-                                                                                opacity: (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) ? 0.5 : 1,
-                                                                                cursor: (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) ? 'not-allowed' : 'pointer'
-                                                                            }}
-                                                                        >
-                                                                            <i className="bi bi-pencil-square me-1"></i>Edit
-                                                                        </button>
+                                                                        <div className="d-flex justify-content-center gap-1">
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-sm btn-outline-primary py-0 px-2"
+                                                                                title="Edit Report"
+                                                                                onClick={() => handleEdit(report)}
+                                                                                style={{ fontSize: '0.8rem' }}
+                                                                            >
+                                                                                <i className="bi bi-pencil-square me-1"></i>Edit
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-sm btn-outline-danger py-0 px-2"
+                                                                                title="Delete Report"
+                                                                                onClick={() => handleDelete(report)}
+                                                                                style={{ fontSize: '0.8rem' }}
+                                                                            >
+                                                                                <i className="bi bi-trash"></i>
+                                                                            </button>
+                                                                        </div>
                                                                     ) : null}
                                                                 </td>
                                                             )}

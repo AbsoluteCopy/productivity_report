@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -45,6 +45,7 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                 style={{
                     cursor: 'pointer',
                     backgroundColor: '#fff',
+                    backgroundImage: 'none',
                     minHeight: '38px',
                     borderColor: isOpen ? '#065d48' : '#dee2e6',
                     boxShadow: isOpen ? '0 0 0 0.25rem rgba(6, 93, 72, 0.25)' : 'none',
@@ -210,6 +211,7 @@ const NewData = () => {
     const navigate = useNavigate();
     const editId = searchParams.get('edit');
     const [isEditMode, setIsEditMode] = useState(false);
+    const [editingUserName, setEditingUserName] = useState('');
     const [hasTimeSpent, setHasTimeSpent] = useState(false);
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -219,6 +221,108 @@ const NewData = () => {
         { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
     ]);
     const [taskCategories, setTaskCategories] = useState([]);
+    const [existingDayReports, setExistingDayReports] = useState([]);
+
+    const fetchExistingDayReports = useCallback(async (date, targetUserId) => {
+        if (!date) return;
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const uid = targetUserId || user?.id;
+            if (!uid) return;
+
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/users/${uid}/reports/`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                params: { date }
+            });
+            const reports = Array.isArray(res.data) ? res.data : [];
+            const dayReports = reports.filter(r => {
+                const rDate = r.date ? (typeof r.date === 'string' ? r.date.split('T')[0] : r.date) : '';
+                return rDate === date;
+            });
+            setExistingDayReports(dayReports);
+        } catch (err) {
+            console.error("Error fetching day's existing reports:", err);
+            setExistingDayReports([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        const user = JSON.parse(localStorage.getItem('user'));
+        const uid = formData.user_id || user?.id;
+        if (formData.date && uid) {
+            fetchExistingDayReports(formData.date, uid);
+        }
+    }, [formData.date, formData.user_id, fetchExistingDayReports]);
+
+    const priorTotals = useMemo(() => {
+        let priorTasks = 0;
+        let priorMinutes = 0;
+
+        existingDayReports.forEach((r) => {
+            if (editId && String(r.id) === String(editId)) {
+                return;
+            }
+
+            const isLeave = ['Holiday', 'PTO', 'Company Event'].includes(r.task_category);
+            if (isLeave) return;
+
+            if (r.task_category === 'Meeting') {
+                const mCount = Number(r.meeting_count || r.number_of_tasks || 1);
+                const mTime = Number(r.time_spent || 0);
+                priorMinutes += mCount * mTime;
+                priorTasks += mCount;
+            } else {
+                const count = Number(r.number_of_tasks || (Array.isArray(r.task_list) ? r.task_list.length : 0));
+                const time = Number(r.time_spent || 0);
+                priorTasks += count;
+                priorMinutes += count > 0 ? (count * time) : time;
+            }
+        });
+
+        return { priorTasks, priorMinutes };
+    }, [existingDayReports, editId]);
+
+    const dailyTotals = useMemo(() => {
+        let currentTasks = 0;
+        let currentMinutes = 0;
+
+        categories.forEach((cat) => {
+            if (cat.category === 'Meeting') {
+                const mCount = Number(cat.meetingCount) || 1;
+                const mTime = Number(cat.timeSpent) || 0;
+                currentMinutes += mCount * mTime;
+                currentTasks += mCount;
+            } else if (cat.category === 'Others' && hasTimeSpent) {
+                currentTasks += (cat.tasks || []).length;
+            } else {
+                const count = (cat.tasks || []).length;
+                const perTask = Number(cat.timeSpent) || 0;
+                currentTasks += count;
+                currentMinutes += count * perTask;
+            }
+        });
+
+        const tasksCount = priorTotals.priorTasks + currentTasks;
+        const minutes = priorTotals.priorMinutes + currentMinutes;
+        const targetMinutes = 480;
+        const totalHours = Math.floor(minutes / 60);
+        const remainingMins = minutes % 60;
+        const percent = Math.min(Math.round((minutes / targetMinutes) * 100), 999);
+
+        return {
+            tasksCount,
+            minutes,
+            totalHours,
+            remainingMins,
+            percent,
+            targetMinutes,
+            priorTasks: priorTotals.priorTasks,
+            priorMinutes: priorTotals.priorMinutes,
+            currentTasks,
+            currentMinutes,
+        };
+    }, [categories, hasTimeSpent, priorTotals]);
 
     // Copy from previous day
     const [showCopyModal, setShowCopyModal] = useState(false);
@@ -313,23 +417,6 @@ const NewData = () => {
                 }
             }
 
-            // Check 1-month limit for HR / Supervisor (Admin can edit older)
-            if (currentUser && currentUser.role !== 'admin') {
-                const reportDate = new Date(data.date);
-                const oneMonthAgo = new Date();
-                oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-                if (reportDate < oneMonthAgo) {
-                    await Swal.fire({
-                        icon: 'warning',
-                        title: 'Cannot Edit',
-                        text: 'Records older than 1 month cannot be edited.',
-                        confirmButtonColor: '#065d48'
-                    });
-                    navigate('/daily_report');
-                    return;
-                }
-            }
-
             setFormData({
                 date: data.date,
                 work_type: data.work_type,
@@ -338,6 +425,11 @@ const NewData = () => {
                     ? (data.task_list?.[0] || '')
                     : ''
             });
+
+            setEditingUserName(data.user_name || '');
+            if (data.date && data.user) {
+                fetchExistingDayReports(data.date, data.user);
+            }
 
             if (data.work_type === 'Working') {
                 setCategories([
@@ -904,6 +996,22 @@ const NewData = () => {
             return;
         }
 
+        if (formData.work_type === 'Working' && dailyTotals.minutes > 600) {
+            const confirmResult = await Swal.fire({
+                title: 'High Work Hours Warning',
+                html: `This entry brings the total logged time for this day to <b>${dailyTotals.totalHours} hrs ${dailyTotals.remainingMins} mins (${dailyTotals.minutes} mins)</b>.<br/><br/>Please confirm if <b>Time per Task</b> was entered correctly (not total minutes for the whole day).<br/><br/>Do you want to proceed and submit anyway?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#065d48',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, Submit',
+                cancelButtonText: 'Let me double check'
+            });
+            if (!confirmResult.isConfirmed) {
+                return;
+            }
+        }
+
         try {
             if (isEditMode) {
                 // Update the original report with the first category
@@ -1079,6 +1187,45 @@ const NewData = () => {
         navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
     };
 
+    const handleDeleteReport = async () => {
+        if (!editId) return;
+        const confirmResult = await Swal.fire({
+            title: 'Delete this Report?',
+            text: 'Are you sure you want to permanently delete this report? This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Delete',
+            cancelButtonText: 'Cancel'
+        });
+
+        if (!confirmResult.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_BASE_URL}/daily-reports/${editId}/`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            await Swal.fire({
+                title: 'Deleted!',
+                text: 'The report has been deleted.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            const fromPage = searchParams.get('from');
+            navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
+        } catch (err) {
+            console.error('Error deleting report:', err);
+            Swal.fire({
+                title: 'Error',
+                text: err.response?.data?.error || 'Failed to delete report.',
+                icon: 'error'
+            });
+        }
+    };
+
     return (
         <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
             <div className="row justify-content-center">
@@ -1094,7 +1241,18 @@ const NewData = () => {
                                     {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
                                 </h2>
 
-                                <div></div>
+                                <div>
+                                    {isEditMode && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-danger btn-sm"
+                                            onClick={handleDeleteReport}
+                                            title="Delete this report"
+                                        >
+                                            <i className="bi bi-trash me-1"></i>Delete
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <form onSubmit={handleSubmit}>
@@ -1159,6 +1317,116 @@ const NewData = () => {
                                 </div>
                                 {formData.work_type === 'Working' && (
                                     <>
+                                        <div
+                                            className="card mb-4 border-0 shadow-sm"
+                                            style={{
+                                                background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)',
+                                                border: '1px solid #bbf7d0',
+                                                borderRadius: '12px',
+                                            }}
+                                        >
+                                            <div className="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                                {/* Left: Circular Progress Ring + Hours Display */}
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0 }}>
+                                                        <svg width="56" height="56" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)' }}>
+                                                            <circle
+                                                                cx="28"
+                                                                cy="28"
+                                                                r="22"
+                                                                stroke="#e2e8f0"
+                                                                strokeWidth="5"
+                                                                fill="transparent"
+                                                            />
+                                                            <circle
+                                                                cx="28"
+                                                                cy="28"
+                                                                r="22"
+                                                                stroke={
+                                                                    dailyTotals.minutes > 600
+                                                                        ? '#ef4444'
+                                                                        : dailyTotals.minutes >= 450
+                                                                        ? '#10b981'
+                                                                        : '#065d48'
+                                                                }
+                                                                strokeWidth="5"
+                                                                strokeDasharray={138.23}
+                                                                strokeDashoffset={
+                                                                    138.23 - (138.23 * Math.min(dailyTotals.minutes / dailyTotals.targetMinutes, 1))
+                                                                }
+                                                                strokeLinecap="round"
+                                                                fill="transparent"
+                                                                style={{ transition: 'stroke-dashoffset 0.4s ease, stroke 0.3s ease' }}
+                                                            />
+                                                        </svg>
+                                                        <div
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: 0,
+                                                                left: 0,
+                                                                width: '56px',
+                                                                height: '56px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 700,
+                                                                color: dailyTotals.minutes > 600 ? '#dc2626' : '#065d48',
+                                                            }}
+                                                        >
+                                                            {dailyTotals.percent}%
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        {isEditMode && editingUserName && (
+                                                            <div className="badge bg-light text-success border border-success-subtle px-2 py-1 mb-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                                <i className="bi bi-person-fill me-1"></i>Employee: {editingUserName}
+                                                            </div>
+                                                        )}
+                                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                                            <h5 className="mb-0 fw-bold" style={{ color: dailyTotals.minutes > 600 ? '#dc2626' : '#065d48' }}>
+                                                                {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours} hr${dailyTotals.totalHours > 1 ? 's' : ''} ` : ''}
+                                                                {dailyTotals.remainingMins} min{dailyTotals.remainingMins !== 1 ? 's' : ''}
+                                                            </h5>
+                                                            {dailyTotals.minutes >= 450 && dailyTotals.minutes <= 510 && (
+                                                                <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                                    <i className="bi bi-check-circle-fill me-1"></i>Full Day (8h)
+                                                                </span>
+                                                            )}
+                                                            {dailyTotals.minutes > 600 && (
+                                                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                                    <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 8h (Check Time per Task)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <small className="text-muted">
+                                                            {dailyTotals.priorMinutes > 0 ? (
+                                                                <>
+                                                                    <span className="fw-semibold text-dark">{dailyTotals.priorMinutes}m</span> already logged today + <span className="fw-semibold text-dark">{dailyTotals.currentMinutes}m</span> this entry &bull; Target: 8 hrs
+                                                                </>
+                                                            ) : (
+                                                                `Total Work Hours for ${formData.date} • Target: 8 hrs (480 mins)`
+                                                            )}
+                                                        </small>
+                                                    </div>
+                                                </div>
+
+                                                {/* Right: Tasks Count */}
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div className="text-end">
+                                                        <div className="fw-bold fs-5" style={{ color: '#065d48' }}>
+                                                            {dailyTotals.tasksCount}
+                                                        </div>
+                                                        <small className="text-muted d-block" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                            {dailyTotals.priorTasks > 0
+                                                                ? `${dailyTotals.priorTasks} logged + ${dailyTotals.currentTasks} new`
+                                                                : 'Total Tasks'}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         {categories.map((cat, index) => (
                                             <div key={cat.id} className="card mb-3" style={{ border: '2px solid #e0e0e0' }}>
                                                 <div className="card-body">
@@ -1205,7 +1473,7 @@ const NewData = () => {
                                                                 <div className="d-flex justify-content-between align-items-center mb-1">
                                                                     <div className="d-flex align-items-center">
                                                                         <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
-                                                                            Time Spent (Minutes) *
+                                                                            Time per Task (Minutes) *
                                                                         </label>
                                                                         {(() => {
                                                                             const matched = taskCategories.find(c => c.name === cat.category);
@@ -1286,7 +1554,7 @@ const NewData = () => {
                                                             <>
                                                                 <div className="mb-3 col-lg-6">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Time Spent (Minutes) *
+                                                                        Meeting Duration (Minutes) *
                                                                     </label>
                                                                     <div className="d-flex gap-2 align-items-center">
                                                                         <select
@@ -1444,9 +1712,25 @@ const NewData = () => {
                                         </div>
                                     </>
                                 )}
-                                <button type="submit" className="btn btn-success w-100 fw-bold">
-                                    Submit Report
-                                </button>
+                                {isEditMode ? (
+                                    <div className="d-flex gap-2">
+                                        <button type="submit" className="btn btn-success flex-grow-1 fw-bold py-2">
+                                            <i className="bi bi-check-circle me-1"></i>Update Report
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-danger fw-semibold px-4 py-2"
+                                            onClick={handleDeleteReport}
+                                            title="Permanently remove this report"
+                                        >
+                                            <i className="bi bi-trash me-1"></i>Delete Report
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button type="submit" className="btn btn-success w-100 fw-bold py-2">
+                                        Submit Report
+                                    </button>
+                                )}
                             </form>
                         </div>
                     </div>
