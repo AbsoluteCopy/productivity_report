@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -43,6 +43,10 @@ const ViewReport = () => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(false);
     const [taskCategories, setTaskCategories] = useState([]);
+
+    const topScrollbarRef = useRef(null);
+    const tableContainerRef = useRef(null);
+    const scrollContentRef = useRef(null);
 
 
     useEffect(() => {
@@ -923,7 +927,61 @@ const ViewReport = () => {
         if (key === 'date') return 'fitcell';
         return '';
     };
+
+    useEffect(() => {
+        const updateScrollbarWidth = () => {
+            if (tableContainerRef.current && scrollContentRef.current) {
+                const table = tableContainerRef.current.querySelector('table');
+                if (table) {
+                    scrollContentRef.current.style.width = `${table.scrollWidth}px`;
+                }
+            }
+        };
+
+        // Use requestAnimationFrame to ensure DOM is fully updated
+        requestAnimationFrame(() => {
+            updateScrollbarWidth();
+        });
+
+        const observer = new MutationObserver(() => {
+            requestAnimationFrame(updateScrollbarWidth);
+        });
+        if (tableContainerRef.current) {
+            observer.observe(tableContainerRef.current, { childList: true, subtree: true });
+        }
+
+        window.addEventListener('resize', updateScrollbarWidth);
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', updateScrollbarWidth);
+        };
+    }, [filteredReports]);
+
+    useEffect(() => {
+        if (topScrollbarRef.current && tableContainerRef.current) {
+            const syncScroll = () => {
+                if (topScrollbarRef.current && tableContainerRef.current) {
+                    topScrollbarRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+                }
+            };
+            tableContainerRef.current.addEventListener('scroll', syncScroll);
+            return () => {
+                if (tableContainerRef.current) {
+                    tableContainerRef.current.removeEventListener('scroll', syncScroll);
+                }
+            };
+        }
+    }, []);
+
+    const handleTopScroll = (e) => {
+        if (tableContainerRef.current) {
+            tableContainerRef.current.scrollLeft = e.target.scrollLeft;
+        }
+    };
+
     const renderItemsReportTable = () => {
+
         if (filteredReports.length === 0) {
             return (
                 <div className="text-center text-muted py-4">
@@ -933,52 +991,78 @@ const ViewReport = () => {
         }
 
         return (
-            <div className="table-responsive">
-                <table className="table table-hover table-bordered table-striped font-12">
-                    <thead className="table-light">
-                        <tr>
-                            {itemsReportColumns.map(col => (
-                                <th className='main-background text-white fitcell' key={col.key}>{col.label}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredReports.map(report => (
-                            <tr key={report.date}>
-                                {itemsReportColumns.map(col => {
-                                    const value = report[col.key];
+            <div>
+                <div
+                    ref={topScrollbarRef}
+                    className="scrollbar-top"
+                    style={{
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        marginBottom: '0px',
+                        height: '17px',
+                        width: '100%',
+                        position: 'relative',
+                        zIndex: 1,
+                        backgroundColor: '#f8f9fa'
+                    }}
+                    onScroll={handleTopScroll}
+                >
+                    <div
+                        ref={scrollContentRef}
+                        style={{ height: '1px', pointerEvents: 'none' }}
+                    ></div>
+                </div>
+                <div
+                    ref={tableContainerRef}
+                    className="table-responsive"
+                    style={{ marginTop: '0px' }}
+                >
+                    <table className="table table-hover table-bordered table-striped font-12">
+                        <thead className="table-light">
+                            <tr>
+                                {itemsReportColumns.map(col => (
+                                    <th className='main-background text-white fitcell' key={col.key}>{col.label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredReports.map(report => (
+                                <tr key={report.date}>
+                                    {itemsReportColumns.map(col => {
+                                        const value = report[col.key];
 
-                                    // Task list columns
-                                    if (Array.isArray(value)) {
-                                        return (
-                                            <td key={col.key}>
-                                                {value.length > 0 &&
-                                                    value.map((task, index) => (
-                                                        <div key={index}>{task}</div>
+                                        // Task list columns
+                                        if (Array.isArray(value)) {
+                                            return (
+                                                <td key={col.key}>
+                                                    {value.length > 0 &&
+                                                        value.map((task, index) => (
+                                                            <div key={index}>{task}</div>
                                                     ))}
+                                                </td>
+                                            );
+                                        }
+
+                                        // Count/time columns
+                                        const isCategoryValue =
+                                            col.key.endsWith('_count') ||
+                                            col.key.endsWith('_time');
+
+                                        const taskKey = col.key.replace(/_(count|time)$/, '_tasks');
+
+                                        return (
+                                            <td key={col.key} className={`${getColumnClass(col.key)} middle`}>
+                                                {isCategoryValue && report[taskKey]?.length === 0
+                                                    ? ''
+                                                    : value}
                                             </td>
                                         );
-                                    }
-
-                                    // Count/time columns
-                                    const isCategoryValue =
-                                        col.key.endsWith('_count') ||
-                                        col.key.endsWith('_time');
-
-                                    const taskKey = col.key.replace(/_(count|time)$/, '_tasks');
-
-                                    return (
-                                        <td key={col.key} className={`${getColumnClass(col.key)} middle`}>
-                                            {isCategoryValue && report[taskKey]?.length === 0
-                                                ? ''
-                                                : value}
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     };
@@ -1085,7 +1169,7 @@ const ViewReport = () => {
                         <div className="tab-pane fade show active" id="daily-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2">
                                 {dailyReports.length === 0 ? null : (
-                                    <button onClick={() => exportDailyReport('dailyreport')} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
+                                    <button onClick={() => exportDailyReport('dailyreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
                                 )}
@@ -1105,7 +1189,7 @@ const ViewReport = () => {
                                 ) : (
                                     <table className="table table-bordered table-striped table-hover table-sm mt-3 font-12">
                                         <thead>
-                                            <tr>
+                                            <tr className='middle'>
                                                 <th className='main-background text-white py-2'>Date</th>
                                                 <th className='main-background text-white py-2'>Day</th>
                                                 <th className='main-background text-white py-2'>Task</th>
@@ -1143,11 +1227,11 @@ const ViewReport = () => {
                                                         const meetMins = Number(report.meeting_total || 0) % 60;
 
                                                         return (
-                                                            <tr key={report.id} className="fw-bold table-success" style={{ backgroundColor: '#f0fdf4' }}>
+                                                            <tr key={report.id} className="fw-bold table-success middle" style={{ backgroundColor: '#f0fdf4' }}>
                                                                 <td></td>
                                                                 <td></td>
                                                                 <td>
-                                                                    <div className="d-flex align-items-center gap-2">
+                                                                    <div className="d-flex align-items-center justify-content-center gap-2">
                                                                         <span>Daily Total</span>
                                                                         <span className={`badge ${badgeClass} rounded-pill px-2 py-1`} style={{ fontSize: '0.72rem', fontWeight: 600 }}>
                                                                             {statusLabel} ({pct}%)
@@ -1304,7 +1388,7 @@ const ViewReport = () => {
                         <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2">
                                 {dailyReports.length === 0 ? null : (
-                                    <button onClick={() => exportDailyReport('summaryreport')} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
+                                    <button onClick={() => exportDailyReport('summaryreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
                                 )}
@@ -1403,7 +1487,7 @@ const ViewReport = () => {
                         <div className="tab-pane fade" id="items-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2 mb-2">
                                 {dailyReports.length === 0 ? null : (
-                                    <button onClick={() => exportDailyReport('itemsreport')} className="btn btn-sm shadow-sm" style={{ backgroundColor: '#065d48', color: 'white', fontWeight: '600', padding: '6px 16px' }}>
+                                    <button onClick={() => exportDailyReport('itemsreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
                                 )}

@@ -67,7 +67,7 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                 tabIndex={-1}
                 aria-hidden="true"
                 style={{ opacity: 0, position: 'absolute', height: 0, width: 0, pointerEvents: 'none' }}
-                onChange={() => {}}
+                onChange={() => { }}
             />
 
             {isOpen && (
@@ -212,16 +212,22 @@ const NewData = () => {
     const editId = searchParams.get('edit');
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingUserName, setEditingUserName] = useState('');
-    const [hasTimeSpent, setHasTimeSpent] = useState(false);
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
-        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '' }
+        { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '', hasTimeSpent: false }
     ]);
     const [taskCategories, setTaskCategories] = useState([]);
     const [existingDayReports, setExistingDayReports] = useState([]);
+    const taskListRefs = useRef({});
+
+    const setTaskListRef = useCallback((id, el) => {
+        if (el) {
+            taskListRefs.current[id] = el;
+        }
+    }, []);
 
     const fetchExistingDayReports = useCallback(async (date, targetUserId) => {
         if (!date) return;
@@ -293,7 +299,7 @@ const NewData = () => {
                 const mTime = Number(cat.timeSpent) || 0;
                 currentMinutes += mCount * mTime;
                 currentTasks += mCount;
-            } else if (cat.category === 'Others' && hasTimeSpent) {
+            } else if (cat.category === 'Others' && cat.hasTimeSpent) {
                 currentTasks += (cat.tasks || []).length;
             } else {
                 const count = (cat.tasks || []).length;
@@ -322,7 +328,7 @@ const NewData = () => {
             currentTasks,
             currentMinutes,
         };
-    }, [categories, hasTimeSpent, priorTotals]);
+    }, [categories, priorTotals]);
 
     // Copy from previous day
     const [showCopyModal, setShowCopyModal] = useState(false);
@@ -441,7 +447,8 @@ const NewData = () => {
                         currentTask: '',
                         timeSpent: (data.time_spent !== undefined && data.time_spent !== null) ? String(data.time_spent) : '',
                         meetingCount: data.meeting_count || 0,
-                        meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : ''
+                        meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : '',
+                        hasTimeSpent: data.task_category === 'Others' && data.time_spent === 0
                     }
                 ]);
             }
@@ -450,8 +457,10 @@ const NewData = () => {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: 'Unable to load report data for editing.',
+                text: 'Unable to load selected report data for editing.',
             });
+            navigate('/daily_report');
+            return;
         }
     };
 
@@ -642,6 +651,14 @@ const NewData = () => {
             }
             return cat;
         }));
+
+        // Scroll to bottom of task list after DOM update
+        requestAnimationFrame(() => {
+            const taskListRef = taskListRefs.current[id];
+            if (taskListRef) {
+                taskListRef.scrollTop = taskListRef.scrollHeight;
+            }
+        });
     };
 
     const handleTaskKeyDown = (e, id) => {
@@ -720,20 +737,37 @@ const NewData = () => {
     const addCategory = () => {
         setCategories(prev => [
             ...prev,
-            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, sub_category: '', meetingTitle: '' }
+            { id: Date.now(), category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, sub_category: '', meetingTitle: '', hasTimeSpent: false }
         ]);
     };
 
     const removeCategory = (id) => {
         if (categories.length > 1) {
-            setCategories(prev => prev.filter(cat => cat.id !== id));
+            const categoryToRemove = categories.find(cat => cat.id === id);
+
+            if (categoryToRemove && categoryToRemove.tasks && categoryToRemove.tasks.length > 0) {
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: 'This category has tasks. Do you want to remove it?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#065d48',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, remove it'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        setCategories(prev => prev.filter(cat => cat.id !== id));
+                    }
+                });
+            } else {
+                setCategories(prev => prev.filter(cat => cat.id !== id));
+            }
         }
     };
 
     const resetForm = () => {
         const user = JSON.parse(localStorage.getItem('user'));
 
-        setHasTimeSpent(false);
         setFormData({
             date: new Date().toISOString().split('T')[0],
             work_type: 'Working',
@@ -750,7 +784,8 @@ const NewData = () => {
                 timeSpent: '',
                 meetingCount: 0,
                 sub_category: '',
-                meetingTitle: ''
+                meetingTitle: '',
+                hasTimeSpent: false
             }
         ]);
     };
@@ -812,7 +847,7 @@ const NewData = () => {
                     });
                     return;
                 }
-            } else if (cat.category === 'Others' && hasTimeSpent) {
+            } else if (cat.category === 'Others' && cat.hasTimeSpent) {
                 // "No Time Spent" checked for Others, skip validation
                 continue;
             } else if (cat.category) {
@@ -940,7 +975,7 @@ const NewData = () => {
         // Ensure every working category has at least one task (unless Others with "No Time Spent")
         for (let cat of processedCategories) {
             if (cat.category && cat.category !== 'Meeting') {
-                if (cat.category === 'Others' && hasTimeSpent) {
+                if (cat.category === 'Others' && cat.hasTimeSpent) {
                     // No Time Spent checked for Others, allowed without tasks
                     continue;
                 }
@@ -963,7 +998,7 @@ const NewData = () => {
                 cat.category &&
                 (
                     cat.tasks.length > 0 ||
-                    (cat.category === 'Others' && hasTimeSpent) ||
+                    (cat.category === 'Others' && cat.hasTimeSpent) ||
                     (cat.category === 'Meeting' && cat.meetingTitle.trim() !== '')
                 )
             )
@@ -977,7 +1012,7 @@ const NewData = () => {
                 number_of_tasks: cat.category === 'Meeting'
                     ? (cat.meetingTitle.trim() ? 1 : 0)
                     : cat.tasks.length,
-                time_spent: hasTimeSpent && cat.category === 'Others'
+                time_spent: cat.hasTimeSpent && cat.category === 'Others'
                     ? 0
                     : parseInt(cat.timeSpent, 10) || 0,
                 meeting_count: cat.category === 'Meeting'
@@ -1041,11 +1076,20 @@ const NewData = () => {
 
                 await Promise.all(promises);
 
-                await Swal.fire({
+                const result = await Swal.fire({
                     title: 'Success',
                     text: 'All daily reports submitted successfully!',
                     icon: 'success',
+                    showCancelButton: true,
+                    confirmButtonText: 'View Reports',
+                    cancelButtonText: 'Close',
+                    confirmButtonColor: '#065d48',
+                    cancelButtonColor: '#6c757d',
                 });
+
+                if (result.isConfirmed) {
+                    navigate('/daily_report');
+                }
                 resetForm();
             }
         } catch (error) {
@@ -1170,7 +1214,8 @@ const NewData = () => {
             currentTask: '',
             timeSpent: String(report.time_spent || ''),
             meetingCount: report.meeting_count || 0,
-            meetingTitle: report.task_category === 'Meeting' && report.task_list?.[0] ? report.task_list[0] : ''
+            meetingTitle: report.task_category === 'Meeting' && report.task_list?.[0] ? report.task_list[0] : '',
+            hasTimeSpent: report.task_category === 'Others' && report.time_spent === 0
         }));
 
         setCategories(prev => {
@@ -1346,8 +1391,8 @@ const NewData = () => {
                                                                     dailyTotals.minutes > 600
                                                                         ? '#ef4444'
                                                                         : dailyTotals.minutes >= 450
-                                                                        ? '#10b981'
-                                                                        : '#065d48'
+                                                                            ? '#10b981'
+                                                                            : '#065d48'
                                                                 }
                                                                 strokeWidth="5"
                                                                 strokeDasharray={138.23}
@@ -1491,8 +1536,12 @@ const NewData = () => {
                                                                         <div className="form-check mb-0">
                                                                             <input
                                                                                 type="checkbox"
-                                                                                checked={hasTimeSpent}
-                                                                                onChange={(e) => setHasTimeSpent(e.target.checked)}
+                                                                                checked={cat.hasTimeSpent || false}
+                                                                                onChange={(e) => {
+                                                                                    setCategories(prev => prev.map(c =>
+                                                                                        c.id === cat.id ? { ...c, hasTimeSpent: e.target.checked } : c
+                                                                                    ));
+                                                                                }}
                                                                                 className="form-check-input"
                                                                                 id={`noTimeSpent-${cat.id}`}
                                                                             />
@@ -1521,8 +1570,8 @@ const NewData = () => {
                                                                         }}
                                                                         className="form-select"
                                                                         style={{ minWidth: '150px' }}
-                                                                        disabled={cat.category === 'Others' && hasTimeSpent}
-                                                                        required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                        disabled={cat.category === 'Others' && cat.hasTimeSpent}
+                                                                        required={!(cat.category === 'Others' && cat.hasTimeSpent)}
                                                                     >
                                                                         <option value="">Select Time</option>
                                                                         <option value="15">15 mins</option>
@@ -1543,8 +1592,8 @@ const NewData = () => {
                                                                             step="1"
                                                                             placeholder="Enter minutes"
                                                                             className="form-control"
-                                                                            disabled={cat.category === 'Others' && hasTimeSpent}
-                                                                            required={!(cat.category === 'Others' && hasTimeSpent)}
+                                                                            disabled={cat.category === 'Others' && cat.hasTimeSpent}
+                                                                            required={!(cat.category === 'Others' && cat.hasTimeSpent)}
                                                                         />
                                                                     )}
                                                                 </div>
@@ -1631,7 +1680,7 @@ const NewData = () => {
                                                         )}
                                                         {cat.category !== 'Meeting' && (
                                                             <>
-                                                                <div className="mb-3 col-lg-8">
+                                                                <div className="mb-3 col-lg-9">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Task List *
                                                                     </label>
@@ -1653,7 +1702,11 @@ const NewData = () => {
                                                                         </button>
                                                                     </div>
                                                                     {cat.tasks.length > 0 && (
-                                                                        <div className="mt-2 shadow-sm" style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}>
+                                                                        <div
+                                                                            className="mt-2 shadow-sm"
+                                                                            style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}
+                                                                            ref={(el) => setTaskListRef(cat.id, el)}
+                                                                        >
                                                                             <ul className="list-group list-group-flush mb-0">
                                                                                 {cat.tasks.map((task, taskIndex) => (
                                                                                     <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
@@ -1674,7 +1727,7 @@ const NewData = () => {
                                                                     )}
                                                                 </div>
 
-                                                                <div className="mb-3 col-lg-4">
+                                                                <div className="mb-3 col-lg-3">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Number of Tasks
                                                                     </label>
