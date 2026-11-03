@@ -11,6 +11,7 @@ import {
     Tooltip,
     Legend,
 } from 'chart.js';import API_BASE_URL from "../config";
+import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
 
 ChartJS.register(
     CategoryScale,
@@ -24,7 +25,7 @@ ChartJS.register(
 
 const Home = () => {
     const [user, setUser] = useState(null);
-    const [currentTime, setCurrentTime] = useState(new Date());
+    const [currentTime, setCurrentTime] = useState(getCurrentDateTimeInTimezone());
     const [recentReports, setRecentReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState('');
@@ -91,18 +92,7 @@ const Home = () => {
         });
     };
 
-    const formatRelativeTime = (dateStr) => {
-        if (!dateStr) return '';
-        const now = new Date();
-        const past = new Date(dateStr);
-        const diffSec = Math.floor((now - past) / 1000);
-        if (diffSec < 60) return 'Active just now';
-        const diffMin = Math.floor(diffSec / 60);
-        if (diffMin === 1) return 'Active 1m ago';
-        if (diffMin < 60) return `Active ${diffMin}m ago`;
-        const diffHr = Math.floor(diffMin / 60);
-        return `Active ${diffHr}h ago`;
-    };
+
 
     useEffect(() => {
         if (user) {
@@ -115,7 +105,7 @@ const Home = () => {
 
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentTime(new Date());
+            setCurrentTime(getCurrentDateTimeInTimezone());
         }, 1000);
 
         return () => clearInterval(timer);
@@ -136,7 +126,7 @@ const Home = () => {
             if (response.ok) {
                 const data = await response.json();
                 const sorted = (Array.isArray(data) ? data : []).sort((a, b) => {
-                    const diff = new Date(b.date || 0) - new Date(a.date || 0);
+                    const diff = parseDateInTimezone(b.date || 0) - parseDateInTimezone(a.date || 0);
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
                 const lastThree = sorted.slice(0, 3);
@@ -177,10 +167,9 @@ const Home = () => {
         // Fill in actual data from reports
         reports.forEach(report => {
             // Parse date properly to avoid timezone issues
-            const [year, month, day] = report.date.split('-');
-            const reportDate = new Date(Number(year), Number(month) - 1, Number(day));
+            const reportDate = parseDateInTimezone(report.date);
             if (reportDate.getMonth() === currentMonth && reportDate.getFullYear() === currentYear) {
-                timeSpentData[day - 1] = report.time_spent;
+                timeSpentData[reportDate.getDate() - 1] = report.time_spent;
             }
         });
 
@@ -205,24 +194,9 @@ const Home = () => {
         });
     };
 
-    const formatDateTime = (date) => {
-        return {
-            date: date.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            }),
-            time: date.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            })
-        };
-    };
 
-    const { date, time } = formatDateTime(currentTime);
+
+    const { date, time } = currentTime;
 
     return (
         <div className="container mt-5">
@@ -294,15 +268,11 @@ const Home = () => {
                                                             </span>
                                                         )}
                                                         <i className="bi bi-calendar3 me-1"></i>
-                                                        {(() => {
-                                                            const [year, month, day] = report.date.split('-');
-                                                            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
-                                                            return dateObj.toLocaleDateString('en-US', {
-                                                                month: 'short',
-                                                                day: 'numeric',
-                                                                year: 'numeric'
-                                                            });
-                                                        })()}
+                                                        {formatDateString(report.date, {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric'
+                                                        })}
                                                     </small>
                                                 </div>
                                             </div>

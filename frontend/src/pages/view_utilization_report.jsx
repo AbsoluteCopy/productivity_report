@@ -3,6 +3,7 @@ import axios from 'axios';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import API_BASE_URL from "../config";
+import { parseDateInTimezone } from '../utils/dateUtils';
 
 
 const ViewUtilizationReport = () => {
@@ -38,6 +39,7 @@ const ViewUtilizationReport = () => {
                 value: i + 1,
                 label: new Date(0, i).toLocaleString("default", {
                     month: "long",
+                    timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
                 }),
             })),
         []
@@ -139,9 +141,7 @@ const ViewUtilizationReport = () => {
                 return acc;
             }, {})
         ).sort((a, b) => {
-            const [aYear, aMonth, aDay] = a.date.split('-');
-            const [bYear, bMonth, bDay] = b.date.split('-');
-            return new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
+            return parseDateInTimezone(a.date) - parseDateInTimezone(b.date);
         });
     }, [dailyReports]);
 
@@ -162,7 +162,10 @@ const ViewUtilizationReport = () => {
                 day
             );
 
-            const dayOfWeek = date.getDay();
+            const dayOfWeek = date.toLocaleString('en-US', {
+                weekday: 'numeric',
+                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+            });
 
             if (dayOfWeek === 0 || dayOfWeek === 6) {
 
@@ -252,10 +255,10 @@ const ViewUtilizationReport = () => {
                 : "USER";
 
         const monthName = new Date(selectedYear, selectedMonth - 1, 1)
-            .toLocaleString("default", { month: "long" }).toUpperCase();
+            .toLocaleString("default", { month: "long", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }).toUpperCase();
 
         const monthNameShort = new Date(selectedYear, selectedMonth - 1, 1)
-            .toLocaleString("default", { month: "short" });
+            .toLocaleString("default", { month: "short", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' });
 
         const workbook = new ExcelJS.Workbook();
         const ws = workbook.addWorksheet("Sheet1");
@@ -330,15 +333,17 @@ const ViewUtilizationReport = () => {
         let rowNumber = 4;
         // (data loop continues below)
         displayReports.forEach((report) => {
+            const dateObj = parseDateInTimezone(report.date);
             const [year, month, day] = report.date.split("-");
-            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
 
             const dateLabel = `${day}-${dateObj.toLocaleString("en-US", {
                 month: "short",
+                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
             })}-${String(year).slice(-2)}`;
 
             const dayLabel = dateObj.toLocaleDateString("en-US", {
                 weekday: "long",
+                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
             });
 
             const isHoliday = report.task_category === "Holiday";
@@ -623,7 +628,7 @@ const ViewUtilizationReport = () => {
                                                 <th>&nbsp;</th>
                                                 <th className='text-muted fw-semibold py-3' colSpan={2}>PERIOD</th>
                                                 <th className='fw-bold text-dark py-3' colSpan={4}>
-                                                    {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long' }).toUpperCase()} {selectedYear}
+                                                    {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }).toUpperCase()} {selectedYear}
                                                 </th>
                                             </tr>
                                             <tr className='middle text-muted' style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
@@ -712,7 +717,7 @@ const ViewUtilizationReport = () => {
                                                                 {showDate &&
                                                                     `${date.getDate()}-${date.toLocaleString(
                                                                         'en-US',
-                                                                        { month: 'short' }
+                                                                        { month: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
                                                                     )}-${String(date.getFullYear()).slice(-2)}`
                                                                 }
                                                             </td>
@@ -720,7 +725,7 @@ const ViewUtilizationReport = () => {
                                                                 {showDate &&
                                                                     date.toLocaleDateString(
                                                                         'en-US',
-                                                                        { weekday: 'short' }
+                                                                        { weekday: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
                                                                     )
                                                                 }
                                                             </td>

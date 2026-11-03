@@ -3,6 +3,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
 import API_BASE_URL from "../config";
+import { DEFAULT_TIMEZONE } from '../utils/dateUtils';
 
 const API_URL = `${API_BASE_URL}/task-categories/`;
 
@@ -243,10 +244,11 @@ const ManageTaskCategory = () => {
         },
         {
             name: "Created At",
-            selector: row => new Intl.DateTimeFormat("en-PH", {
+            selector: row => new Intl.DateTimeFormat("en-US", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
+                timeZone: DEFAULT_TIMEZONE
             }).format(new Date(row.created_at)),
             sortable: true,
         },

@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
+import { getCurrentDateInTimezone, parseDateInTimezone, formatDateString, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
 
 const categoryOptions = [
     'Accounting Unapplied Payments',
@@ -213,7 +214,7 @@ const NewData = () => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingUserName, setEditingUserName] = useState('');
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split('T')[0],
+        date: getCurrentDateInTimezone(),
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
@@ -409,9 +410,7 @@ const NewData = () => {
 
             // Check 24-hour edit window for employees
             if (currentUser && currentUser.role === 'employee') {
-                const timeToCompare = data.created_at ? new Date(data.created_at).getTime() : new Date(data.date).getTime();
-                const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
-                if (hoursAgo > 24) {
+                if (checkIsMoreThan24HoursOld(data)) {
                     await Swal.fire({
                         icon: 'warning',
                         title: 'Edit Window Expired',
@@ -465,13 +464,13 @@ const NewData = () => {
     };
 
     const isWeekend = (dateString) => {
-        // Parse as a calendar date
-        const date = new Date(`${dateString}T12:00:00`);
+        // Parse as a calendar date in the configured timezone
+        const date = parseDateInTimezone(dateString);
 
-        const weekday = new Intl.DateTimeFormat("en-US", {
+        const weekday = date.toLocaleDateString("en-US", {
             weekday: "short",
-            timeZone: "America/Anchorage",
-        }).format(date);
+            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+        });
 
         return weekday === "Sat" || weekday === "Sun";
     };
@@ -769,7 +768,7 @@ const NewData = () => {
         const user = JSON.parse(localStorage.getItem('user'));
 
         setFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: getCurrentDateInTimezone(),
             work_type: 'Working',
             holiday_name: '',
             user_id: user?.id
@@ -1169,9 +1168,7 @@ const NewData = () => {
     };
 
     const formatDateLabel = (dateStr) => {
-        const [y, m, d] = dateStr.split('-');
-        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
-        return dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        return formatDateString(dateStr, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     };
 
     const handleCopyDateChange = (newDate) => {
