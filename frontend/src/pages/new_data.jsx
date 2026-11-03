@@ -5,17 +5,6 @@ import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
 import { getCurrentDateInTimezone, parseDateInTimezone, formatDateString, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
 
-const categoryOptions = [
-    'Accounting Unapplied Payments',
-    'Accounting Cash Receipts',
-    'Checked/Reviewed Accounting Posted Payments',
-    'Check Deposits to Cash Receipts & UAP',
-    'Checked & Cleared 2025 ePay Transactions',
-    'Process Offset on Accounting from Matt/UW Team',
-    'Meeting',
-    'Others',
-];
-
 const CategorySelect = ({ cat, taskCategories, onSelect }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +33,6 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
             <div
                 className={`form-select d-flex justify-content-between align-items-center ${!displayLabel ? 'text-muted' : ''}`}
                 style={{
-                    cursor: 'pointer',
                     backgroundColor: '#fff',
                     backgroundImage: 'none',
                     minHeight: '38px',
@@ -73,7 +61,7 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
 
             {isOpen && (
                 <div
-                    className="dropdown-menu show shadow-lg w-100 p-2 mt-1"
+                    className="dropdown-menu show shadow-lg w-100 p-2 mt-1 pointer"
                     style={{
                         position: 'absolute',
                         top: '100%',
@@ -162,9 +150,8 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
 
                         {(!searchTerm || 'meeting'.includes(searchTerm.toLowerCase())) && (
                             <div
-                                className={`dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Meeting' ? 'active text-white' : ''}`}
+                                className={`pointer dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Meeting' ? 'active text-white' : ''}`}
                                 style={{
-                                    cursor: 'pointer',
                                     backgroundColor: cat.category === 'Meeting' ? '#065d48' : undefined,
                                     fontSize: '0.9rem'
                                 }}
@@ -1647,19 +1634,6 @@ const NewData = () => {
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                {/* <div className="mb-3 col-lg-3">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        No. of Meetings
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={cat.meetingCount}
-                                                                        onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
-                                                                        min="0"
-                                                                        placeholder="0"
-                                                                        className="form-control"
-                                                                    />
-                                                                </div> */}
                                                                 <div className="mb-3 col-lg-12">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Meeting Title

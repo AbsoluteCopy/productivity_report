@@ -10,9 +10,10 @@ import {
     Title,
     Tooltip,
     Legend,
-} from 'chart.js';import API_BASE_URL from "../config";
+} from 'chart.js'; import API_BASE_URL from "../config";
 import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
+import Announcement from '../components/Announcement'
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -39,6 +40,7 @@ const Home = () => {
     const [companyCounts, setCompanyCounts] = useState({});
     const [availableCompanies, setAvailableCompanies] = useState([]);
     const [selectedCompanies, setSelectedCompanies] = useState([]);
+    const [showAnnouncements, setShowAnnouncements] = useState(false);
 
     useEffect(() => {
         const userData = localStorage.getItem('user');
@@ -47,6 +49,13 @@ const Home = () => {
             setUser(parsedUser);
             setRole(parsedUser.role);
         }
+    }, []);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowAnnouncements(true);
+        }, 1000);
+
+        return () => clearTimeout(timer);
     }, []);
 
     const fetchOnlineUsers = async () => {
@@ -200,7 +209,7 @@ const Home = () => {
 
     return (
         <div className="container mt-5">
-            <div className="row mb-5">
+            <div className="row mb-1">
                 <div className="col-12">
                     <div className="p-4 rounded-4 shadow-sm" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
                         <h2 className="fw-bold mb-1">
@@ -208,6 +217,50 @@ const Home = () => {
                         </h2>
                         {(role === 'admin' || role === 'viewer' || role === 'hr') ? <p className="mb-0 opacity-75">Track your team's productivity with ease.</p> :
                             <p className="mb-0 opacity-75">Ready to track your productivity today?</p>}
+                    </div>
+                </div>
+            </div>
+            <div className="row mb-4">
+                <div className="col-12">
+                    <div
+                        className="d-flex flex-wrap justify-content-between align-items-center p-3 rounded-3 shadow-sm"
+                        style={{
+                            backgroundColor: '#f0f8f5',
+                            border: '1px solid rgba(5, 93, 71, 0.15)'
+                        }}
+                    >
+                        <div className="d-flex align-items-center gap-3">
+                            <div
+                                className="rounded-circle d-flex align-items-center justify-content-center"
+                                style={{
+                                    width: '45px',
+                                    height: '45px',
+                                    backgroundColor: 'rgba(5, 93, 71, 0.12)',
+                                    color: '#055d47'
+                                }}
+                            >
+                                <i className="bi bi-megaphone-fill fs-5"></i>
+                            </div>
+
+                            <div>
+                                <h6 className="fw-bold mb-1" style={{ color: '#055d47' }}>
+                                    What's New?
+                                </h6>
+                                <small className="text-muted">
+                                    Check out the latest application updates and announcements.
+                                </small>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="btn btn-success rounded-pill px-4 mt-2 mt-md-0"
+                            style={{ backgroundColor: '#055d47', borderColor: '#055d47' }}
+                            onClick={() => setShowAnnouncements(true)}
+                        >
+                            <i className="bi bi-eye me-2"></i>
+                            View Updates
+                        </button>
                     </div>
                 </div>
             </div>
@@ -540,6 +593,11 @@ const Home = () => {
                     </div>
                 )}
             </div>
+            {showAnnouncements && (
+                <Announcement
+                    onClose={() => setShowAnnouncements(false)}
+                />
+            )}
         </div>
     );
 };
