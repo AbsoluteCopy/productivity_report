@@ -12,7 +12,7 @@ import {
     Legend,
 } from 'chart.js';import API_BASE_URL from "../config";
 import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
-
+import AnalogClock from '../components/AnalogClock'
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -217,7 +217,7 @@ const Home = () => {
                     <div className="card shadow-sm h-100 border-0 rounded-4 overflow-hidden" style={{ transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-5px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                         <div className="card-body text-center p-5 d-flex flex-column justify-content-center">
                             <div className="mb-3">
-                                <i className="bi bi-clock-history" style={{ fontSize: '3rem', color: '#055d47' }}></i>
+                                <AnalogClock />
                             </div>
                             <div className="display-5 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
                                 {time}
