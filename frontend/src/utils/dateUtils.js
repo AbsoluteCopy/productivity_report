@@ -4,7 +4,7 @@ import.meta.env.VITE_DEFAULT_TIMEZONE;
  * Get the configured timezone from environment variables
  * Defaults to 'UTC' if not specified
  */
-export const DEFAULT_TIMEZONE = import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC';
+export const DEFAULT_TIMEZONE = import.meta.env.VITE_DEFAULT_TIMEZONE || 'America/Anchorage';
 
 /**
  * Get current date in the configured timezone as YYYY-MM-DD

@@ -430,14 +430,14 @@ const ViewReport = () => {
     ]));
 
     const initialCategoryMap = allReportCategories.reduce((acc, cat) => {
-        acc[cat] = { tasks: 0, minutes: 0 };
+        acc[cat] = { tasks: 0, minutes: 0, actual: 0 };
         return acc;
     }, {});
 
     const categoryMap = groupedReports.reduce((acc, report) => {
         const cat = getReportCategory(report);
         if (!cat || cat === 'Weekend' || cat === 'Daily Total' || cat === 'PTO' || cat === 'Holiday' || cat === 'Company Event') return acc;
-        if (!acc[cat]) acc[cat] = { tasks: 0, minutes: 0 };
+        if (!acc[cat]) acc[cat] = { tasks: 0, minutes: 0, actual: 0 };
 
         acc[cat].tasks += Number(report.number_of_tasks || 0);
         acc[cat].minutes += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
@@ -449,7 +449,7 @@ const ViewReport = () => {
         task,
         totalTasks: categoryMap[task].tasks,
         totalTime: categoryMap[task].minutes,
-        totalActualTime: categoryMap[task].actual
+        totalActualTime: categoryMap[task].actual > 0 ? Number((categoryMap[task].actual / 60).toFixed(2)) : 0
     })).sort((a, b) => b.totalTime - a.totalTime); // Sort by time spent descending
 
     const taskChartLabels = [];
@@ -1277,7 +1277,7 @@ const ViewReport = () => {
                                                     const isMeeting = report.task_category === 'Meeting';
                                                     const displayCat = getReportCategory(report);
                                                     const rowKey = `${report.date}-${displayCat}-${report.id || index}`;
-                                                    const actualTime = (Number(report.actual_time || 0) / 60);
+                                                    const actualTime = report.actual_time && Number(report.actual_time) > 0 ? Number((Number(report.actual_time) / 60).toFixed(2)) : '';
                                                     return (
                                                         <tr key={rowKey} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
@@ -1481,11 +1481,11 @@ const ViewReport = () => {
                                             </td>
                                             <td>
                                                 {
-                                                    summaryReports.reduce(
+                                                    Number(summaryReports.reduce(
                                                         (sum, item) =>
-                                                            sum + item.totalActualTime,
+                                                            sum + (Number(item.totalActualTime) || 0),
                                                         0
-                                                    )
+                                                    ).toFixed(2))
                                                 }
                                             </td>
 
