@@ -3,17 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
-
-const categoryOptions = [
-    'Accounting Unapplied Payments',
-    'Accounting Cash Receipts',
-    'Checked/Reviewed Accounting Posted Payments',
-    'Check Deposits to Cash Receipts & UAP',
-    'Checked & Cleared 2025 ePay Transactions',
-    'Process Offset on Accounting from Matt/UW Team',
-    'Meeting',
-    'Others',
-];
+import { getCurrentDateInTimezone, parseDateInTimezone, formatDateString, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
 
 const CategorySelect = ({ cat, taskCategories, onSelect }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -43,7 +33,6 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
             <div
                 className={`form-select d-flex justify-content-between align-items-center ${!displayLabel ? 'text-muted' : ''}`}
                 style={{
-                    cursor: 'pointer',
                     backgroundColor: '#fff',
                     backgroundImage: 'none',
                     minHeight: '38px',
@@ -72,7 +61,7 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
 
             {isOpen && (
                 <div
-                    className="dropdown-menu show shadow-lg w-100 p-2 mt-1"
+                    className="dropdown-menu show shadow-lg w-100 p-2 mt-1 pointer"
                     style={{
                         position: 'absolute',
                         top: '100%',
@@ -161,9 +150,8 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
 
                         {(!searchTerm || 'meeting'.includes(searchTerm.toLowerCase())) && (
                             <div
-                                className={`dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Meeting' ? 'active text-white' : ''}`}
+                                className={`pointer dropdown-item rounded px-3 py-2 d-flex justify-content-between align-items-center ${cat.category === 'Meeting' ? 'active text-white' : ''}`}
                                 style={{
-                                    cursor: 'pointer',
                                     backgroundColor: cat.category === 'Meeting' ? '#065d48' : undefined,
                                     fontSize: '0.9rem'
                                 }}
@@ -213,7 +201,7 @@ const NewData = () => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingUserName, setEditingUserName] = useState('');
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split('T')[0],
+        date: getCurrentDateInTimezone(),
         work_type: 'Working'
     });
     const [categories, setCategories] = useState([
@@ -252,6 +240,102 @@ const NewData = () => {
             setExistingDayReports([]);
         }
     }, []);
+    const RUN_KEY = 'task_run_v1';
+    const [run, setRun] = useState(() => {
+        try { const r = JSON.parse(localStorage.getItem(RUN_KEY)); return r && r.queue ? r : null; }
+        catch { return null; }
+    });
+    const [now, setNow] = useState(Date.now());
+    const [description, setDescription] = useState('');
+    const [attachment, setAttachment] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const warnedRef = useRef(null);
+
+    // survive page refresh (timer uses a start timestamp, so it stays accurate)
+    useEffect(() => {
+        if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run));
+        else localStorage.removeItem(RUN_KEY);
+    }, [run]);
+
+    const timerActive = !!(run && !run.finished && run.startedAt);
+    useEffect(() => {
+        if (!timerActive) return;
+        const t = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(t);
+    }, [timerActive, run?.index]);
+
+    const elapsedSec = timerActive ? Math.max(0, Math.floor((now - run.startedAt) / 1000)) : 0;
+    const current = run && !run.finished ? run.queue[run.index] : null;
+    const overtime = !!(current && current.expectedSeconds > 0 && elapsedSec > current.expectedSeconds);
+
+    // one-time warning when going beyond (time per task × number of tasks)
+    useEffect(() => {
+        if (!overtime) return;
+        const key = `${run.index}-${run.queue[run.index].label}`;
+        if (warnedRef.current === key) return;
+        warnedRef.current = key;
+        Swal.fire({
+            toast: true, position: 'top-end', icon: 'warning', timer: 7000, showConfirmButton: false,
+            title: 'Time exceeded',
+            text: `You've gone past the allotted ${fmtClock(current.expectedSeconds)} for "${current.label}".`
+        });
+    }, [overtime]); // eslint-disable-line
+
+    const fmtClock = (s) => {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
+    };
+
+    const compareText = (actual, expected) => {
+        if (!expected) return { text: 'No time target set', cls: 'text-muted' };
+        const pct = Math.round((Math.abs(actual - expected) / expected) * 100);
+        if (actual <= expected) return { text: `${pct}% faster than selected time`, cls: 'text-success' };
+        return { text: `${pct}% slower than selected time`, cls: 'text-danger' };
+    };
+
+    const startNext = () => setRun(prev => ({ ...prev, startedAt: Date.now() }));
+
+    const cancelRun = async () => {
+        const r = await Swal.fire({
+            title: 'Cancel remaining tasks?',
+            text: 'Categories already ended are saved. The current timer and unstarted categories will be discarded.',
+            icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, cancel'
+        });
+        if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); }
+    };
+
+    const endTask = async () => {
+        const cur = run.queue[run.index];
+        const actualSeconds = Math.max(1, Math.floor((Date.now() - run.startedAt) / 1000));
+        setSaving(true);
+        try {
+            const fd = new FormData();
+            ['user', 'date', 'task_category', 'sub_category', 'work_type',
+                'number_of_tasks', 'time_spent', 'meeting_count'].forEach(k => fd.append(k, cur.payload[k] ?? ''));
+            fd.append('task_list', JSON.stringify(cur.payload.task_list));
+            fd.append('actual_time', actualSeconds);            // seconds; use Math.round(actualSeconds/60) if your column is minutes
+            fd.append('description', description.trim());
+            if (attachment) fd.append('attachment', attachment);
+
+            await axios.post(`${API_BASE_URL}/daily-reports/`, fd);
+
+            const results = [...run.results, { label: cur.label, expectedSeconds: cur.expectedSeconds, actualSeconds }];
+            const isLast = run.index + 1 >= run.queue.length;
+            setDescription(''); setAttachment(null);
+            setRun(isLast
+                ? { ...run, results, startedAt: null, finished: true }
+                : { ...run, results, index: run.index + 1, startedAt: null });
+        } catch (error) {
+            console.error('Error:', error);
+            Swal.fire({
+                title: 'Could not save',
+                text: error.response?.data?.error || 'Error saving this task. Your timer is still running, please try again.',
+                icon: 'error'
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
@@ -409,9 +493,7 @@ const NewData = () => {
 
             // Check 24-hour edit window for employees
             if (currentUser && currentUser.role === 'employee') {
-                const timeToCompare = data.created_at ? new Date(data.created_at).getTime() : new Date(data.date).getTime();
-                const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
-                if (hoursAgo > 24) {
+                if (checkIsMoreThan24HoursOld(data)) {
                     await Swal.fire({
                         icon: 'warning',
                         title: 'Edit Window Expired',
@@ -465,13 +547,13 @@ const NewData = () => {
     };
 
     const isWeekend = (dateString) => {
-        // Parse as a calendar date
-        const date = new Date(`${dateString}T12:00:00`);
+        // Parse as a calendar date in the configured timezone
+        const date = parseDateInTimezone(dateString);
 
-        const weekday = new Intl.DateTimeFormat("en-US", {
+        const weekday = date.toLocaleDateString("en-US", {
             weekday: "short",
-            timeZone: "America/Anchorage",
-        }).format(date);
+            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+        });
 
         return weekday === "Sat" || weekday === "Sun";
     };
@@ -769,7 +851,7 @@ const NewData = () => {
         const user = JSON.parse(localStorage.getItem('user'));
 
         setFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: getCurrentDateInTimezone(),
             work_type: 'Working',
             holiday_name: '',
             user_id: user?.id
@@ -1047,57 +1129,34 @@ const NewData = () => {
             }
         }
 
+        if (!isEditMode) {
+            const queue = reports.map(r => {
+                const isMeeting = r.task_category === 'Meeting';
+                const units = isMeeting ? Math.max(Number(r.meeting_count) || 1, 1) : r.number_of_tasks;
+                return {
+                    payload: r,
+                    label: r.sub_category && r.task_category === 'Others' ? r.sub_category : r.task_category,
+                    expectedSeconds: (Number(r.time_spent) || 0) * units * 60   // time per task × number of tasks
+                };
+            });
+            warnedRef.current = null;
+            setRun({ queue, index: 0, startedAt: Date.now(), results: [], finished: false });
+            return;
+        }
+
         try {
-            if (isEditMode) {
-                // Update the original report with the first category
-                await axios.put(`${API_BASE_URL}/daily-reports/${editId}/`, reports[0]);
-
-                // If the user added extra categories, POST them as new reports
-                if (reports.length > 1) {
-                    const newReports = reports.slice(1).map(report =>
-                        axios.post(`${API_BASE_URL}/daily-reports/`, report)
-                    );
-                    await Promise.all(newReports);
-                }
-
-                await Swal.fire({
-                    title: 'Success',
-                    text: 'Daily report updated successfully!',
-                    icon: 'success',
-                });
-                // Navigate back so the list refreshes and user can't re-submit
-                const fromPage = searchParams.get('from');
-                navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
-            } else {
-                // Create new reports
-                const promises = reports.map(report =>
-                    axios.post(`${API_BASE_URL}/daily-reports/`, report)
-                );
-
-                await Promise.all(promises);
-
-                const result = await Swal.fire({
-                    title: 'Success',
-                    text: 'All daily reports submitted successfully!',
-                    icon: 'success',
-                    showCancelButton: true,
-                    confirmButtonText: 'View Reports',
-                    cancelButtonText: 'Close',
-                    confirmButtonColor: '#065d48',
-                    cancelButtonColor: '#6c757d',
-                });
-
-                if (result.isConfirmed) {
-                    navigate('/daily_report');
-                }
-                resetForm();
+            await axios.put(`${API_BASE_URL}/daily-reports/${editId}/`, reports[0]);
+            if (reports.length > 1) {
+                await Promise.all(reports.slice(1).map(report => axios.post(`${API_BASE_URL}/daily-reports/`, report)));
             }
+            await Swal.fire({ title: 'Success', text: 'Daily report updated successfully!', icon: 'success' });
+            const fromPage = searchParams.get('from');
+            navigate(fromPage === 'view_report' ? '/view_report' : '/daily_report');
         } catch (error) {
             console.error('Error:', error);
-            const errMsg = error.response?.data?.error || error.response?.data?.detail || error.response?.data?.message || `Error ${isEditMode ? 'updating' : 'submitting'} report. Please try again.`;
             Swal.fire({
                 title: 'Submission Error',
-                text: errMsg,
+                text: error.response?.data?.error || error.response?.data?.detail || 'Error updating report. Please try again.',
                 icon: 'error',
             });
         }
@@ -1169,9 +1228,7 @@ const NewData = () => {
     };
 
     const formatDateLabel = (dateStr) => {
-        const [y, m, d] = dateStr.split('-');
-        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
-        return dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        return formatDateString(dateStr, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     };
 
     const handleCopyDateChange = (newDate) => {
@@ -1270,6 +1327,188 @@ const NewData = () => {
             });
         }
     };
+    if (run) {
+        // ---- Final summary ----
+        if (run.finished) {
+            const tExp = run.results.reduce((s, r) => s + (r.expectedSeconds || 0), 0);
+            const tAct = run.results.filter(r => r.expectedSeconds > 0).reduce((s, r) => s + r.actualSeconds, 0);
+            const overall = compareText(tAct, tExp);
+            return (
+                <div className="container py-4">
+                    <div className="card shadow-sm mx-auto" style={{ maxWidth: 720 }}>
+                        <div className="card-body p-4">
+                            <h3 className="fw-bold text-center mb-3" style={{ color: '#065d48' }}>All Tasks Completed</h3>
+                            <ul className="list-group mb-3">
+                                {run.results.map((r, i) => {
+                                    const c = compareText(r.actualSeconds, r.expectedSeconds);
+                                    return (
+                                        <li key={i} className="list-group-item d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <div className="fw-semibold">{r.label}</div>
+                                                <small className="text-muted">
+                                                    Selected: {r.expectedSeconds ? fmtClock(r.expectedSeconds) : '—'} • Actual: {fmtClock(r.actualSeconds)}
+                                                </small>
+                                            </div>
+                                            <span className={`fw-semibold ${c.cls}`}>{c.text}</span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                            <div className={`text-center fs-5 fw-bold mb-3 ${overall.cls}`}>Overall: {overall.text}</div>
+                            <button className="btn btn-success w-100 fw-bold"
+                                style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
+                                onClick={() => { setRun(null); resetForm(); navigate('/daily_report'); }}>
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ---- Active category ----
+        const cur = run.queue[run.index];
+        const p = cur.payload;
+        const running = !!run.startedAt;
+        const pct = cur.expectedSeconds ? Math.min((elapsedSec / cur.expectedSeconds) * 100, 100) : 0;
+
+        return (
+            <div className="container py-4">
+                <div className="card shadow-sm mx-auto" style={{ maxWidth: 760 }}>
+                    <div className="card-body p-4">
+                        <div className="d-flex justify-content-between align-items-center mb-3">
+                            <span className="badge bg-secondary">Category {run.index + 1} of {run.queue.length}</span>
+                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={cancelRun} disabled={saving}>Cancel</button>
+                        </div>
+
+                        <h3 className="fw-bold mb-1" style={{ color: '#065d48' }}>{cur.label}</h3>
+                        <small className="text-muted">
+                            {p.date} • {cur.expectedSeconds ? `Selected time: ${fmtClock(cur.expectedSeconds)}` : 'No time target'}
+                        </small>
+
+                        <div className="d-flex justify-content-center my-4">
+                            {(() => {
+                                const size = 220;
+                                const strokeWidth = 12;
+                                const radius = (size - strokeWidth) / 2;
+                                const circumference = 2 * Math.PI * radius;
+
+                                const progress = Math.min(pct, 100);
+                                const offset =
+                                    circumference - (progress / 100) * circumference;
+
+                                return (
+                                    <div style={{ position: 'relative', width: size, height: size }}>
+                                        <svg width={size} height={size}>
+                                            {/* Background Circle */}
+                                            <circle
+                                                cx={size / 2}
+                                                cy={size / 2}
+                                                r={radius}
+                                                fill="none"
+                                                stroke="#e5e7eb"
+                                                strokeWidth={strokeWidth}
+                                            />
+
+                                            {/* Progress Circle */}
+                                            <circle
+                                                cx={size / 2}
+                                                cy={size / 2}
+                                                r={radius}
+                                                fill="none"
+                                                stroke={overtime ? "#b14c4c" : "#065d48"}
+                                                strokeWidth={strokeWidth}
+                                                strokeLinecap="round"
+                                                strokeDasharray={circumference}
+                                                strokeDashoffset={offset}
+                                                transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                                                style={{
+                                                    transition: "stroke-dashoffset 0.5s ease"
+                                                }}
+                                            />
+                                        </svg>
+
+                                        {/* Timer Text */}
+                                        <div
+                                            className="position-absolute top-50 start-50 translate-middle text-center"
+                                            style={{ width: "100%" }}
+                                        >
+                                            <div
+                                                style={{
+                                                    fontSize: "2.8rem",
+                                                    fontWeight: 700,
+                                                    fontVariantNumeric: "tabular-nums",
+                                                    color: overtime ? "#b14c4c" : "#065d48",
+                                                }}
+                                            >
+                                                {fmtClock(running ? elapsedSec : 0)}
+                                            </div>
+
+                                            <small className="text-muted">
+                                                {overtime ? "Beyond planned duration" : "On track"}
+                                            </small>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {overtime && (
+                            <div
+                                className="rounded-3 p-3 mb-3"
+                                style={{
+                                    backgroundColor: "#fffbeb",
+                                    border: "1px solid #fde68a"
+                                }}
+                            >
+                                <div className="fw-semibold text-warning-emphasis">
+                                    Target duration reached
+                                </div>
+
+                                <small className="text-muted">
+                                    You've spent {fmtClock(elapsedSec - cur.expectedSeconds)} &nbsp;
+                                    beyond the originally planned duration on this task.
+                                    Feel free to continue working and finish when ready.
+                                </small>
+                            </div>
+                        )}
+
+                        {p.task_category === 'Meeting' ? (
+                            <p className="mb-3">{p.task_list[0]}</p>
+                        ) : (
+                            <ul className="list-group mb-3">
+                                {p.task_list.map((t, i) => <li key={i} className="list-group-item py-2">{t}</li>)}
+                            </ul>
+                        )}
+
+                        {running ? (
+                            <>
+                                <div className="mb-3">
+                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Description</label>
+                                    <textarea className="form-control" rows={3} value={description}
+                                        onChange={e => setDescription(e.target.value)}
+                                        placeholder="What did you do for this task?" />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Attachment (optional, max 10 MB)</label>
+                                    <input type="file" className="form-control"
+                                        onChange={e => setAttachment(e.target.files[0] || null)} />
+                                </div>
+                                <button className="btn btn-danger w-100 fw-bold py-2" onClick={endTask} disabled={saving}>
+                                    {saving ? 'Saving...' : <><i className="bi bi-stop-circle me-1"></i>End Task</>}
+                                </button>
+                            </>
+                        ) : (
+                            <button className="btn btn-success w-100 fw-bold py-2" onClick={startNext}
+                                style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}>
+                                <i className="bi bi-play-circle me-1"></i>Start {cur.label}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
@@ -1484,7 +1723,7 @@ const NewData = () => {
                                                                 className="btn btn-sm btn-outline-danger"
                                                                 onClick={() => removeCategory(cat.id)}
                                                             >
-                                                                Remove Category
+                                                                <i className="bi bi-trash me-1"></i>Remove Category
                                                             </button>
                                                         )}
                                                     </div>
@@ -1650,19 +1889,6 @@ const NewData = () => {
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                {/* <div className="mb-3 col-lg-3">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        No. of Meetings
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={cat.meetingCount}
-                                                                        onChange={(e) => handleMeetingCountChange(cat.id, e.target.value)}
-                                                                        min="0"
-                                                                        placeholder="0"
-                                                                        className="form-control"
-                                                                    />
-                                                                </div> */}
                                                                 <div className="mb-3 col-lg-12">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                                                         Meeting Title
@@ -1698,7 +1924,7 @@ const NewData = () => {
                                                                             className="btn btn-outline-success"
                                                                             onClick={() => addTask(cat.id, cat.currentTask)}
                                                                         >
-                                                                            Add
+                                                                            <i className="bi bi-patch-plus me-1"></i>Add
                                                                         </button>
                                                                     </div>
                                                                     {cat.tasks.length > 0 && (
@@ -1744,25 +1970,26 @@ const NewData = () => {
                                                 </div>
                                             </div>
                                         ))}
-
-                                        <div className="d-flex gap-2 mb-3">
-                                            <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
-                                                + Add Another Category
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn btn-outline-secondary d-flex align-items-center"
-                                                onClick={fetchPreviousReports}
-                                                disabled={copyLoading}
-                                                title="Copy tasks from your most recent previous working day"
-                                            >
-                                                {copyLoading
-                                                    ? <span className="spinner-border spinner-border-sm me-1" role="status" />
-                                                    : <i className="bi bi-clipboard-plus me-1"></i>
-                                                }
-                                                {copyLoading ? ' Loading...' : ' Copy from Previous Day'}
-                                            </button>
-                                        </div>
+                                        {!isEditMode && (
+                                            <div className="d-flex gap-2 mb-3">
+                                                <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
+                                                    + Add Another Category
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary d-flex align-items-center"
+                                                    onClick={fetchPreviousReports}
+                                                    disabled={copyLoading}
+                                                    title="Copy tasks from your most recent previous working day"
+                                                >
+                                                    {copyLoading
+                                                        ? <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                        : <i className="bi bi-clipboard-plus me-1"></i>
+                                                    }
+                                                    {copyLoading ? ' Loading...' : ' Copy from Previous Day'}
+                                                </button>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                                 {isEditMode ? (
@@ -1781,7 +2008,7 @@ const NewData = () => {
                                     </div>
                                 ) : (
                                     <button type="submit" className="btn btn-success w-100 fw-bold py-2">
-                                        Submit Report
+                                        <i className="bi bi-play-circle me-1"></i>Start Task
                                     </button>
                                 )}
                             </form>

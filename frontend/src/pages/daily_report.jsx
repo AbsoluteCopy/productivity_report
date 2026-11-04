@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
+import { getCurrentDateInTimezone, parseDateInTimezone, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
 
 const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event"]);
 const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
@@ -105,13 +106,13 @@ const DailyReport = () => {
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
     const isRestrictedCategory = useCallback((category) => { return RESTRICTED_CATEGORIES.has(category); }, []);
 
-    const [teamSnapshotDate, setTeamSnapshotDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [teamSnapshotDate, setTeamSnapshotDate] = useState(() => getCurrentDateInTimezone());
 
     useEffect(() => {
         if (dailyReports.length > 0) {
             const dates = dailyReports.map(r => r.date).filter(Boolean);
             if (dates.length > 0) {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getCurrentDateInTimezone();
                 const hasToday = dates.includes(today);
                 if (!hasToday) {
                     setTeamSnapshotDate(dates[0]);
@@ -180,24 +181,13 @@ const DailyReport = () => {
     }, [isAdminOrHR, teamSnapshotDate, dailyReports]);
 
     // Check if date is more than 1 month old
-    const isMoreThanOneMonthOld = useCallback((dateString) => { 
-        if (!dateString) return false; 
-        const reportDate = new Date(dateString); 
-        if (Number.isNaN(reportDate.getTime())) { 
-            return false; 
-        } 
-        const oneMonthAgo = new Date(); 
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); 
-        return reportDate < oneMonthAgo; 
+    const isMoreThanOneMonthOld = useCallback((dateString) => {
+        return checkIsMoreThanOneMonthOld(dateString);
     }, []);
 
     // Check if report is more than 24 hours old (for employees)
     const isMoreThan24HoursOld = useCallback((report) => {
-        if (!report) return false;
-        const timeToCompare = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
-        if (Number.isNaN(timeToCompare)) return false;
-        const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);
-        return hoursAgo > 24;
+        return checkIsMoreThan24HoursOld(report);
     }, []);
 
 
@@ -213,7 +203,7 @@ const DailyReport = () => {
                 const rawReports = Array.isArray(response.data) ? response.data : [];
                 const parseDate = (d) => {
                     if (!d) return 0;
-                    const t = new Date(d).getTime();
+                    const t = parseDateInTimezone(d).getTime();
                     return Number.isNaN(t) ? 0 : t;
                 };
                 const sortedReports = [...rawReports].sort((a, b) => {
@@ -752,11 +742,21 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                             </div>
                         </div>
                     )}
+                    {Number(report.actual_time) > 0 && (
+                        <div className="col-md-4">
+                            <div className="card text-center border-success shadow-sm h-100">
+                                <div className="card-body">
+                                    <h3 className="text-success mb-1"> {Number(report.actual_time)/60} </h3>
+                                    <small className="text-muted"> Actual Time Spent </small>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {Number(report.meeting_count) > 0 && (
                         <div className="col-md-4">
                             <div className="card text-center border-warning shadow-sm h-100">
                                 <div className="card-body">
-                                    <h3 className="text-warning mb-1"> {report.meeting_count} </h3>
+                                    <h3 className="text-warning mb-1"> {report.meeting_count/60} </h3>
                                     <small className="text-muted"> Meetings </small>
                                 </div>
                             </div>

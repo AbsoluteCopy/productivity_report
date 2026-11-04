@@ -121,3 +121,7 @@ img {
 .nav-tabs .nav-link.active {
     border-color: transparent;
 }
+
+.pointer{
+  cursor:pointer!important;
+}

@@ -16,6 +16,7 @@ import {
 import { Bar, Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld } from '../utils/dateUtils';
 
 ChartJS.register(
     CategoryScale,
@@ -135,11 +136,7 @@ const ViewReport = () => {
     const canEdit = ['admin', 'hr', 'supervisor'].includes(currentUser?.role);
 
     const isMoreThanOneMonthOld = (reportDate) => {
-        if (!reportDate) return false;
-        const report = new Date(reportDate);
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-        return report < oneMonthAgo;
+        return checkIsMoreThanOneMonthOld(reportDate);
     };
 
     const handleEdit = (report) => {
@@ -255,7 +252,8 @@ const ViewReport = () => {
         return {
             value: i + 1,
             label: date.toLocaleString('default', {
-                month: 'long'
+                month: 'long',
+                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
             })
         };
     });
@@ -280,7 +278,7 @@ const ViewReport = () => {
     }).sort((a, b) => {
         const [aYear, aMonth, aDay] = a.date.split('-');
         const [bYear, bMonth, bDay] = b.date.split('-');
-        const dateCompare = new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
+        const dateCompare = parseDateInTimezone(a.date) - parseDateInTimezone(b.date);
 
         if (dateCompare !== 0) {
             return dateCompare;
@@ -339,10 +337,7 @@ const ViewReport = () => {
             ...weekendRows
         ].sort((a, b) => {
 
-            const [aYear, aMonth, aDay] = a.date.split('-');
-            const [bYear, bMonth, bDay] = b.date.split('-');
-            const dateCompare =
-                new Date(Number(aYear), Number(aMonth) - 1, Number(aDay)) - new Date(Number(bYear), Number(bMonth) - 1, Number(bDay));
+            const dateCompare = parseDateInTimezone(a.date) - parseDateInTimezone(b.date);
 
             if (dateCompare !== 0) {
                 return dateCompare;
@@ -446,13 +441,15 @@ const ViewReport = () => {
 
         acc[cat].tasks += Number(report.number_of_tasks || 0);
         acc[cat].minutes += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
+        acc[cat].actual += Number(report.actual_time || 0);
         return acc;
     }, initialCategoryMap);
 
     const summaryReports = Object.keys(categoryMap).filter(task => task !== 'Meeting').map(task => ({
         task,
         totalTasks: categoryMap[task].tasks,
-        totalTime: categoryMap[task].minutes
+        totalTime: categoryMap[task].minutes,
+        totalActualTime: categoryMap[task].actual
     })).sort((a, b) => b.totalTime - a.totalTime); // Sort by time spent descending
 
     const taskChartLabels = [];
@@ -526,7 +523,10 @@ const ViewReport = () => {
             return currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : "User";
         })();
 
-        const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", { month: "short" });
+        const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", {
+            month: "short",
+            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+        });
 
         const workbook = new ExcelJS.Workbook();
 
@@ -550,11 +550,11 @@ const ViewReport = () => {
 
         const formatLabel = (dateStr) => {
             const [year, month, day] = dateStr.split("-");
-            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+            const dateObj = parseDateInTimezone(dateStr);
             return {
                 dateObj,
-                dateLabel: `${day}-${dateObj.toLocaleString("en-US", { month: "short" })}-${String(year).slice(-2)}`,
-                dayLabel: dateObj.toLocaleDateString("en-US", { weekday: "long" })
+                dateLabel: `${day}-${dateObj.toLocaleString("en-US", { month: "short", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' })}-${String(year).slice(-2)}`,
+                dayLabel: dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' })
             };
         };
 
@@ -861,8 +861,10 @@ const ViewReport = () => {
         if (!date) return '';
 
         const [year, month, day] = date.split('-');
-        const monthName = new Date(year, month - 1, day).toLocaleString('en-US', {
-            month: 'long'
+        const dateObj = parseDateInTimezone(date);
+        const monthName = dateObj.toLocaleString('en-US', {
+            month: 'long',
+            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
         });
 
         return `${day}-${monthName}-${year.slice(2)}`;
@@ -1038,7 +1040,7 @@ const ViewReport = () => {
                                                     {value.length > 0 &&
                                                         value.map((task, index) => (
                                                             <div key={index}>{task}</div>
-                                                    ))}
+                                                        ))}
                                                 </td>
                                             );
                                         }
@@ -1195,6 +1197,7 @@ const ViewReport = () => {
                                                 <th className='main-background text-white py-2'>Task</th>
                                                 <th className='main-background text-white py-2'># of Task</th>
                                                 <th className='main-background text-white py-2'>Time Spent(mins)</th>
+                                                <th className='main-background text-white py-2'>Actual Time Spent(mins)</th>
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
                                                 {canEdit && (
@@ -1220,7 +1223,6 @@ const ViewReport = () => {
                                                             badgeClass = 'bg-danger text-white';
                                                             statusLabel = totalMins > 600 ? 'Over 8h (Check)' : 'Overtime';
                                                         }
-
                                                         const workHrs = Math.floor(Number(report.working_hours_total || 0) / 60);
                                                         const workMins = Number(report.working_hours_total || 0) % 60;
                                                         const meetHrs = Math.floor(Number(report.meeting_total || 0) / 60);
@@ -1238,6 +1240,7 @@ const ViewReport = () => {
                                                                         </span>
                                                                     </div>
                                                                 </td>
+                                                                <td></td>
                                                                 <td></td>
                                                                 <td></td>
                                                                 <td>
@@ -1262,8 +1265,7 @@ const ViewReport = () => {
                                                             </tr>
                                                         );
                                                     }
-                                                    const [year, month, day] = report.date.split('-');
-                                                    const date = new Date(year, month - 1, day);
+                                                    const date = parseDateInTimezone(report.date);
                                                     const previousReport = displayReports[index - 1];
                                                     const showDate =
                                                         !previousReport ||
@@ -1275,6 +1277,7 @@ const ViewReport = () => {
                                                     const isMeeting = report.task_category === 'Meeting';
                                                     const displayCat = getReportCategory(report);
                                                     const rowKey = `${report.date}-${displayCat}-${report.id || index}`;
+                                                    const actualTime = (Number(report.actual_time || 0) / 60);
                                                     return (
                                                         <tr key={rowKey} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
@@ -1285,7 +1288,7 @@ const ViewReport = () => {
                                                                 {showDate &&
                                                                     `${date.getDate()}-${date.toLocaleString(
                                                                         'en-US',
-                                                                        { month: 'short' }
+                                                                        { month: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
                                                                     )}-${String(date.getFullYear()).slice(-2)}`
                                                                 }
                                                             </td>
@@ -1294,7 +1297,7 @@ const ViewReport = () => {
                                                                 {showDate &&
                                                                     date.toLocaleDateString(
                                                                         'en-US',
-                                                                        { weekday: 'long' }
+                                                                        { weekday: 'long', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
                                                                     )
                                                                 }
                                                             </td>
@@ -1340,6 +1343,7 @@ const ViewReport = () => {
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
 
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
+                                                            <td>{isLeave || report.number_of_tasks === 0 || report.number_of_tasks === '' ? '' : actualTime}</td>
 
                                                             <td>
                                                                 {isLeave || report.number_of_tasks === 0 || isMeeting
@@ -1436,6 +1440,7 @@ const ViewReport = () => {
                                             <th className='main-background text-white py-2'>List of Task</th>
                                             <th className='main-background text-white py-2'>Total # of Task Done</th>
                                             <th className='main-background text-white py-2'>Total Time Spent (mins)</th>
+                                            <th className='main-background text-white py-2'>Total Actual Time Spent (mins)</th>
                                         </tr>
                                     </thead>
 
@@ -1446,6 +1451,7 @@ const ViewReport = () => {
                                                 <td>{item.task}</td>
                                                 <td>{item.totalTasks}</td>
                                                 <td>{item.totalTime}</td>
+                                                <td>{item.totalActualTime}</td>
                                             </tr>
 
                                         ))}
@@ -1469,6 +1475,15 @@ const ViewReport = () => {
                                                     summaryReports.reduce(
                                                         (sum, item) =>
                                                             sum + item.totalTime,
+                                                        0
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    summaryReports.reduce(
+                                                        (sum, item) =>
+                                                            sum + item.totalActualTime,
                                                         0
                                                     )
                                                 }

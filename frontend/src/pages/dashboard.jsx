@@ -10,8 +10,10 @@ import {
     Title,
     Tooltip,
     Legend,
-} from 'chart.js';import API_BASE_URL from "../config";
-
+} from 'chart.js'; import API_BASE_URL from "../config";
+import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
+import AnalogClock from '../components/AnalogClock'
+import Announcement, { ANNOUNCEMENT_VERSION } from '../components/Announcement'
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -22,9 +24,11 @@ ChartJS.register(
     Legend
 );
 
+const getAnnouncementKey = (userId) => `announcement_seen_${userId || 'guest'}`;
+
 const Home = () => {
     const [user, setUser] = useState(null);
-    const [currentTime, setCurrentTime] = useState(new Date());
+    const [currentTime, setCurrentTime] = useState(getCurrentDateTimeInTimezone());
     const [recentReports, setRecentReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState('');
@@ -38,6 +42,7 @@ const Home = () => {
     const [companyCounts, setCompanyCounts] = useState({});
     const [availableCompanies, setAvailableCompanies] = useState([]);
     const [selectedCompanies, setSelectedCompanies] = useState([]);
+    const [showAnnouncements, setShowAnnouncements] = useState(false);
 
     useEffect(() => {
         const userData = localStorage.getItem('user');
@@ -47,6 +52,34 @@ const Home = () => {
             setRole(parsedUser.role);
         }
     }, []);
+
+    useEffect(() => {
+        if (!user) return;
+
+        let seenVersion = null;
+        try {
+            seenVersion = localStorage.getItem(getAnnouncementKey(user.id));
+        } catch (e) {
+            console.error('Unable to read announcement status:', e);
+        }
+
+        if (seenVersion === ANNOUNCEMENT_VERSION) return; // already seen
+
+        const timer = setTimeout(() => {
+            setShowAnnouncements(true);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [user]);
+
+    const handleCloseAnnouncements = () => {
+        setShowAnnouncements(false);
+        try {
+            localStorage.setItem(getAnnouncementKey(user?.id), ANNOUNCEMENT_VERSION);
+        } catch (e) {
+            console.error('Unable to save announcement status:', e);
+        }
+    };
 
     const fetchOnlineUsers = async () => {
         try {
@@ -91,18 +124,7 @@ const Home = () => {
         });
     };
 
-    const formatRelativeTime = (dateStr) => {
-        if (!dateStr) return '';
-        const now = new Date();
-        const past = new Date(dateStr);
-        const diffSec = Math.floor((now - past) / 1000);
-        if (diffSec < 60) return 'Active just now';
-        const diffMin = Math.floor(diffSec / 60);
-        if (diffMin === 1) return 'Active 1m ago';
-        if (diffMin < 60) return `Active ${diffMin}m ago`;
-        const diffHr = Math.floor(diffMin / 60);
-        return `Active ${diffHr}h ago`;
-    };
+
 
     useEffect(() => {
         if (user) {
@@ -115,7 +137,7 @@ const Home = () => {
 
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentTime(new Date());
+            setCurrentTime(getCurrentDateTimeInTimezone());
         }, 1000);
 
         return () => clearInterval(timer);
@@ -136,7 +158,7 @@ const Home = () => {
             if (response.ok) {
                 const data = await response.json();
                 const sorted = (Array.isArray(data) ? data : []).sort((a, b) => {
-                    const diff = new Date(b.date || 0) - new Date(a.date || 0);
+                    const diff = parseDateInTimezone(b.date || 0) - parseDateInTimezone(a.date || 0);
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
                 const lastThree = sorted.slice(0, 3);
@@ -177,10 +199,9 @@ const Home = () => {
         // Fill in actual data from reports
         reports.forEach(report => {
             // Parse date properly to avoid timezone issues
-            const [year, month, day] = report.date.split('-');
-            const reportDate = new Date(Number(year), Number(month) - 1, Number(day));
+            const reportDate = parseDateInTimezone(report.date);
             if (reportDate.getMonth() === currentMonth && reportDate.getFullYear() === currentYear) {
-                timeSpentData[day - 1] = report.time_spent;
+                timeSpentData[reportDate.getDate() - 1] = report.time_spent;
             }
         });
 
@@ -205,28 +226,13 @@ const Home = () => {
         });
     };
 
-    const formatDateTime = (date) => {
-        return {
-            date: date.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            }),
-            time: date.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            })
-        };
-    };
 
-    const { date, time } = formatDateTime(currentTime);
+
+    const { date, time } = currentTime;
 
     return (
         <div className="container mt-5">
-            <div className="row mb-5">
+            <div className="row mb-1">
                 <div className="col-12">
                     <div className="p-4 rounded-4 shadow-sm" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
                         <h2 className="fw-bold mb-1">
@@ -237,13 +243,57 @@ const Home = () => {
                     </div>
                 </div>
             </div>
+            <div className="row mb-4">
+                <div className="col-12">
+                    <div
+                        className="d-flex flex-wrap justify-content-between align-items-center p-3 rounded-3 shadow-sm"
+                        style={{
+                            backgroundColor: '#f0f8f5',
+                            border: '1px solid rgba(5, 93, 71, 0.15)'
+                        }}
+                    >
+                        <div className="d-flex align-items-center gap-3">
+                            <div
+                                className="rounded-circle d-flex align-items-center justify-content-center"
+                                style={{
+                                    width: '45px',
+                                    height: '45px',
+                                    backgroundColor: 'rgba(5, 93, 71, 0.12)',
+                                    color: '#055d47'
+                                }}
+                            >
+                                <i className="bi bi-megaphone-fill fs-5"></i>
+                            </div>
+
+                            <div>
+                                <h6 className="fw-bold mb-1" style={{ color: '#055d47' }}>
+                                    What's New?
+                                </h6>
+                                <small className="text-muted">
+                                    Check out the latest application updates and announcements.
+                                </small>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="btn btn-success rounded-pill px-4 mt-2 mt-md-0"
+                            style={{ backgroundColor: '#055d47', borderColor: '#055d47' }}
+                            onClick={() => setShowAnnouncements(true)}
+                        >
+                            <i className="bi bi-eye me-2"></i>
+                            View Updates
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div className="row g-4">
                 <div className="col-md-5 col-lg-4">
                     <div className="card shadow-sm h-100 border-0 rounded-4 overflow-hidden" style={{ transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-5px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                         <div className="card-body text-center p-5 d-flex flex-column justify-content-center">
                             <div className="mb-3">
-                                <i className="bi bi-clock-history" style={{ fontSize: '3rem', color: '#055d47' }}></i>
+                                <AnalogClock />
                             </div>
                             <div className="display-5 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
                                 {time}
@@ -294,15 +344,11 @@ const Home = () => {
                                                             </span>
                                                         )}
                                                         <i className="bi bi-calendar3 me-1"></i>
-                                                        {(() => {
-                                                            const [year, month, day] = report.date.split('-');
-                                                            const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
-                                                            return dateObj.toLocaleDateString('en-US', {
-                                                                month: 'short',
-                                                                day: 'numeric',
-                                                                year: 'numeric'
-                                                            });
-                                                        })()}
+                                                        {formatDateString(report.date, {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric'
+                                                        })}
                                                     </small>
                                                 </div>
                                             </div>
@@ -570,6 +616,9 @@ const Home = () => {
                     </div>
                 )}
             </div>
+            {showAnnouncements && (
+                <Announcement onClose={handleCloseAnnouncements} />
+            )}
         </div>
     );
 };

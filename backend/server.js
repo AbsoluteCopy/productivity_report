@@ -11,11 +11,31 @@ const path = require('path');
 const { spawn } = require('child_process');
 const pool = require('./db');
 const { authenticate, sanitize } = require('./auth');
+const multer = require('multer');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 8097;
 const SECRET_KEY = process.env.SECRET_KEY || 'default-secret-key-12345';
+
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) =>
+      cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`)
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    /\.(png|jpe?g|gif|webp|pdf|docx?|xlsx?|csv|txt)$/i.test(file.originalname)
+      ? cb(null, true)
+      : cb(new Error('Unsupported file type.'))
+});
+const uploadAttachment = (req, res, next) =>
+  upload.single('attachment')(req, res, err => err ? res.status(400).json({ error: err.message }) : next());
 
 // Trust Nginx reverse proxy (fixes express-rate-limit X-Forwarded-For error)
 app.set('trust proxy', 1);
@@ -161,7 +181,7 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
     );
 
     // Update last_active_at on login
-    await pool.query('UPDATE users SET last_active_at = NOW() WHERE id = ?', [user.id]).catch(() => {});
+    await pool.query('UPDATE users SET last_active_at = NOW() WHERE id = ?', [user.id]).catch(() => { });
 
     return res.json({
       message: 'Login successful.',
@@ -264,7 +284,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     }
 
     let { id_number, first_name, last_name, username, email, password, role, company, task_list } = req.body;
-    
+
     // Explicit field validations
     if (!id_number || typeof id_number !== 'string' || !id_number.trim()) {
       return res.status(400).json({ error: 'ID Number is required.', detail: 'ID Number is required.' });
@@ -276,7 +296,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Last Name is required.', detail: 'Last Name is required.' });
     }
     if ((username !== undefined && username !== null && typeof username !== 'string') ||
-        (email !== undefined && email !== null && typeof email !== 'string')) {
+      (email !== undefined && email !== null && typeof email !== 'string')) {
       return res.status(400).json({ error: 'Username and email must be text.', detail: 'Username and email must be text.' });
     }
     username = typeof username === 'string' ? username.trim().toLowerCase() : '';
@@ -291,7 +311,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     if (!password || typeof password !== 'string' || password.length < 6) {
       return res.status(400).json({ error: 'Password is required and must be at least 6 characters long.', detail: 'Password must be at least 6 characters long.' });
     }
-    
+
     const validRoles = ['admin', 'hr', 'supervisor', 'employee', 'viewer'];
     const chosenRole = (role && validRoles.includes(role)) ? role : 'employee';
 
@@ -473,7 +493,7 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
     }
     if (username !== undefined || email !== undefined) {
       if ((username !== undefined && username !== null && typeof username !== 'string') ||
-          (email !== undefined && email !== null && typeof email !== 'string')) {
+        (email !== undefined && email !== null && typeof email !== 'string')) {
         return res.status(400).json({ error: 'Username and email must be text.', detail: 'Username and email must be text.' });
       }
 
@@ -509,7 +529,6 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       updates.push('password = ?');
       params.push(hashed);
     }
-
     if (isAdmin) {
       if (role) {
         const validRoles = ['admin', 'hr', 'supervisor', 'employee', 'viewer'];
@@ -620,7 +639,7 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
     const formatted = rows.map(r => {
       let taskList = [];
       if (typeof r.task_list === 'string') {
-        try { taskList = JSON.parse(r.task_list); } catch (e) {}
+        try { taskList = JSON.parse(r.task_list); } catch (e) { }
       } else if (Array.isArray(r.task_list)) {
         taskList = r.task_list;
       }
@@ -637,7 +656,10 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
         time_spent: r.time_spent,
         meeting_count: r.meeting_count,
         created_at: r.created_at,
-        updated_at: r.updated_at
+        updated_at: r.updated_at,
+        actual_time: r.actual_time,
+        description: r.description,
+        attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
       };
     });
 
@@ -693,8 +715,8 @@ app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplica
       const person = (match.first_name || match.last_name)
         ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
         : (match.username || 'another user');
-      const formattedDate = match.date instanceof Date 
-        ? match.date.toISOString().split('T')[0] 
+      const formattedDate = match.date instanceof Date
+        ? match.date.toISOString().split('T')[0]
         : String(match.date).split('T')[0];
 
       return res.json({
@@ -728,14 +750,14 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
 
     const r = rows[0];
     if (req.user.role !== 'admin' &&
-        !(['hr', 'supervisor'].includes(req.user.role) && req.user.company === r.user_company) &&
-        req.user.id != r.user_id) {
+      !(['hr', 'supervisor'].includes(req.user.role) && req.user.company === r.user_company) &&
+      req.user.id != r.user_id) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
     let taskList = [];
     if (typeof r.task_list === 'string') {
-      try { taskList = JSON.parse(r.task_list); } catch (e) {}
+      try { taskList = JSON.parse(r.task_list); } catch (e) { }
     } else if (Array.isArray(r.task_list)) {
       taskList = r.task_list;
     }
@@ -753,7 +775,10 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       time_spent: r.time_spent,
       meeting_count: r.meeting_count,
       created_at: r.created_at,
-      updated_at: r.updated_at
+      updated_at: r.updated_at,
+      actual_time: r.actual_time,
+      description: r.description,
+      attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
     });
   } catch (err) {
     console.error('Fetch single report error:', err);
@@ -761,11 +786,20 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
   }
 });
 
-app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req, res) => {
+app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAttachment, async (req, res) => {
+  // delete the uploaded file if the request ends up failing
+  res.on('finish', () => {
+    if (res.statusCode >= 400 && req.file) fsPromises.unlink(req.file.path).catch(() => { });
+  });
   try {
-    let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, user } = req.body;
-    let targetUserId = req.user.id;
+    let { date, task_category, sub_category, work_type, task_list, number_of_tasks,
+      time_spent, meeting_count, user, actual_time, description } = req.body;
 
+    // multipart sends everything as strings
+    if (typeof task_list === 'string') {
+      try { task_list = JSON.parse(task_list); } catch (e) { task_list = []; }
+    }
+    let targetUserId = req.user.id;
     if (req.user.role === 'admin' && user) {
       targetUserId = user;
     } else if (['hr', 'supervisor'].includes(req.user.role) && user) {
@@ -826,8 +860,8 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
           const person = (match.first_name || match.last_name)
             ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
             : (match.username || 'another user');
-          const formattedDate = match.date instanceof Date 
-            ? match.date.toISOString().split('T')[0] 
+          const formattedDate = match.date instanceof Date
+            ? match.date.toISOString().split('T')[0]
             : String(match.date).split('T')[0];
 
           return res.status(400).json({
@@ -838,8 +872,15 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req
     }
 
     const [result] = await pool.query(
-      'INSERT INTO daily_reports (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
-      [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson, number_of_tasks || 0, time_spent || 0, meeting_count || 0]
+      `INSERT INTO daily_reports
+        (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks,
+         time_spent, meeting_count, actual_time, description, attachment, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson,
+        number_of_tasks || 0, time_spent || 0, meeting_count || 0,
+        Number(actual_time) || null,                      // seconds
+        (description || '').trim() || null,
+        req.file ? req.file.filename : null]
     );
 
     const [created] = await pool.query('SELECT * FROM daily_reports WHERE id = ?', [result.insertId]);
@@ -877,13 +918,14 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
     let updates = [];
     let params = [];
+    let cleanTaskList = [];   
 
     if (date) { updates.push('date = ?'); params.push(date); }
     if (task_category) { updates.push('task_category = ?'); params.push(task_category); }
     if (sub_category !== undefined) { updates.push('sub_category = ?'); params.push(sub_category); }
     if (work_type !== undefined) { updates.push('work_type = ?'); params.push(work_type); }
     if (task_list !== undefined) {
-      let cleanTaskList = Array.isArray(task_list) ? task_list : [];
+      cleanTaskList = Array.isArray(task_list) ? task_list : [];
       const seenPutTasks = new Set();
       cleanTaskList = cleanTaskList.filter(t => {
         if (typeof t !== 'string') return true;
@@ -898,6 +940,8 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (number_of_tasks !== undefined) { updates.push('number_of_tasks = ?'); params.push(number_of_tasks); }
     if (time_spent !== undefined) { updates.push('time_spent = ?'); params.push(time_spent); }
     if (meeting_count !== undefined) { updates.push('meeting_count = ?'); params.push(meeting_count); }
+    const { description } = req.body;
+    if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;
@@ -933,8 +977,8 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
           const person = (match.first_name || match.last_name)
             ? `${match.first_name || ''} ${match.last_name || ''}`.trim()
             : (match.username || 'another user');
-          const formattedDate = match.date instanceof Date 
-            ? match.date.toISOString().split('T')[0] 
+          const formattedDate = match.date instanceof Date
+            ? match.date.toISOString().split('T')[0]
             : String(match.date).split('T')[0];
 
           return res.status(400).json({
@@ -988,6 +1032,23 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
     return res.status(204).send();
   } catch (err) {
     return res.status(500).json({ error: 'Error deleting daily report.' });
+  }
+});
+
+app.get(['/api/daily-reports/:id/attachment'], authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT r.user_id, r.attachment, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ?',
+      [req.params.id]
+    );
+    if (rows.length === 0 || !rows[0].attachment) return res.status(404).json({ error: 'Attachment not found.' });
+    const r = rows[0];
+    const allowed = req.user.role === 'admin' || req.user.id == r.user_id ||
+      (['hr', 'supervisor', 'viewer'].includes(req.user.role) && req.user.company === r.company);
+    if (!allowed) return res.status(403).json({ error: 'Permission denied.' });
+    return res.sendFile(path.join(UPLOAD_DIR, path.basename(r.attachment)));
+  } catch (err) {
+    return res.status(500).json({ error: 'Error fetching attachment.' });
   }
 });
 
@@ -1232,7 +1293,7 @@ app.get(['/api/admin/backup-sql', '/api/admin/backup-sql/'], authenticate, async
     if (!tempDir) return;
     const directory = tempDir;
     tempDir = null;
-    await fsPromises.rm(directory, { recursive: true, force: true }).catch(() => {});
+    await fsPromises.rm(directory, { recursive: true, force: true }).catch(() => { });
   };
 
   try {

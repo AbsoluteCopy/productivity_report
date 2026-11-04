@@ -7,6 +7,7 @@ const API = API_BASE_URL;
 const API_URL = API_BASE_URL;
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
+import { getTimestampInTimezone, parseDateInTimezone } from '../utils/dateUtils';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -155,7 +156,7 @@ const ManageAccounts = () => {
             const sqlBlob = await sqlRes.blob();
 
             // 1. Save SQL Dump file
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const timestamp = getTimestampInTimezone();
             saveAs(sqlBlob, `Productivity_Database_Backup_${timestamp}.sql`);
 
             // 2. Generate and Save Comprehensive Excel Workbook
@@ -205,9 +206,11 @@ const ManageAccounts = () => {
                 let rIdx = 3;
                 empReports.forEach(r => {
                     const dStr = String(r.date).slice(0, 10);
-                    const [y, m, d] = dStr.split('-');
-                    const dayStr = new Date(Number(y), Number(m) - 1, Number(d))
-                        .toLocaleDateString('en-US', { weekday: 'long' });
+                    const dateObj = parseDateInTimezone(dStr);
+                    const dayStr = dateObj.toLocaleDateString('en-US', { 
+                        weekday: 'long',
+                        timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                    });
 
                     const cat = r.task_category || '';
                     const subcat = r.sub_category || '';
