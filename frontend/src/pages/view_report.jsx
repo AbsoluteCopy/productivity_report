@@ -441,13 +441,15 @@ const ViewReport = () => {
 
         acc[cat].tasks += Number(report.number_of_tasks || 0);
         acc[cat].minutes += Number(report.number_of_tasks || 0) * Number(report.time_spent || 0);
+        acc[cat].actual += Number(report.actual_time || 0);
         return acc;
     }, initialCategoryMap);
 
     const summaryReports = Object.keys(categoryMap).filter(task => task !== 'Meeting').map(task => ({
         task,
         totalTasks: categoryMap[task].tasks,
-        totalTime: categoryMap[task].minutes
+        totalTime: categoryMap[task].minutes,
+        totalActualTime: categoryMap[task].actual
     })).sort((a, b) => b.totalTime - a.totalTime); // Sort by time spent descending
 
     const taskChartLabels = [];
@@ -521,7 +523,7 @@ const ViewReport = () => {
             return currentUser ? `${currentUser.first_name}_${currentUser.last_name}` : "User";
         })();
 
-        const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", { 
+        const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", {
             month: "short",
             timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
         });
@@ -1038,7 +1040,7 @@ const ViewReport = () => {
                                                     {value.length > 0 &&
                                                         value.map((task, index) => (
                                                             <div key={index}>{task}</div>
-                                                    ))}
+                                                        ))}
                                                 </td>
                                             );
                                         }
@@ -1195,6 +1197,7 @@ const ViewReport = () => {
                                                 <th className='main-background text-white py-2'>Task</th>
                                                 <th className='main-background text-white py-2'># of Task</th>
                                                 <th className='main-background text-white py-2'>Time Spent(mins)</th>
+                                                <th className='main-background text-white py-2'>Actual Time Spent(mins)</th>
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
                                                 {canEdit && (
@@ -1220,7 +1223,6 @@ const ViewReport = () => {
                                                             badgeClass = 'bg-danger text-white';
                                                             statusLabel = totalMins > 600 ? 'Over 8h (Check)' : 'Overtime';
                                                         }
-
                                                         const workHrs = Math.floor(Number(report.working_hours_total || 0) / 60);
                                                         const workMins = Number(report.working_hours_total || 0) % 60;
                                                         const meetHrs = Math.floor(Number(report.meeting_total || 0) / 60);
@@ -1238,6 +1240,7 @@ const ViewReport = () => {
                                                                         </span>
                                                                     </div>
                                                                 </td>
+                                                                <td></td>
                                                                 <td></td>
                                                                 <td></td>
                                                                 <td>
@@ -1274,6 +1277,7 @@ const ViewReport = () => {
                                                     const isMeeting = report.task_category === 'Meeting';
                                                     const displayCat = getReportCategory(report);
                                                     const rowKey = `${report.date}-${displayCat}-${report.id || index}`;
+                                                    const actualTime = (Number(report.actual_time || 0) / 60);
                                                     return (
                                                         <tr key={rowKey} className={`
                                                             ${report.isWeekend ? "table-warning" : ""}
@@ -1339,6 +1343,7 @@ const ViewReport = () => {
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
 
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
+                                                            <td>{isLeave || report.number_of_tasks === 0 || report.number_of_tasks === '' ? '' : actualTime}</td>
 
                                                             <td>
                                                                 {isLeave || report.number_of_tasks === 0 || isMeeting
@@ -1435,6 +1440,7 @@ const ViewReport = () => {
                                             <th className='main-background text-white py-2'>List of Task</th>
                                             <th className='main-background text-white py-2'>Total # of Task Done</th>
                                             <th className='main-background text-white py-2'>Total Time Spent (mins)</th>
+                                            <th className='main-background text-white py-2'>Total Actual Time Spent (mins)</th>
                                         </tr>
                                     </thead>
 
@@ -1445,6 +1451,7 @@ const ViewReport = () => {
                                                 <td>{item.task}</td>
                                                 <td>{item.totalTasks}</td>
                                                 <td>{item.totalTime}</td>
+                                                <td>{item.totalActualTime}</td>
                                             </tr>
 
                                         ))}
@@ -1468,6 +1475,15 @@ const ViewReport = () => {
                                                     summaryReports.reduce(
                                                         (sum, item) =>
                                                             sum + item.totalTime,
+                                                        0
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    summaryReports.reduce(
+                                                        (sum, item) =>
+                                                            sum + item.totalActualTime,
                                                         0
                                                     )
                                                 }

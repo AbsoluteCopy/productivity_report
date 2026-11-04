@@ -13,7 +13,7 @@ import {
 } from 'chart.js'; import API_BASE_URL from "../config";
 import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
-import Announcement from '../components/Announcement'
+import Announcement, { ANNOUNCEMENT_VERSION } from '../components/Announcement'
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -23,6 +23,8 @@ ChartJS.register(
     Tooltip,
     Legend
 );
+
+const getAnnouncementKey = (userId) => `announcement_seen_${userId || 'guest'}`;
 
 const Home = () => {
     const [user, setUser] = useState(null);
@@ -50,13 +52,34 @@ const Home = () => {
             setRole(parsedUser.role);
         }
     }, []);
+
     useEffect(() => {
+        if (!user) return;
+
+        let seenVersion = null;
+        try {
+            seenVersion = localStorage.getItem(getAnnouncementKey(user.id));
+        } catch (e) {
+            console.error('Unable to read announcement status:', e);
+        }
+
+        if (seenVersion === ANNOUNCEMENT_VERSION) return; // already seen
+
         const timer = setTimeout(() => {
             setShowAnnouncements(true);
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []);
+    }, [user]);
+
+    const handleCloseAnnouncements = () => {
+        setShowAnnouncements(false);
+        try {
+            localStorage.setItem(getAnnouncementKey(user?.id), ANNOUNCEMENT_VERSION);
+        } catch (e) {
+            console.error('Unable to save announcement status:', e);
+        }
+    };
 
     const fetchOnlineUsers = async () => {
         try {
@@ -594,9 +617,7 @@ const Home = () => {
                 )}
             </div>
             {showAnnouncements && (
-                <Announcement
-                    onClose={() => setShowAnnouncements(false)}
-                />
+                <Announcement onClose={handleCloseAnnouncements} />
             )}
         </div>
     );

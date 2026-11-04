@@ -1,32 +1,35 @@
 
 import React, { useState } from 'react';
 
+export const updates = [
+    {
+        id: 1,
+        title: 'New Dashboard Design',
+        description: 'We have improved the dashboard interface to provide a cleaner and more user-friendly experience.',
+        image: '/images/updates/dashboard.png',
+        date: 'November 3, 2026'
+    },
+    {
+        id: 2,
+        title: 'Improved Reports',
+        description: 'Generate reports faster with our newly improved reporting module and enhanced filtering options.',
+        image: '/images/updates/reports.png',
+        date: 'November 2, 2026'
+    },
+    {
+        id: 3,
+        title: 'New Features Available',
+        description: 'Explore our latest features and improvements designed to make your workflow easier.',
+        image: '/images/updates/features.png',
+        date: 'October 30, 2026'
+    }
+];
+
+// Changes whenever a new update is added at the top of the list
+export const ANNOUNCEMENT_VERSION = `${updates[0].id}-${updates[0].date}`;
+
 const Announcement = ({ onClose }) => {
     const [activeSlide, setActiveSlide] = useState(0);
-
-    const updates = [
-        {
-            id: 1,
-            title: 'New Dashboard Design',
-            description: 'We have improved the dashboard interface to provide a cleaner and more user-friendly experience.',
-            image: '/images/updates/dashboard.png',
-            date: 'November 3, 2026'
-        },
-        {
-            id: 2,
-            title: 'Improved Reports',
-            description: 'Generate reports faster with our newly improved reporting module and enhanced filtering options.',
-            image: '/images/updates/reports.png',
-            date: 'November 2, 2026'
-        },
-        {
-            id: 3,
-            title: 'New Features Available',
-            description: 'Explore our latest features and improvements designed to make your workflow easier.',
-            image: '/images/updates/features.png',
-            date: 'October 30, 2026'
-        }
-    ];
 
     const nextSlide = () => {
         setActiveSlide((prev) => (prev + 1) % updates.length);
