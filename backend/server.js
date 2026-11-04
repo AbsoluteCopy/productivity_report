@@ -49,6 +49,30 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Auto-migrate: Ensure actual_time, description, and attachment columns exist in daily_reports table
+(async () => {
+  try {
+    const [cols] = await pool.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_reports'"
+    );
+    const existing = new Set(cols.map(c => c.COLUMN_NAME));
+    if (!existing.has('actual_time')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN actual_time INT NULL DEFAULT NULL AFTER meeting_count");
+      console.log("Added column 'actual_time' to daily_reports table.");
+    }
+    if (!existing.has('description')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN description TEXT NULL DEFAULT NULL AFTER actual_time");
+      console.log("Added column 'description' to daily_reports table.");
+    }
+    if (!existing.has('attachment')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN attachment VARCHAR(255) NULL DEFAULT NULL AFTER description");
+      console.log("Added column 'attachment' to daily_reports table.");
+    }
+  } catch (err) {
+    console.error("Migration check error for daily_reports columns:", err);
+  }
+})();
+
 // Auto-migrate: Ensure last_active_at column exists in users table
 (async () => {
   try {

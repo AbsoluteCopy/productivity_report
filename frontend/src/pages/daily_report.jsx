@@ -746,7 +746,7 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                         <div className="col-md-4">
                             <div className="card text-center border-success shadow-sm h-100">
                                 <div className="card-body">
-                                    <h3 className="text-success mb-1"> {Number(report.actual_time)/60} </h3>
+                                    <h3 className="text-success mb-1"> {Number((Number(report.actual_time) / 60).toFixed(2))} mins </h3>
                                     <small className="text-muted"> Actual Time Spent </small>
                                 </div>
                             </div>
