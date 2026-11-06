@@ -6,6 +6,7 @@ import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
 import { getCurrentDateInTimezone, parseDateInTimezone, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
+import EmployeeTimelineModal from '../components/EmployeeTimelineModal';
 
 const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event"]);
 const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
@@ -101,6 +102,7 @@ const DailyReport = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [search, setSearch] = useState("");
+    const [selectedTimelineUser, setSelectedTimelineUser] = useState(null);
 
     const isAdminOrHR = useMemo(() => { return ADMIN_ROLES.has(currentUser?.role); }, [currentUser]);
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
@@ -132,7 +134,7 @@ const DailyReport = () => {
             if (!empMap[userName]) {
                 empMap[userName] = {
                     userName,
-                    userId: r.user_id,
+                    userId: r.user,
                     totalTasks: 0,
                     totalMinutes: 0,
                     isPTO: false,
@@ -662,9 +664,11 @@ const DailyReport = () => {
                                                         cursor: "pointer",
                                                         transition: "all 0.2s ease",
                                                     }}
-                                                    title={`Click to filter table for ${emp.userName}`}
+                                                    title={emp.userId ? `View ${emp.userName}'s timeline` : `Click to filter table for ${emp.userName}`}
                                                     onClick={() => {
-                                                        if (isCurrentSearch) {
+                                                        if (emp.userId) {
+                                                            setSelectedTimelineUser({ id: emp.userId, displayName: emp.userName });
+                                                        } else if (isCurrentSearch) {
                                                             setSearch("");
                                                         } else {
                                                             setSearch(emp.userName);
@@ -737,6 +741,9 @@ const DailyReport = () => {
             </div>
             {/* Report Details Modal */}
             {showModal && selectedReport && (<ReportDetailsModal report={selectedReport} onClose={closeModal} isRestrictedCategory={isRestrictedCategory} />)}
+            {selectedTimelineUser && (
+                <EmployeeTimelineModal user={selectedTimelineUser} onClose={() => setSelectedTimelineUser(null)} />
+            )}
         </div>);
 }; /** * ============================================================= * Report Details Modal * ============================================================= */
 const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {

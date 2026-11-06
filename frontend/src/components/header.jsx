@@ -121,6 +121,13 @@ function Navbar() {
                         )}
                         {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
                             <li className="nav-item">
+                                <Link className={`nav-link ${location.pathname === '/attendance' ? 'active' : ''}`} to="/attendance">
+                                    <i className="bi bi-clock-history"></i> Attendance
+                                </Link>
+                            </li>
+                        )}
+                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                            <li className="nav-item">
                                 <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
                                     <i className="bi bi-tags"></i> Task Category
                                 </Link>
