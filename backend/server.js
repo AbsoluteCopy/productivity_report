@@ -964,8 +964,9 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (number_of_tasks !== undefined) { updates.push('number_of_tasks = ?'); params.push(number_of_tasks); }
     if (time_spent !== undefined) { updates.push('time_spent = ?'); params.push(time_spent); }
     if (meeting_count !== undefined) { updates.push('meeting_count = ?'); params.push(meeting_count); }
-    const { description } = req.body;
+    const { description, actual_time } = req.body;
     if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
+    if (actual_time !== undefined) { updates.push('actual_time = ?'); params.push(actual_time !== null && actual_time !== '' ? actual_time : null); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;

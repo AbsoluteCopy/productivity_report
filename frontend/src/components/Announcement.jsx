@@ -3,6 +3,13 @@ import React, { useState } from 'react';
 
 export const updates = [
     {
+        id: 4,
+        title: 'Real-Time Tracking & 7.5-Hour Shift Targets',
+        description: 'Real-time actual time tracking is now integrated across Daily Reports, View Reports, Utilization Reports, and Excel exports. Daily work shift targets are also now aligned to 7.5 hrs (450 mins).',
+        image: '/images/updates/features.png',
+        date: 'November 5, 2026'
+    },
+    {
         id: 1,
         title: 'New Dashboard Design',
         description: 'We have improved the dashboard interface to provide a cleaner and more user-friendly experience.',

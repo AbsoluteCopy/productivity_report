@@ -462,7 +462,7 @@ const NewData = () => {
 
         const tasksCount = priorTotals.priorTasks + currentTasks;
         const minutes = priorTotals.priorMinutes + currentMinutes;
-        const targetMinutes = 480;
+        const targetMinutes = 450;
         const totalHours = Math.floor(minutes / 60);
         const remainingMins = minutes % 60;
         const percent = Math.min(Math.round((minutes / targetMinutes) * 100), 999);
@@ -597,6 +597,9 @@ const NewData = () => {
             }
 
             if (data.work_type === 'Working') {
+                const actualMins = (data.actual_time != null && data.actual_time !== '')
+                    ? Number((Number(data.actual_time) / 60).toFixed(2))
+                    : '';
                 setCategories([
                     {
                         id: 1,
@@ -605,6 +608,7 @@ const NewData = () => {
                         tasks: Array.isArray(data.task_list) ? data.task_list : [],
                         currentTask: '',
                         timeSpent: (data.time_spent !== undefined && data.time_spent !== null) ? String(data.time_spent) : '',
+                        actualTime: actualMins,
                         meetingCount: data.meeting_count || 0,
                         meetingTitle: data.task_category === 'Meeting' && data.task_list?.[0] ? data.task_list[0] : '',
                         hasTimeSpent: data.task_category === 'Others' && data.time_spent === 0
@@ -1178,7 +1182,10 @@ const NewData = () => {
                     ? (cat.meetingCount || 0)
                     : 0,
                 work_type: 'Working',
-                sub_category: cat.sub_category
+                sub_category: cat.sub_category,
+                actual_time: (cat.actualTime !== undefined && cat.actualTime !== null && cat.actualTime !== '' && !isNaN(Number(cat.actualTime)))
+                    ? Math.round(Number(cat.actualTime) * 60)
+                    : (cat.actualTime === '' ? null : undefined)
             }));
         if (reports.length === 0) {
             console.log(reports);
@@ -1458,10 +1465,23 @@ const NewData = () => {
                             <button type="button" className="btn btn-sm btn-outline-danger" onClick={cancelRun} disabled={saving}>Cancel</button>
                         </div>
 
-                        <h3 className="fw-bold mb-1" style={{ color: '#065d48' }}>{cur.label}</h3>
-                        <small className="text-muted">
-                            {p.date} • {cur.expectedSeconds ? `Selected time: ${fmtClock(cur.expectedSeconds)}` : 'No time target'}
-                        </small>
+                        <h3 className="fw-bold mb-2" style={{ color: '#065d48' }}>{cur.label}</h3>
+                        <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
+                            <span className="badge bg-light text-dark border">
+                                <i className="bi bi-calendar3 me-1"></i>{p.date}
+                            </span>
+                            <span className="badge bg-light text-dark border">
+                                <i className="bi bi-bullseye me-1 text-primary"></i>Estimated Target: {cur.expectedSeconds ? fmtClock(cur.expectedSeconds) : 'No time target'}
+                            </span>
+                            <span className="badge bg-light text-dark border">
+                                <i className="bi bi-stopwatch me-1 text-success"></i>Realtime Elapsed: {fmtClock(running ? elapsedSec : 0)}
+                            </span>
+                            {cur.expectedSeconds > 0 && (
+                                <span className={`badge ${overtime ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-success-subtle text-success border border-success-subtle'}`}>
+                                    {overtime ? `+${fmtClock(elapsedSec - cur.expectedSeconds)} Overtime` : `${fmtClock(cur.expectedSeconds - elapsedSec)} Remaining`}
+                                </span>
+                            )}
+                        </div>
 
                         <div className="d-flex justify-content-center my-4">
                             {(() => {
@@ -1748,22 +1768,22 @@ const NewData = () => {
                                                             </h5>
                                                             {dailyTotals.minutes >= 450 && dailyTotals.minutes <= 510 && (
                                                                 <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
-                                                                    <i className="bi bi-check-circle-fill me-1"></i>Full Day (8h)
+                                                                    <i className="bi bi-check-circle-fill me-1"></i>Full Day (7.5h)
                                                                 </span>
                                                             )}
                                                             {dailyTotals.minutes > 600 && (
                                                                 <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
-                                                                    <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 8h (Check Time per Task)
+                                                                    <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 7.5h (Check Time per Task)
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <small className="text-muted">
                                                             {dailyTotals.priorMinutes > 0 ? (
                                                                 <>
-                                                                    <span className="fw-semibold text-dark">{dailyTotals.priorMinutes}m</span> already logged today + <span className="fw-semibold text-dark">{dailyTotals.currentMinutes}m</span> this entry &bull; Target: 8 hrs
+                                                                    <span className="fw-semibold text-dark">{dailyTotals.priorMinutes}m</span> already logged today + <span className="fw-semibold text-dark">{dailyTotals.currentMinutes}m</span> this entry &bull; Target: 7.5 hrs
                                                                 </>
                                                             ) : (
-                                                                `Total Work Hours for ${formData.date} • Target: 8 hrs (480 mins)`
+                                                                `Total Work Hours for ${formData.date} • Target: 7.5 hrs (450 mins)`
                                                             )}
                                                         </small>
                                                     </div>
@@ -1784,13 +1804,91 @@ const NewData = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {categories.map((cat, index) => (
+                                        {isEditMode && formData.work_type === 'Working' && categories[0] && (
+                                            <div className="card mb-4 border-0 shadow-sm" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                                <div className="card-body p-3">
+                                                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                                        <div className="d-flex align-items-center gap-2">
+                                                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48' }}>
+                                                                <i className="bi bi-clock-history fs-5"></i>
+                                                            </div>
+                                                            <div>
+                                                                <h6 className="mb-0 fw-bold text-dark">Time Comparison Overview</h6>
+                                                                <small className="text-muted">Target estimate vs recorded real-time</small>
+                                                            </div>
+                                                        </div>
+                                                        <div className="d-flex align-items-center gap-3 flex-wrap">
+                                                            <div className="px-3 py-1 bg-white rounded-3 border text-center">
+                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. Total</small>
+                                                                <span className="fw-bold" style={{ color: '#065d48' }}>
+                                                                    {categories.reduce((sum, c) => sum + (c.category === 'Meeting' ? (Number(c.meetingCount) || 1) * (Number(c.timeSpent) || 0) : (c.tasks?.length || 0) * (Number(c.timeSpent) || 0)), 0)} mins
+                                                                </span>
+                                                            </div>
+                                                            <div className="px-3 py-1 bg-white rounded-3 border text-center">
+                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Actual Time</small>
+                                                                <span className="fw-bold text-dark">
+                                                                    {categories[0].actualTime !== '' && categories[0].actualTime !== null && categories[0].actualTime !== undefined
+                                                                        ? `${categories[0].actualTime} mins`
+                                                                        : 'Untimed'}
+                                                                </span>
+                                                            </div>
+                                                            {categories[0].actualTime !== '' && categories[0].actualTime !== null && categories[0].actualTime !== undefined && (
+                                                                (() => {
+                                                                    const est = categories.reduce((sum, c) => sum + (c.category === 'Meeting' ? (Number(c.meetingCount) || 1) * (Number(c.timeSpent) || 0) : (c.tasks?.length || 0) * (Number(c.timeSpent) || 0)), 0);
+                                                                    const act = Number(categories[0].actualTime) || 0;
+                                                                    if (est <= 0 || act <= 0) return null;
+                                                                    const diff = est - act;
+                                                                    const isFaster = diff >= 0;
+                                                                    const pct = Math.round((Math.abs(diff) / est) * 100);
+                                                                    return (
+                                                                        <div className={`px-3 py-1 rounded-3 border text-center ${isFaster ? 'bg-success-subtle text-success border-success-subtle' : 'bg-danger-subtle text-danger border-danger-subtle'}`}>
+                                                                            <small className="d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Variance</small>
+                                                                            <span className="fw-bold">
+                                                                                {isFaster ? `${diff.toFixed(1)}m faster (${pct}%)` : `${Math.abs(diff).toFixed(1)}m over (${pct}%)`}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })()
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {categories.map((cat, index) => {
+                                            const taskCount = Array.isArray(cat.tasks) ? cat.tasks.length : 0;
+                                            const timePerTask = Number(cat.timeSpent) || 0;
+                                            const totalCatEstMinutes = cat.category === 'Meeting'
+                                                ? (Number(cat.meetingCount) || 1) * timePerTask
+                                                : taskCount * timePerTask;
+                                            const catActualMinutes = (cat.actualTime !== undefined && cat.actualTime !== null && cat.actualTime !== '')
+                                                ? Number(cat.actualTime)
+                                                : null;
+
+                                            return (
                                             <div key={cat.id} className="card mb-3" style={{ border: '2px solid #e0e0e0' }}>
                                                 <div className="card-body">
-                                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                                        <h5 className="card-title mb-0" style={{ color: '#065d48' }}>
-                                                            Category {index + 1}
-                                                        </h5>
+                                                    <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                                            <h5 className="card-title mb-0" style={{ color: '#065d48' }}>
+                                                                Category {index + 1}
+                                                            </h5>
+                                                            {cat.category && cat.category !== 'Meeting' && (
+                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                    <i className="bi bi-clock me-1"></i>Est. Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
+                                                                </span>
+                                                            )}
+                                                            {cat.category === 'Meeting' && (
+                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                    <i className="bi bi-clock me-1"></i>Meeting Est.: {totalCatEstMinutes} mins
+                                                                </span>
+                                                            )}
+                                                            {isEditMode && catActualMinutes !== null && (
+                                                                <span className="badge rounded-pill bg-light text-dark border" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                    <i className="bi bi-stopwatch me-1 text-success"></i>Actual: {catActualMinutes} mins
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         {categories.length > 1 && (
                                                             <button type="button"
                                                                 className="btn btn-sm btn-outline-danger"
@@ -1909,6 +2007,31 @@ const NewData = () => {
                                                                         />
                                                                     )}
                                                                 </div>
+                                                            </div>
+                                                        )}
+                                                        {isEditMode && (
+                                                            <div className="mb-3 col-lg-6">
+                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                    Actual Time Spent (Minutes)
+                                                                </label>
+                                                                <div className="input-group">
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        min="0"
+                                                                        className="form-control"
+                                                                        value={cat.actualTime ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, actualTime: val } : c));
+                                                                        }}
+                                                                        placeholder="e.g. 25"
+                                                                    />
+                                                                    <span className="input-group-text bg-light text-muted">mins</span>
+                                                                </div>
+                                                                <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                                                    Recorded timer time. You can edit this if the timer was stopped late.
+                                                                </small>
                                                             </div>
                                                         )}
                                                         {cat.category === 'Meeting' && (
@@ -2042,7 +2165,8 @@ const NewData = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                         {!isEditMode && (
                                             <div className="d-flex gap-2 mb-3">
                                                 <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
