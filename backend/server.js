@@ -197,6 +197,11 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
+    await pool.query(
+      'INSERT INTO logs (user_id, type) VALUES (?, ?)',
+      [user.id, 'sign in']
+    );
+
     // Set 12 hours token lifetime
     const token = jwt.sign(
       { user_id: user.id, token_version: user.token_version },
@@ -221,9 +226,20 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
 // 3. Logout
 app.post(['/api/logout', '/api/logout/'], authenticate, async (req, res) => {
   try {
-    await pool.query('UPDATE users SET token_version = token_version + 1, last_active_at = NULL WHERE id = ?', [req.user.id]);
+    // Save logout activity
+    await pool.query(
+      'INSERT INTO logs (user_id, type) VALUES (?, ?)',
+      [req.user.id, 'sign out']
+    );
+
+    await pool.query(
+      'UPDATE users SET token_version = token_version + 1, last_active_at = NULL WHERE id = ?',
+      [req.user.id]
+    );
+
     return res.json({ message: 'Successfully logged out.' });
   } catch (err) {
+    console.error('Logout error:', err);
     return res.status(500).json({ error: 'Error logging out.' });
   }
 });
@@ -942,7 +958,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
     let updates = [];
     let params = [];
-    let cleanTaskList = [];   
+    let cleanTaskList = [];
 
     if (date) { updates.push('date = ?'); params.push(date); }
     if (task_category) { updates.push('task_category = ?'); params.push(task_category); }
