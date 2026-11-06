@@ -102,6 +102,8 @@ const DailyReport = () => {
     const [currentUser, setCurrentUser] = useState(null);
     const [search, setSearch] = useState("");
     const [selectedUserFilter, setSelectedUserFilter] = useState("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
 
     const isAdminOrHR = useMemo(() => { return ADMIN_ROLES.has(currentUser?.role); }, [currentUser]);
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
@@ -267,6 +269,14 @@ const DailyReport = () => {
             reports = reports.filter(report => report.user_name === selectedUserFilter);
         }
 
+        if (dateFrom) {
+            reports = reports.filter(report => report.date >= dateFrom);
+        }
+
+        if (dateTo) {
+            reports = reports.filter(report => report.date <= dateTo);
+        }
+
         if (!searchText) {
             return reports;
         }
@@ -274,7 +284,7 @@ const DailyReport = () => {
             const searchableText = [report.user_name, report.date, report.task_category, report.sub_category, Array.isArray(report.task_list) ? report.task_list.join(" ") : report.task_list, report.number_of_tasks, report.time_spent, report.work_type,].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase();
             return searchableText.includes(searchText);
         });
-    }, [search, dailyReports, selectedUserFilter]);
+    }, [search, dailyReports, selectedUserFilter, dateFrom, dateTo]);
 
     const handleView = async (id) => {
         try {
@@ -723,7 +733,7 @@ const DailyReport = () => {
                         <div className="card-body"> {/* Search */}
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div className="text-muted small"> {loading ? "Loading reports..." : `${filteredReports.length} report${filteredReports.length !== 1 ? "s" : ""} found`} </div>
-                                <div className="d-flex gap-2">
+                                <div className="d-flex gap-2 align-items-center">
                                     {isAdminOrHR && (
                                         <select
                                             className="form-select"
@@ -738,6 +748,24 @@ const DailyReport = () => {
                                             ))}
                                         </select>
                                     )}
+                                    <div className="d-flex gap-2 align-items-center">
+                                        <label className="small text-muted mb-0 fw-semibold">From:</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            style={{ width: "150px" }}
+                                            value={dateFrom}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                        />
+                                        <label className="small text-muted mb-0 fw-semibold">To:</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            style={{ width: "150px" }}
+                                            value={dateTo}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                        />
+                                    </div>
                                     <input type="search" className="form-control" style={{ maxWidth: "300px", }} placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search reports" />
                                 </div>
                             </div>
