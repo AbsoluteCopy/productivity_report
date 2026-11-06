@@ -305,31 +305,95 @@ const NewData = () => {
     };
 
     const endTask = async () => {
+
+        const actualSeconds = Math.max(
+            1,
+            Math.floor((Date.now() - run.startedAt) / 1000)
+        );
+
+        const result = await Swal.fire({
+            title: 'Finish Task?',
+            text: `This task took ${Math.floor(actualSeconds / 60)} minute(s). Do you want to end it?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, End it',
+            cancelButtonText: 'Continue Working',
+            reverseButtons: true,
+            confirmButtonColor: '#28a745',
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
         const cur = run.queue[run.index];
-        const actualSeconds = Math.max(1, Math.floor((Date.now() - run.startedAt) / 1000));
         setSaving(true);
+
         try {
             const fd = new FormData();
-            ['user', 'date', 'task_category', 'sub_category', 'work_type',
-                'number_of_tasks', 'time_spent', 'meeting_count'].forEach(k => fd.append(k, cur.payload[k] ?? ''));
+
+            [
+                'user',
+                'date',
+                'task_category',
+                'sub_category',
+                'work_type',
+                'number_of_tasks',
+                'time_spent',
+                'meeting_count'
+            ].forEach(k => fd.append(k, cur.payload[k] ?? ''));
+
             fd.append('task_list', JSON.stringify(cur.payload.task_list));
-            fd.append('actual_time', actualSeconds);            // seconds; use Math.round(actualSeconds/60) if your column is minutes
+            fd.append('actual_time', actualSeconds);
             fd.append('description', description.trim());
-            if (attachment) fd.append('attachment', attachment);
+
+            if (attachment) {
+                fd.append('attachment', attachment);
+            }
 
             await axios.post(`${API_BASE_URL}/daily-reports/`, fd);
 
-            const results = [...run.results, { label: cur.label, expectedSeconds: cur.expectedSeconds, actualSeconds }];
+            const results = [
+                ...run.results,
+                {
+                    label: cur.label,
+                    expectedSeconds: cur.expectedSeconds,
+                    actualSeconds
+                }
+            ];
+
             const isLast = run.index + 1 >= run.queue.length;
-            setDescription(''); setAttachment(null);
-            setRun(isLast
-                ? { ...run, results, startedAt: null, finished: true }
-                : { ...run, results, index: run.index + 1, startedAt: null });
+
+            setDescription('');
+            setAttachment(null);
+
+            setRun(
+                isLast
+                    ? { ...run, results, startedAt: null, finished: true }
+                    : {
+                        ...run,
+                        results,
+                        index: run.index + 1,
+                        startedAt: null
+                    }
+            );
+
+            Swal.fire({
+                title: 'Saved!',
+                text: 'Task has been completed successfully.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+
         } catch (error) {
             console.error('Error:', error);
+
             Swal.fire({
                 title: 'Could not save',
-                text: error.response?.data?.error || 'Error saving this task. Your timer is still running, please try again.',
+                text:
+                    error.response?.data?.error ||
+                    'Error saving this task. Your timer is still running, please try again.',
                 icon: 'error'
             });
         } finally {
@@ -348,6 +412,7 @@ const NewData = () => {
     const priorTotals = useMemo(() => {
         let priorTasks = 0;
         let priorMinutes = 0;
+        let priorActual = 0;
 
         existingDayReports.forEach((r) => {
             if (editId && String(r.id) === String(editId)) {
@@ -365,12 +430,14 @@ const NewData = () => {
             } else {
                 const count = Number(r.number_of_tasks || (Array.isArray(r.task_list) ? r.task_list.length : 0));
                 const time = Number(r.time_spent || 0);
+                const actual = Number(r.actual_time || 0);
                 priorTasks += count;
                 priorMinutes += count > 0 ? (count * time) : time;
+                priorActual += actual;
             }
         });
 
-        return { priorTasks, priorMinutes };
+        return { priorTasks, priorMinutes, priorActual };
     }, [existingDayReports, editId]);
 
     const dailyTotals = useMemo(() => {
@@ -400,17 +467,27 @@ const NewData = () => {
         const remainingMins = minutes % 60;
         const percent = Math.min(Math.round((minutes / targetMinutes) * 100), 999);
 
+        const actualMinutes = priorTotals.priorActual + currentMinutes;
+        const totalActualHours = Math.floor(actualMinutes / 60);
+        const remainingActualMins = actualMinutes % 60;
+        const actualPercent = Math.min(Math.round((actualMinutes / targetMinutes) * 100), 999);
+
         return {
             tasksCount,
             minutes,
+            actualMinutes,
             totalHours,
             remainingMins,
             percent,
             targetMinutes,
             priorTasks: priorTotals.priorTasks,
             priorMinutes: priorTotals.priorMinutes,
+            priorActual: priorTotals.priorActual,
             currentTasks,
             currentMinutes,
+            actualPercent,
+            totalActualHours,
+            remainingActualMins,
         };
     }, [categories, priorTotals]);
 
@@ -1533,7 +1610,7 @@ const NewData = () => {
                                             onClick={handleDeleteReport}
                                             title="Delete this report"
                                         >
-                                            <i className="bi bi-trash me-1"></i>Delete
+                                            <i className="bi bi-trash me-1"></i>Delete Report
                                         </button>
                                     )}
                                 </div>
@@ -1545,13 +1622,9 @@ const NewData = () => {
                                         <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
                                             Date *
                                         </label>
-                                        <input
-                                            type="date"
-                                            name="date"
-                                            value={formData.date}
-                                            onChange={handleChange}
-                                            required
-                                            className="form-control"
+                                        <input type="date" name="date" value={formData.date}
+                                            onChange={handleChange} required
+                                            className="form-control" disabled={isEditMode}
                                         />
                                     </div>
                                     <div className="col-lg-6 col-sm-12">
@@ -1561,19 +1634,19 @@ const NewData = () => {
                                             </label>
                                             <br />
                                             <div className="form-check form-check-inline">
-                                                <input className="form-check-input" type="radio" name="work_type" id="working" value="Working" checked={!formData.work_type || formData.work_type === "Working"} onChange={handleChange} required />
+                                                <input className="form-check-input" type="radio" name="work_type" id="working" value="Working" checked={!formData.work_type || formData.work_type === "Working"} onChange={handleChange} required disabled={isEditMode} />
                                                 <label className="form-check-label" htmlFor="working">Working</label>
                                             </div>
                                             <div className="form-check form-check-inline">
-                                                <input className="form-check-input" type="radio" name="work_type" id="pto" value="PTO" checked={formData.work_type === "PTO"} onChange={handleChange} required />
+                                                <input className="form-check-input" type="radio" name="work_type" id="pto" value="PTO" checked={formData.work_type === "PTO"} onChange={handleChange} required disabled={isEditMode} />
                                                 <label className="form-check-label" htmlFor="pto">PTO</label>
                                             </div>
                                             <div className="form-check form-check-inline">
-                                                <input className="form-check-input" type="radio" name="work_type" id="holiday" value="Holiday" checked={formData.work_type === "Holiday"} onChange={handleChange} required />
+                                                <input className="form-check-input" type="radio" name="work_type" id="holiday" value="Holiday" checked={formData.work_type === "Holiday"} onChange={handleChange} required disabled={isEditMode} />
                                                 <label className="form-check-label" htmlFor="holiday">Holiday</label>
                                             </div>
                                             <div className="form-check form-check-inline">
-                                                <input className="form-check-input" type="radio" name="work_type" id="company_event" value="Company Event" checked={formData.work_type === "Company Event"} onChange={handleChange} required />
+                                                <input className="form-check-input" type="radio" name="work_type" id="company_event" value="Company Event" checked={formData.work_type === "Company Event"} onChange={handleChange} required disabled={isEditMode} />
                                                 <label className="form-check-label" htmlFor="company_event">Company Event</label>
                                             </div>
                                         </div>
@@ -2008,7 +2081,7 @@ const NewData = () => {
                                     </div>
                                 ) : (
                                     <button type="submit" className="btn btn-success w-100 fw-bold py-2">
-                                        <i className="bi bi-play-circle me-1"></i>Start Task
+                                        <i className="bi bi-play-circle me-1"></i> {formData.work_type && formData.work_type === 'Working' ? 'Start Task' : 'Save ' + formData.work_type}
                                     </button>
                                 )}
                             </form>
