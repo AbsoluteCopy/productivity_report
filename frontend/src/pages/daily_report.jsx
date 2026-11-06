@@ -101,6 +101,7 @@ const DailyReport = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [search, setSearch] = useState("");
+    const [selectedUserFilter, setSelectedUserFilter] = useState("");
 
     const isAdminOrHR = useMemo(() => { return ADMIN_ROLES.has(currentUser?.role); }, [currentUser]);
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
@@ -180,6 +181,17 @@ const DailyReport = () => {
         });
     }, [isAdminOrHR, teamSnapshotDate, dailyReports]);
 
+    const userList = useMemo(() => {
+        if (!isAdminOrHR || dailyReports.length === 0) return [];
+        const users = new Set();
+        dailyReports.forEach(report => {
+            if (report.user_name) {
+                users.add(report.user_name);
+            }
+        });
+        return Array.from(users).sort();
+    }, [isAdminOrHR, dailyReports]);
+
     // Check if date is more than 1 month old
     const isMoreThanOneMonthOld = useCallback((dateString) => {
         return checkIsMoreThanOneMonthOld(dateString);
@@ -248,15 +260,21 @@ const DailyReport = () => {
         }, [fetchReports]);
 
     const filteredReports = useMemo(() => {
-        const searchText = search.trim().toLowerCase(); 
-        if (!searchText) { 
-            return dailyReports; 
-        } 
-        return dailyReports.filter((report) => { 
-            const searchableText = [report.user_name, report.date, report.task_category, report.sub_category, Array.isArray(report.task_list) ? report.task_list.join(" ") : report.task_list, report.number_of_tasks, report.time_spent, report.work_type,].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase(); 
-            return searchableText.includes(searchText); 
+        const searchText = search.trim().toLowerCase();
+        let reports = dailyReports;
+
+        if (selectedUserFilter) {
+            reports = reports.filter(report => report.user_name === selectedUserFilter);
+        }
+
+        if (!searchText) {
+            return reports;
+        }
+        return reports.filter((report) => {
+            const searchableText = [report.user_name, report.date, report.task_category, report.sub_category, Array.isArray(report.task_list) ? report.task_list.join(" ") : report.task_list, report.number_of_tasks, report.time_spent, report.work_type,].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase();
+            return searchableText.includes(searchText);
         });
-    }, [search, dailyReports]);
+    }, [search, dailyReports, selectedUserFilter]);
 
     const handleView = async (id) => {
         try {
@@ -430,28 +448,6 @@ const DailyReport = () => {
                             {mins} mins
                         </span>
                     );
-                },
-                sortable: true,
-                center: true,
-            },
-            {
-                name: "Start Time",
-                selector: (row) => row.time_added || "",
-                cell: (row) => {
-                    if (!row.time_added) return <span className="text-muted">—</span>;
-                    const date = new Date(row.time_added);
-                    return <span style={{ fontSize: "0.85rem" }}>{date.toLocaleTimeString()}</span>;
-                },
-                sortable: true,
-                center: true,
-            },
-            {
-                name: "End Time",
-                selector: (row) => row.time_finished || "",
-                cell: (row) => {
-                    if (!row.time_finished) return <span className="text-muted">—</span>;
-                    const date = new Date(row.time_finished);
-                    return <span style={{ fontSize: "0.85rem" }}>{date.toLocaleTimeString()}</span>;
                 },
                 sortable: true,
                 center: true,
@@ -727,7 +723,23 @@ const DailyReport = () => {
                         <div className="card-body"> {/* Search */}
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div className="text-muted small"> {loading ? "Loading reports..." : `${filteredReports.length} report${filteredReports.length !== 1 ? "s" : ""} found`} </div>
-                                <input type="search" className="form-control" style={{ maxWidth: "300px", }} placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search reports" />
+                                <div className="d-flex gap-2">
+                                    {isAdminOrHR && (
+                                        <select
+                                            className="form-select"
+                                            style={{ maxWidth: "200px" }}
+                                            value={selectedUserFilter}
+                                            onChange={(event) => setSelectedUserFilter(event.target.value)}
+                                            aria-label="Filter by user"
+                                        >
+                                            <option value="">All Users</option>
+                                            {userList.map(user => (
+                                                <option key={user} value={user}>{user}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                    <input type="search" className="form-control" style={{ maxWidth: "300px", }} placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search reports" />
+                                </div>
                             </div>
                             {/* Table */}
                             <DataTable columns={columns} data={filteredReports} customStyles={customStyles} pagination striped responsive highlightOnHover fixedHeader fixedHeaderScrollHeight="600px" defaultSortFieldId="date" defaultSortAsc={false} persistTableHead noDataComponent={<div className="py-4 text-muted"> {search ? "No reports match your search." : "No daily reports found."} </div>} progressPending={loading} progressComponent={<div className="text-center py-4"> <div className="spinner-border text-success" role="status" > <span className="visually-hidden"> Loading... </span> </div> <div className="mt-2 text-muted"> Loading reports... </div> </div>} />
