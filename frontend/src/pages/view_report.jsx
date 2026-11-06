@@ -44,6 +44,7 @@ const ViewReport = () => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(false);
     const [taskCategories, setTaskCategories] = useState([]);
+    const [activityData, setActivityData] = useState([]);
 
     const topScrollbarRef = useRef(null);
     const tableContainerRef = useRef(null);
@@ -237,12 +238,62 @@ const ViewReport = () => {
             const data = await response.json();
 
             setDailyReports(data);
+            processActivityData(data);
         } catch (error) {
             console.error('Error fetching reports:', error);
 
         } finally {
             setLoading(false);
         }
+    };
+
+    const processActivityData = (reports) => {
+        const activities = [];
+
+        reports.forEach(report => {
+            if (!report.time_added || !report.time_finished) return;
+
+            const displayCategory = getReportCategory(report);
+
+            // Parse time_added and time_finished - handle both UTC format and HH:mm format
+            let startDate, endDate;
+            if (report.time_added.includes('T') || report.time_added.includes('Z')) {
+                startDate = new Date(report.time_added);
+            } else {
+                startDate = new Date(`${report.date}T${report.time_added}`);
+            }
+
+            if (report.time_finished.includes('T') || report.time_finished.includes('Z')) {
+                endDate = new Date(report.time_finished);
+            } else {
+                endDate = new Date(`${report.date}T${report.time_finished}`);
+            }
+
+            // Format times for display
+            const formatTime = (date) => {
+                if (!date || isNaN(date.getTime())) return '';
+                return date.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+            };
+
+            activities.push({
+                date: report.date,
+                category: displayCategory,
+                task_category: report.task_category,
+                sub_category: report.sub_category,
+                time_added: formatTime(startDate),
+                time_finished: formatTime(endDate),
+                start: startDate,
+                end: endDate,
+                number_of_tasks: report.number_of_tasks,
+                task_list: report.task_list
+            });
+        });
+
+        setActivityData(activities);
     };
 
     const months = Array.from({ length: 12 }, (_, i) => {
@@ -512,6 +563,98 @@ const ViewReport = () => {
             borderWidth: 2,
             borderColor: '#fff',
         }]
+    };
+
+    const pieChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { font: { family: 'Inter', size: 12 }, padding: 16 }
+            },
+            tooltip: {
+                callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} mins` },
+                backgroundColor: '#08060d',
+                padding: 10,
+                cornerRadius: 8,
+            }
+        }
+    };
+
+    const uniqueDates = [...new Set(activityData.map(a => a.date))].sort();
+
+    const activityChartData = {
+        labels: uniqueDates,
+        datasets: [{
+            label: 'Activities',
+            data: activityData.map(a => {
+                const startHours = a.start.getHours() + a.start.getMinutes() / 60;
+                const endHours = a.end.getHours() + a.end.getMinutes() / 60;
+                return {
+                    x: [startHours, endHours],
+                    y: a.date
+                };
+            }),
+            backgroundColor: activityData.map((a, i) => categoryColors[i % categoryColors.length]),
+            borderWidth: 1,
+            borderColor: '#fff',
+            barPercentage: 1.0,
+            categoryPercentage: 1.0,
+        }]
+    };
+
+    const activityChartOptions = {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                min: 0,
+                max: 24,
+                title: {
+                    display: true,
+                    text: 'Time (24-hour format)'
+                },
+                ticks: {
+                    callback: function(value) {
+                        const hours = Math.floor(value);
+                        const minutes = Math.round((value - hours) * 60);
+                        const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                        return timeStr;
+                    },
+                    stepSize: 2
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Date'
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const activity = activityData[context.dataIndex];
+                        const category = activity.task_category === 'Others' && activity.sub_category
+                            ? activity.sub_category
+                            : activity.category;
+                        const startTime = activity.time_added;
+                        const endTime = activity.time_finished;
+                        return [
+                            `Category: ${category}`,
+                            `Time: ${startTime} - ${endTime}`,
+                            `Tasks: ${activity.number_of_tasks || 0}`
+                        ];
+                    }
+                }
+            }
+        }
     };
 
     const exportDailyReport = async (reportType = 'dailyreport') => {
@@ -848,25 +991,6 @@ const ViewReport = () => {
         );
     };
 
-    const pieChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'right',
-                labels: { font: { family: 'Inter', size: 12 }, padding: 16 }
-            },
-            tooltip: {
-                callbacks: {
-                    label: (ctx) => ` ${ctx.label}: ${ctx.parsed} mins`
-                },
-                backgroundColor: '#08060d',
-                padding: 10,
-                cornerRadius: 8,
-            }
-        }
-    };
-
     const formatDate = (date) => {
         if (!date) return '';
 
@@ -1172,6 +1296,18 @@ const ViewReport = () => {
                                 role="tab"
                             >
                                 Items per Task
+                            </button>
+                        </li>
+                        <li className="nav-item" role="presentation">
+                            <button
+                                className="nav-link"
+                                id="user-activity-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#user-activity-report"
+                                type="button"
+                                role="tab"
+                            >
+                                User Activity
                             </button>
                         </li>
                     </ul>
@@ -1521,6 +1657,29 @@ const ViewReport = () => {
                                 {renderItemsReportTable()}
                             </div>
                         </div>
+                        <div className="tab-pane fade" id="user-activity-report" role="tabpanel">
+                            <div className="row">
+                                <div className="col-12">
+                                    <div className="card shadow-sm border-0 rounded-4" style={{ backgroundColor: '#fdfdfd' }}>
+                                        <div className="card-body p-4">
+                                            <h6 className="fw-bold mb-3" style={{ color: '#08060d' }}>
+                                                User Activity Timeline (24-hour format)
+                                            </h6>
+                                            {activityData.length > 0 ? (
+                                                <div style={{ height: '400px' }}>
+                                                    <Bar data={activityChartData} options={activityChartOptions} />
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-5">
+                                                    <p className="text-muted">No activity data available for the selected period.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                     </div>
                 </div>
             </div>
