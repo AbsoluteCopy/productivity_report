@@ -700,6 +700,8 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
         actual_time: r.actual_time,
         description: r.description,
         attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
+        time_added: r.time_added,
+        time_finished: r.time_finished,
       };
     });
 
@@ -819,6 +821,8 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       actual_time: r.actual_time,
       description: r.description,
       attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
+      time_added: r.time_added,
+      time_finished: r.time_finished,
     });
   } catch (err) {
     console.error('Fetch single report error:', err);
@@ -833,7 +837,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
   });
   try {
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks,
-      time_spent, meeting_count, user, actual_time, description } = req.body;
+      time_spent, meeting_count, user, actual_time, description, time_added, time_finished } = req.body;
 
     // multipart sends everything as strings
     if (typeof task_list === 'string') {
@@ -914,13 +918,15 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
     const [result] = await pool.query(
       `INSERT INTO daily_reports
         (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks,
-         time_spent, meeting_count, actual_time, description, attachment, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+         time_spent, meeting_count, actual_time, description, attachment, time_added, time_finished, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson,
         number_of_tasks || 0, time_spent || 0, meeting_count || 0,
         Number(actual_time) || null,                      // seconds
         (description || '').trim() || null,
-        req.file ? req.file.filename : null]
+        req.file ? req.file.filename : null,
+        time_added || null,
+        time_finished || null]
     );
 
     const [created] = await pool.query('SELECT * FROM daily_reports WHERE id = ?', [result.insertId]);
@@ -955,7 +961,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       }
     }
 
-    let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count } = req.body;
+    let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, time_added, time_finished } = req.body;
     let updates = [];
     let params = [];
     let cleanTaskList = [];
@@ -983,6 +989,8 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     const { description, actual_time } = req.body;
     if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
     if (actual_time !== undefined) { updates.push('actual_time = ?'); params.push(actual_time !== null && actual_time !== '' ? actual_time : null); }
+    if (time_added !== undefined) { updates.push('time_added = ?'); params.push(time_added || null); }
+    if (time_finished !== undefined) { updates.push('time_finished = ?'); params.push(time_finished || null); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;

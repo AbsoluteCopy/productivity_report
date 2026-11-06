@@ -327,6 +327,8 @@ const NewData = () => {
         }
 
         const cur = run.queue[run.index];
+        const timeAdded = new Date(run.startedAt).toISOString();
+        const timeFinished = new Date().toISOString();
         setSaving(true);
 
         try {
@@ -346,6 +348,8 @@ const NewData = () => {
             fd.append('task_list', JSON.stringify(cur.payload.task_list));
             fd.append('actual_time', actualSeconds);
             fd.append('description', description.trim());
+            fd.append('time_added', timeAdded);
+            fd.append('time_finished', timeFinished);
 
             if (attachment) {
                 fd.append('attachment', attachment);
@@ -358,7 +362,9 @@ const NewData = () => {
                 {
                     label: cur.label,
                     expectedSeconds: cur.expectedSeconds,
-                    actualSeconds
+                    actualSeconds,
+                    timeAdded: timeAdded,
+                    timeFinished: timeFinished
                 }
             ];
 
@@ -1425,6 +1431,8 @@ const NewData = () => {
                             <ul className="list-group mb-3">
                                 {run.results.map((r, i) => {
                                     const c = compareText(r.actualSeconds, r.expectedSeconds);
+                                    const startTime = r.timeAdded ? new Date(r.timeAdded).toLocaleTimeString() : '—';
+                                    const endTime = r.timeFinished ? new Date(r.timeFinished).toLocaleTimeString() : '—';
                                     return (
                                         <li key={i} className="list-group-item d-flex justify-content-between align-items-start">
                                             <div>
@@ -1432,6 +1440,11 @@ const NewData = () => {
                                                 <small className="text-muted">
                                                     Selected: {r.expectedSeconds ? fmtClock(r.expectedSeconds) : '—'} • Actual: {fmtClock(r.actualSeconds)}
                                                 </small>
+                                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                                    <i className="bi bi-clock-history me-1"></i>Started: {startTime}
+                                                    <span className="mx-2">•</span>
+                                                    <i className="bi bi-clock me-1"></i>Finished: {endTime}
+                                                </div>
                                             </div>
                                             <span className={`fw-semibold ${c.cls}`}>{c.text}</span>
                                         </li>
@@ -1455,153 +1468,227 @@ const NewData = () => {
         const p = cur.payload;
         const running = !!run.startedAt;
         const pct = cur.expectedSeconds ? Math.min((elapsedSec / cur.expectedSeconds) * 100, 100) : 0;
-
         return (
-            <div className="container py-4">
-                <div className="card shadow-sm mx-auto" style={{ maxWidth: 760 }}>
-                    <div className="card-body p-4">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                            <span className="badge bg-secondary">Category {run.index + 1} of {run.queue.length}</span>
-                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={cancelRun} disabled={saving}>Cancel</button>
-                        </div>
+            <div className="container py-4 px-5">
+                <div className="row g-4 px-5 mx-5 justify-content-center">
 
-                        <h3 className="fw-bold mb-2" style={{ color: '#065d48' }}>{cur.label}</h3>
-                        <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
-                            <span className="badge bg-light text-dark border">
-                                <i className="bi bi-calendar3 me-1"></i>{p.date}
-                            </span>
-                            <span className="badge bg-light text-dark border">
-                                <i className="bi bi-bullseye me-1 text-primary"></i>Estimated Target: {cur.expectedSeconds ? fmtClock(cur.expectedSeconds) : 'No time target'}
-                            </span>
-                            <span className="badge bg-light text-dark border">
-                                <i className="bi bi-stopwatch me-1 text-success"></i>Realtime Elapsed: {fmtClock(running ? elapsedSec : 0)}
-                            </span>
-                            {cur.expectedSeconds > 0 && (
-                                <span className={`badge ${overtime ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-success-subtle text-success border border-success-subtle'}`}>
-                                    {overtime ? `+${fmtClock(elapsedSec - cur.expectedSeconds)} Overtime` : `${fmtClock(cur.expectedSeconds - elapsedSec)} Remaining`}
-                                </span>
-                            )}
-                        </div>
+                    {/* Main Card */}
+                    <div className="col-lg-8">
+                        <div className="card shadow-sm h-100">
+                            <div className="card-body p-4">
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <span className="badge bg-secondary">Category {run.index + 1} of {run.queue.length}</span>
+                                    <button type="button" className="btn btn-sm btn-outline-danger" onClick={cancelRun} disabled={saving}>Cancel</button>
+                                </div>
 
-                        <div className="d-flex justify-content-center my-4">
-                            {(() => {
-                                const size = 220;
-                                const strokeWidth = 12;
-                                const radius = (size - strokeWidth) / 2;
-                                const circumference = 2 * Math.PI * radius;
+                                <h3 className="fw-bold mb-2" style={{ color: '#065d48' }}>{cur.label}</h3>
 
-                                const progress = Math.min(pct, 100);
-                                const offset =
-                                    circumference - (progress / 100) * circumference;
+                                <div className="d-flex justify-content-center my-4">
+                                    {(() => {
+                                        const size = 220;
+                                        const strokeWidth = 12;
+                                        const radius = (size - strokeWidth) / 2;
+                                        const circumference = 2 * Math.PI * radius;
 
-                                return (
-                                    <div style={{ position: 'relative', width: size, height: size }}>
-                                        <svg width={size} height={size}>
-                                            {/* Background Circle */}
-                                            <circle
-                                                cx={size / 2}
-                                                cy={size / 2}
-                                                r={radius}
-                                                fill="none"
-                                                stroke="#e5e7eb"
-                                                strokeWidth={strokeWidth}
-                                            />
+                                        const progress = Math.min(pct, 100);
+                                        const offset =
+                                            circumference - (progress / 100) * circumference;
 
-                                            {/* Progress Circle */}
-                                            <circle
-                                                cx={size / 2}
-                                                cy={size / 2}
-                                                r={radius}
-                                                fill="none"
-                                                stroke={overtime ? "#b14c4c" : "#065d48"}
-                                                strokeWidth={strokeWidth}
-                                                strokeLinecap="round"
-                                                strokeDasharray={circumference}
-                                                strokeDashoffset={offset}
-                                                transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                                                style={{
-                                                    transition: "stroke-dashoffset 0.5s ease"
-                                                }}
-                                            />
-                                        </svg>
+                                        return (
+                                            <div style={{ position: 'relative', width: size, height: size }}>
+                                                <svg width={size} height={size}>
+                                                    {/* Background Circle */}
+                                                    <circle
+                                                        cx={size / 2}
+                                                        cy={size / 2}
+                                                        r={radius}
+                                                        fill="none"
+                                                        stroke="#e5e7eb"
+                                                        strokeWidth={strokeWidth}
+                                                    />
 
-                                        {/* Timer Text */}
-                                        <div
-                                            className="position-absolute top-50 start-50 translate-middle text-center"
-                                            style={{ width: "100%" }}
-                                        >
-                                            <div
-                                                style={{
-                                                    fontSize: "2.8rem",
-                                                    fontWeight: 700,
-                                                    fontVariantNumeric: "tabular-nums",
-                                                    color: overtime ? "#b14c4c" : "#065d48",
-                                                }}
-                                            >
-                                                {fmtClock(running ? elapsedSec : 0)}
+                                                    {/* Progress Circle */}
+                                                    <circle
+                                                        cx={size / 2}
+                                                        cy={size / 2}
+                                                        r={radius}
+                                                        fill="none"
+                                                        stroke={overtime ? "#b14c4c" : "#065d48"}
+                                                        strokeWidth={strokeWidth}
+                                                        strokeLinecap="round"
+                                                        strokeDasharray={circumference}
+                                                        strokeDashoffset={offset}
+                                                        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                                                        style={{
+                                                            transition: "stroke-dashoffset 0.5s ease"
+                                                        }}
+                                                    />
+                                                </svg>
+
+                                                {/* Timer Text */}
+                                                <div
+                                                    className="position-absolute top-50 start-50 translate-middle text-center"
+                                                    style={{ width: "100%" }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            fontSize: "2.8rem",
+                                                            fontWeight: 700,
+                                                            fontVariantNumeric: "tabular-nums",
+                                                            color: overtime ? "#b14c4c" : "#065d48",
+                                                        }}
+                                                    >
+                                                        {fmtClock(running ? elapsedSec : 0)}
+                                                    </div>
+
+                                                    <small className="text-muted">
+                                                        {overtime ? "Beyond planned duration" : "On track"}
+                                                    </small>
+                                                </div>
                                             </div>
+                                        );
+                                    })()}
+                                </div>
 
-                                            <small className="text-muted">
-                                                {overtime ? "Beyond planned duration" : "On track"}
-                                            </small>
+                                {overtime && (
+                                    <div
+                                        className="rounded-3 p-3 mb-3"
+                                        style={{
+                                            backgroundColor: "#fffbeb",
+                                            border: "1px solid #fde68a"
+                                        }}
+                                    >
+                                        <div className="fw-semibold text-warning-emphasis">
+                                            Target duration reached
+                                        </div>
+
+                                        <small className="text-muted">
+                                            You've spent {fmtClock(elapsedSec - cur.expectedSeconds)} &nbsp;
+                                            beyond the originally planned duration on this task.
+                                            Feel free to continue working and finish when ready.
+                                        </small>
+                                    </div>
+                                )}
+
+                                {p.task_category === 'Meeting' ? (
+                                    <p className="mb-3">{p.task_list[0]}</p>
+                                ) : (
+                                    <ul className="list-group mb-3">
+                                        {p.task_list.map((t, i) => <li key={i} className="list-group-item py-2">{t}</li>)}
+                                    </ul>
+                                )}
+
+                                {running ? (
+                                    <>
+                                        <div className="mb-3">
+                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Description</label>
+                                            <textarea className="form-control" rows={3} value={description}
+                                                onChange={e => setDescription(e.target.value)}
+                                                placeholder="What did you do for this task?" />
+                                        </div>
+                                        <div className="mb-3">
+                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Attachment (optional, max 10 MB)</label>
+                                            <input type="file" className="form-control"
+                                                onChange={e => setAttachment(e.target.files[0] || null)} />
+                                        </div>
+                                        <button className="btn btn-danger w-100 fw-bold py-2" onClick={endTask} disabled={saving}>
+                                            {saving ? 'Saving...' : <><i className="bi bi-stop-circle me-1"></i>End Task</>}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button className="btn btn-success w-100 fw-bold py-2" onClick={startNext}
+                                        style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}>
+                                        <i className="bi bi-play-circle me-1"></i>Start {cur.label}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Side Card */}
+                    <div className="col-lg-4">
+                        <div className="card shadow-sm h-100">
+                            <div className="card-body">
+
+                                <h5 className="fw-bold mb-3">
+                                    <i className="bi bi-bar-chart me-2"></i>
+                                    Task Details
+                                </h5>
+
+                                <div className="mb-3">
+                                    <small className="text-muted d-block">
+                                        Date
+                                    </small>
+                                    <div className="fw-semibold">
+                                        {p.date}
+                                    </div>
+                                </div>
+                                <div className="mb-3">
+                                    <small className="text-muted d-block">
+                                        Current Time
+                                    </small>
+                                    <div className="fw-semibold">
+                                        {new Date().toLocaleTimeString()}
+                                    </div>
+                                </div>
+                                
+                                <div className="mb-3">
+                                    <small className="text-muted d-block">
+                                        Time Started
+                                    </small>
+                                    <div className="fw-semibold">
+                                        {new Date(run.startedAt).toLocaleTimeString()}
+                                    </div>
+                                </div>
+
+                                <div className="mb-3">
+                                    <small className="text-muted d-block">
+                                        Elapsed Time
+                                    </small>
+                                    <div className="fw-semibold">
+                                        {fmtClock(elapsedSec)}
+                                    </div>
+                                </div>
+
+                                <div className="mb-3">
+                                    <small className="text-muted d-block">
+                                        Target Time
+                                    </small>
+                                    <div className="fw-semibold">
+                                        {cur.expectedSeconds
+                                            ? fmtClock(cur.expectedSeconds)
+                                            : "N/A"}
+                                    </div>
+                                </div>
+                                {!overtime && (
+                                    <div className="mb-3">
+                                        <small className="text-muted d-block">
+                                            Time Remaining
+                                        </small>
+                                        <div className="fw-semibold">
+                                            {`${fmtClock(cur.expectedSeconds - elapsedSec)}`}
                                         </div>
                                     </div>
-                                );
-                            })()}
-                        </div>
 
-                        {overtime && (
-                            <div
-                                className="rounded-3 p-3 mb-3"
-                                style={{
-                                    backgroundColor: "#fffbeb",
-                                    border: "1px solid #fde68a"
-                                }}
-                            >
-                                <div className="fw-semibold text-warning-emphasis">
-                                    Target duration reached
+                                )}
+                                <div>
+                                    <small className="text-muted d-block">
+                                        Status
+                                    </small>
+                                    <span
+                                        className={`badge ${overtime
+                                            ? "bg-danger"
+                                            : "bg-success"
+                                            }`}
+                                    >
+                                        {overtime ? "Beyond planned duration" : "On Track"}
+                                    </span>
                                 </div>
 
-                                <small className="text-muted">
-                                    You've spent {fmtClock(elapsedSec - cur.expectedSeconds)} &nbsp;
-                                    beyond the originally planned duration on this task.
-                                    Feel free to continue working and finish when ready.
-                                </small>
                             </div>
-                        )}
-
-                        {p.task_category === 'Meeting' ? (
-                            <p className="mb-3">{p.task_list[0]}</p>
-                        ) : (
-                            <ul className="list-group mb-3">
-                                {p.task_list.map((t, i) => <li key={i} className="list-group-item py-2">{t}</li>)}
-                            </ul>
-                        )}
-
-                        {running ? (
-                            <>
-                                <div className="mb-3">
-                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Description</label>
-                                    <textarea className="form-control" rows={3} value={description}
-                                        onChange={e => setDescription(e.target.value)}
-                                        placeholder="What did you do for this task?" />
-                                </div>
-                                <div className="mb-3">
-                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Attachment (optional, max 10 MB)</label>
-                                    <input type="file" className="form-control"
-                                        onChange={e => setAttachment(e.target.files[0] || null)} />
-                                </div>
-                                <button className="btn btn-danger w-100 fw-bold py-2" onClick={endTask} disabled={saving}>
-                                    {saving ? 'Saving...' : <><i className="bi bi-stop-circle me-1"></i>End Task</>}
-                                </button>
-                            </>
-                        ) : (
-                            <button className="btn btn-success w-100 fw-bold py-2" onClick={startNext}
-                                style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}>
-                                <i className="bi bi-play-circle me-1"></i>Start {cur.label}
-                            </button>
-                        )}
+                        </div>
                     </div>
+
                 </div>
             </div>
         );
@@ -1644,7 +1731,7 @@ const NewData = () => {
                                         </label>
                                         <input type="date" name="date" value={formData.date}
                                             onChange={handleChange} required
-                                            className="form-control" disabled={isEditMode}
+                                            className="form-control" disabled={isEditMode || formData.work_type === "Working"}
                                         />
                                     </div>
                                     <div className="col-lg-6 col-sm-12">
@@ -1866,180 +1953,101 @@ const NewData = () => {
                                                 : null;
 
                                             return (
-                                            <div key={cat.id} className="card mb-3" style={{ border: '2px solid #e0e0e0' }}>
-                                                <div className="card-body">
-                                                    <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                                                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                                                            <h5 className="card-title mb-0" style={{ color: '#065d48' }}>
-                                                                Category {index + 1}
-                                                            </h5>
-                                                            {cat.category && cat.category !== 'Meeting' && (
-                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                                    <i className="bi bi-clock me-1"></i>Est. Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
-                                                                </span>
-                                                            )}
-                                                            {cat.category === 'Meeting' && (
-                                                                <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                                    <i className="bi bi-clock me-1"></i>Meeting Est.: {totalCatEstMinutes} mins
-                                                                </span>
-                                                            )}
-                                                            {isEditMode && catActualMinutes !== null && (
-                                                                <span className="badge rounded-pill bg-light text-dark border" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
-                                                                    <i className="bi bi-stopwatch me-1 text-success"></i>Actual: {catActualMinutes} mins
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {categories.length > 1 && (
-                                                            <button type="button"
-                                                                className="btn btn-sm btn-outline-danger"
-                                                                onClick={() => removeCategory(cat.id)}
-                                                            >
-                                                                <i className="bi bi-trash me-1"></i>Remove Category
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="mb-3 col-lg-6">
-                                                            <div className="d-flex justify-content-between align-items-center mb-1">
-                                                                <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
-                                                                    Task Category *
-                                                                </label>
-                                                                {cat.category === 'Others' && cat.sub_category && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
-                                                                        style={{ color: '#065d48', fontSize: '0.82rem' }}
-                                                                        onClick={() => promptForOtherName(cat.id, cat.sub_category)}
-                                                                    >
-                                                                        <i className="bi bi-pencil-square me-1"></i>Rename
-                                                                    </button>
+                                                <div key={cat.id} className="card mb-3" style={{ border: '2px solid #e0e0e0' }}>
+                                                    <div className="card-body">
+                                                        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                                            <div className="d-flex align-items-center gap-2 flex-wrap">
+                                                                <h5 className="card-title mb-0" style={{ color: '#065d48' }}>
+                                                                    Category {index + 1}
+                                                                </h5>
+                                                                {cat.category && cat.category !== 'Meeting' && (
+                                                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                        <i className="bi bi-clock me-1"></i>Est. Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
+                                                                    </span>
+                                                                )}
+                                                                {cat.category === 'Meeting' && (
+                                                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                        <i className="bi bi-clock me-1"></i>Meeting Est.: {totalCatEstMinutes} mins
+                                                                    </span>
+                                                                )}
+                                                                {isEditMode && catActualMinutes !== null && (
+                                                                    <span className="badge rounded-pill bg-light text-dark border" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                        <i className="bi bi-stopwatch me-1 text-success"></i>Actual: {catActualMinutes} mins
+                                                                    </span>
                                                                 )}
                                                             </div>
-                                                            <CategorySelect
-                                                                cat={cat}
-                                                                taskCategories={taskCategories}
-                                                                onSelect={(val) => handleCategoryChange(cat.id, val)}
-                                                            />
+                                                            {categories.length > 1 && (
+                                                                <button type="button"
+                                                                    className="btn btn-sm btn-outline-danger"
+                                                                    onClick={() => removeCategory(cat.id)}
+                                                                >
+                                                                    <i className="bi bi-trash me-1"></i>Remove Category
+                                                                </button>
+                                                            )}
                                                         </div>
 
-                                                        {cat.category !== 'Meeting' && (
+                                                        <div className="row">
                                                             <div className="mb-3 col-lg-6">
                                                                 <div className="d-flex justify-content-between align-items-center mb-1">
-                                                                    <div className="d-flex align-items-center">
-                                                                        <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
-                                                                            Time per Task (Minutes) *
-                                                                        </label>
-                                                                        {(() => {
-                                                                            const matched = taskCategories.find(c => c.name === cat.category);
-                                                                            if (matched?.default_time) {
-                                                                                return (
-                                                                                    <span className="badge rounded-pill ms-2" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.75rem', fontWeight: '600' }}>
-                                                                                        <i className="bi bi-clock me-1"></i>Standard: {matched.default_time} min{matched.default_time > 1 ? 's' : ''}
-                                                                                    </span>
-                                                                                );
-                                                                            }
-                                                                            return null;
-                                                                        })()}
-                                                                    </div>
-                                                                    {cat.category === 'Others' && (
-                                                                        <div className="form-check mb-0">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={cat.hasTimeSpent || false}
-                                                                                onChange={(e) => {
-                                                                                    setCategories(prev => prev.map(c =>
-                                                                                        c.id === cat.id ? { ...c, hasTimeSpent: e.target.checked } : c
-                                                                                    ));
-                                                                                }}
-                                                                                className="form-check-input"
-                                                                                id={`noTimeSpent-${cat.id}`}
-                                                                            />
-                                                                            <label className="form-check-label small fw-semibold text-muted" htmlFor={`noTimeSpent-${cat.id}`}>
-                                                                                No Time Spent
-                                                                            </label>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="d-flex gap-2 align-items-center">
-                                                                    <select
-                                                                        value={
-                                                                            ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
-                                                                                ? String(cat.timeSpent)
-                                                                                : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
-                                                                        }
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            if (val === 'custom') {
-                                                                                if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
-                                                                                    handleTimeSpentChange(cat.id, '');
-                                                                                }
-                                                                            } else {
-                                                                                handleTimeSpentChange(cat.id, val);
-                                                                            }
-                                                                        }}
-                                                                        className="form-select"
-                                                                        style={{ minWidth: '150px' }}
-                                                                        disabled={cat.category === 'Others' && cat.hasTimeSpent}
-                                                                        required={!(cat.category === 'Others' && cat.hasTimeSpent)}
-                                                                    >
-                                                                        <option value="">Select Time</option>
-                                                                        <option value="15">15 mins</option>
-                                                                        <option value="30">30 mins</option>
-                                                                        <option value="45">45 mins</option>
-                                                                        <option value="60">60 mins</option>
-                                                                        <option value="90">90 mins</option>
-                                                                        <option value="120">120 mins</option>
-                                                                        <option value="custom">Custom Time...</option>
-                                                                    </select>
-                                                                    {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
-                                                                        <input
-                                                                            type="number"
-                                                                            value={cat.timeSpent}
-                                                                            onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
-                                                                            onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
-                                                                            min="0"
-                                                                            step="1"
-                                                                            placeholder="Enter minutes"
-                                                                            className="form-control"
-                                                                            disabled={cat.category === 'Others' && cat.hasTimeSpent}
-                                                                            required={!(cat.category === 'Others' && cat.hasTimeSpent)}
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {isEditMode && (
-                                                            <div className="mb-3 col-lg-6">
-                                                                <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                    Actual Time Spent (Minutes)
-                                                                </label>
-                                                                <div className="input-group">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.1"
-                                                                        min="0"
-                                                                        className="form-control"
-                                                                        value={cat.actualTime ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, actualTime: val } : c));
-                                                                        }}
-                                                                        placeholder="e.g. 25"
-                                                                    />
-                                                                    <span className="input-group-text bg-light text-muted">mins</span>
-                                                                </div>
-                                                                <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                                                    Recorded timer time. You can edit this if the timer was stopped late.
-                                                                </small>
-                                                            </div>
-                                                        )}
-                                                        {cat.category === 'Meeting' && (
-                                                            <>
-                                                                <div className="mb-3 col-lg-6">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Meeting Duration (Minutes) *
+                                                                    <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                        Task Category *
                                                                     </label>
+                                                                    {cat.category === 'Others' && cat.sub_category && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
+                                                                            style={{ color: '#065d48', fontSize: '0.82rem' }}
+                                                                            onClick={() => promptForOtherName(cat.id, cat.sub_category)}
+                                                                        >
+                                                                            <i className="bi bi-pencil-square me-1"></i>Rename
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                <CategorySelect
+                                                                    cat={cat}
+                                                                    taskCategories={taskCategories}
+                                                                    onSelect={(val) => handleCategoryChange(cat.id, val)}
+                                                                />
+                                                            </div>
+
+                                                            {cat.category !== 'Meeting' && (
+                                                                <div className="mb-3 col-lg-6">
+                                                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                        <div className="d-flex align-items-center">
+                                                                            <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                                Time per Task (Minutes) *
+                                                                            </label>
+                                                                            {(() => {
+                                                                                const matched = taskCategories.find(c => c.name === cat.category);
+                                                                                if (matched?.default_time) {
+                                                                                    return (
+                                                                                        <span className="badge rounded-pill ms-2" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.75rem', fontWeight: '600' }}>
+                                                                                            <i className="bi bi-clock me-1"></i>Standard: {matched.default_time} min{matched.default_time > 1 ? 's' : ''}
+                                                                                        </span>
+                                                                                    );
+                                                                                }
+                                                                                return null;
+                                                                            })()}
+                                                                        </div>
+                                                                        {cat.category === 'Others' && (
+                                                                            <div className="form-check mb-0">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={cat.hasTimeSpent || false}
+                                                                                    onChange={(e) => {
+                                                                                        setCategories(prev => prev.map(c =>
+                                                                                            c.id === cat.id ? { ...c, hasTimeSpent: e.target.checked } : c
+                                                                                        ));
+                                                                                    }}
+                                                                                    className="form-check-input"
+                                                                                    id={`noTimeSpent-${cat.id}`}
+                                                                                />
+                                                                                <label className="form-check-label small fw-semibold text-muted" htmlFor={`noTimeSpent-${cat.id}`}>
+                                                                                    No Time Spent
+                                                                                </label>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                     <div className="d-flex gap-2 align-items-center">
                                                                         <select
                                                                             value={
@@ -2059,7 +2067,8 @@ const NewData = () => {
                                                                             }}
                                                                             className="form-select"
                                                                             style={{ minWidth: '150px' }}
-                                                                            required
+                                                                            disabled={cat.category === 'Others' && cat.hasTimeSpent}
+                                                                            required={!(cat.category === 'Others' && cat.hasTimeSpent)}
                                                                         >
                                                                             <option value="">Select Time</option>
                                                                             <option value="15">15 mins</option>
@@ -2080,91 +2089,169 @@ const NewData = () => {
                                                                                 step="1"
                                                                                 placeholder="Enter minutes"
                                                                                 className="form-control"
-                                                                                required
+                                                                                disabled={cat.category === 'Others' && cat.hasTimeSpent}
+                                                                                required={!(cat.category === 'Others' && cat.hasTimeSpent)}
                                                                             />
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="mb-3 col-lg-12">
+                                                            )}
+                                                            {isEditMode && (
+                                                                <div className="mb-3 col-lg-6">
                                                                     <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Meeting Title
-                                                                    </label>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={cat.meetingTitle}
-                                                                        onChange={(e) => handleMeetingTitleChange(cat.id, e.target.value)}
-                                                                        placeholder="Enter meeting title"
-                                                                        className="form-control"
-                                                                        name='meeting_title'
-                                                                    />
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {cat.category !== 'Meeting' && (
-                                                            <>
-                                                                <div className="mb-3 col-lg-9">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Task List *
+                                                                        Actual Time Spent (Minutes)
                                                                     </label>
                                                                     <div className="input-group">
                                                                         <input
+                                                                            type="number"
+                                                                            step="0.1"
+                                                                            min="0"
+                                                                            className="form-control"
+                                                                            value={cat.actualTime ?? ''}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, actualTime: val } : c));
+                                                                            }}
+                                                                            placeholder="e.g. 25"
+                                                                        />
+                                                                        <span className="input-group-text bg-light text-muted">mins</span>
+                                                                    </div>
+                                                                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                                                        Recorded timer time. You can edit this if the timer was stopped late.
+                                                                    </small>
+                                                                </div>
+                                                            )}
+                                                            {cat.category === 'Meeting' && (
+                                                                <>
+                                                                    <div className="mb-3 col-lg-6">
+                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                            Meeting Duration (Minutes) *
+                                                                        </label>
+                                                                        <div className="d-flex gap-2 align-items-center">
+                                                                            <select
+                                                                                value={
+                                                                                    ['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))
+                                                                                        ? String(cat.timeSpent)
+                                                                                        : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '')
+                                                                                }
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    if (val === 'custom') {
+                                                                                        if (['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent))) {
+                                                                                            handleTimeSpentChange(cat.id, '');
+                                                                                        }
+                                                                                    } else {
+                                                                                        handleTimeSpentChange(cat.id, val);
+                                                                                    }
+                                                                                }}
+                                                                                className="form-select"
+                                                                                style={{ minWidth: '150px' }}
+                                                                                required
+                                                                            >
+                                                                                <option value="">Select Time</option>
+                                                                                <option value="15">15 mins</option>
+                                                                                <option value="30">30 mins</option>
+                                                                                <option value="45">45 mins</option>
+                                                                                <option value="60">60 mins</option>
+                                                                                <option value="90">90 mins</option>
+                                                                                <option value="120">120 mins</option>
+                                                                                <option value="custom">Custom Time...</option>
+                                                                            </select>
+                                                                            {(!['15', '30', '45', '60', '90', '120'].includes(String(cat.timeSpent)) || cat.timeSpent === '') && (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={cat.timeSpent}
+                                                                                    onChange={(e) => handleTimeSpentChange(cat.id, e.target.value)}
+                                                                                    onBlur={(e) => handleTimeSpentBlur(cat.id, e.target.value)}
+                                                                                    min="0"
+                                                                                    step="1"
+                                                                                    placeholder="Enter minutes"
+                                                                                    className="form-control"
+                                                                                    required
+                                                                                />
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="mb-3 col-lg-12">
+                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                            Meeting Title
+                                                                        </label>
+                                                                        <input
                                                                             type="text"
-                                                                            value={cat.currentTask}
-                                                                            onChange={(e) => handleTaskChange(cat.id, e.target.value)}
-                                                                            onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
-                                                                            placeholder="Type task and press Enter or click Add"
+                                                                            value={cat.meetingTitle}
+                                                                            onChange={(e) => handleMeetingTitleChange(cat.id, e.target.value)}
+                                                                            placeholder="Enter meeting title"
+                                                                            className="form-control"
+                                                                            name='meeting_title'
+                                                                        />
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {cat.category !== 'Meeting' && (
+                                                                <>
+                                                                    <div className="mb-3 col-lg-9">
+                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                            Task List *
+                                                                        </label>
+                                                                        <div className="input-group">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={cat.currentTask}
+                                                                                onChange={(e) => handleTaskChange(cat.id, e.target.value)}
+                                                                                onKeyDown={(e) => handleTaskKeyDown(e, cat.id)}
+                                                                                placeholder="Type task and press Enter or click Add"
+                                                                                className="form-control"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-outline-success"
+                                                                                onClick={() => addTask(cat.id, cat.currentTask)}
+                                                                            >
+                                                                                <i className="bi bi-patch-plus me-1"></i>Add
+                                                                            </button>
+                                                                        </div>
+                                                                        {cat.tasks.length > 0 && (
+                                                                            <div
+                                                                                className="mt-2 shadow-sm"
+                                                                                style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}
+                                                                                ref={(el) => setTaskListRef(cat.id, el)}
+                                                                            >
+                                                                                <ul className="list-group list-group-flush mb-0">
+                                                                                    {cat.tasks.map((task, taskIndex) => (
+                                                                                        <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
+                                                                                            <span className="text-break" style={{ fontSize: '0.9rem', color: '#333' }}>{task}</span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="btn btn-sm btn-outline-danger py-0 px-2 ms-2"
+                                                                                                style={{ fontSize: '1.1rem', lineHeight: '1.2' }}
+                                                                                                title="Remove task"
+                                                                                                onClick={() => removeTask(cat.id, taskIndex)}
+                                                                                            >
+                                                                                                ×
+                                                                                            </button>
+                                                                                        </li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="mb-3 col-lg-3">
+                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                            Number of Tasks
+                                                                        </label>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={cat.tasks.length}
+                                                                            readOnly
                                                                             className="form-control"
                                                                         />
-                                                                        <button
-                                                                            type="button"
-                                                                            className="btn btn-outline-success"
-                                                                            onClick={() => addTask(cat.id, cat.currentTask)}
-                                                                        >
-                                                                            <i className="bi bi-patch-plus me-1"></i>Add
-                                                                        </button>
                                                                     </div>
-                                                                    {cat.tasks.length > 0 && (
-                                                                        <div
-                                                                            className="mt-2 shadow-sm"
-                                                                            style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}
-                                                                            ref={(el) => setTaskListRef(cat.id, el)}
-                                                                        >
-                                                                            <ul className="list-group list-group-flush mb-0">
-                                                                                {cat.tasks.map((task, taskIndex) => (
-                                                                                    <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
-                                                                                        <span className="text-break" style={{ fontSize: '0.9rem', color: '#333' }}>{task}</span>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            className="btn btn-sm btn-outline-danger py-0 px-2 ms-2"
-                                                                                            style={{ fontSize: '1.1rem', lineHeight: '1.2' }}
-                                                                                            title="Remove task"
-                                                                                            onClick={() => removeTask(cat.id, taskIndex)}
-                                                                                        >
-                                                                                            ×
-                                                                                        </button>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-
-                                                                <div className="mb-3 col-lg-3">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Number of Tasks
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={cat.tasks.length}
-                                                                        readOnly
-                                                                        className="form-control"
-                                                                    />
-                                                                </div>
-                                                            </>
-                                                        )}
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
                                             );
                                         })}
                                         {!isEditMode && (

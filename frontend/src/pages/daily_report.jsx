@@ -435,6 +435,28 @@ const DailyReport = () => {
                 center: true,
             },
             {
+                name: "Start Time",
+                selector: (row) => row.time_added || "",
+                cell: (row) => {
+                    if (!row.time_added) return <span className="text-muted">—</span>;
+                    const date = new Date(row.time_added);
+                    return <span style={{ fontSize: "0.85rem" }}>{date.toLocaleTimeString()}</span>;
+                },
+                sortable: true,
+                center: true,
+            },
+            {
+                name: "End Time",
+                selector: (row) => row.time_finished || "",
+                cell: (row) => {
+                    if (!row.time_finished) return <span className="text-muted">—</span>;
+                    const date = new Date(row.time_finished);
+                    return <span style={{ fontSize: "0.85rem" }}>{date.toLocaleTimeString()}</span>;
+                },
+                sortable: true,
+                center: true,
+            },
+            {
                 name: "Options",
                 cell: (row) => {
                     const is24hOld = isEmployee && isMoreThan24HoursOld(row);

@@ -570,13 +570,15 @@ const ViewReport = () => {
                 { key: 'count', width: 12 },
                 { key: 'time', width: 18 },
                 { key: 'actual', width: 22 },
+                { key: 'start', width: 14 },
+                { key: 'end', width: 14 },
                 { key: 'working', width: 22 },
                 { key: 'meeting', width: 24 },
             ];
 
             const row1 = ws.getRow(1);
             row1.height = 28;
-            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Actual Time Spent (mins)', 'Working Hours (mins)', 'Meetings/Training (mins)']
+            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Actual Time Spent (mins)', 'Start Time', 'End Time', 'Working Hours (mins)', 'Meetings/Training (mins)']
                 .forEach((h, i) => setHdr(row1, i + 1, h));
 
             let currentRow = 2;
