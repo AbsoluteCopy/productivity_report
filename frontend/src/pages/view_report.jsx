@@ -569,13 +569,14 @@ const ViewReport = () => {
                 { key: 'task', width: 36 },
                 { key: 'count', width: 12 },
                 { key: 'time', width: 18 },
+                { key: 'actual', width: 22 },
                 { key: 'working', width: 22 },
                 { key: 'meeting', width: 24 },
             ];
 
             const row1 = ws.getRow(1);
             row1.height = 28;
-            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Working Hours (mins)', 'Meetings/Training (mins)']
+            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Actual Time Spent (mins)', 'Working Hours (mins)', 'Meetings/Training (mins)']
                 .forEach((h, i) => setHdr(row1, i + 1, h));
 
             let currentRow = 2;
@@ -593,10 +594,10 @@ const ViewReport = () => {
 
                 if (isDailyTotal) {
                     r.getCell(3).value = "Daily Total";
-                    r.getCell(6).value = report.working_hours_total ?? "";
-                    r.getCell(7).value = report.meeting_total ?? "";
+                    r.getCell(7).value = report.working_hours_total ?? "";
+                    r.getCell(8).value = report.meeting_total ?? "";
 
-                    for (let c = 1; c <= 7; c++) {
+                    for (let c = 1; c <= 8; c++) {
                         const cell = r.getCell(c);
                         cell.font = { bold: true, size: 10, name: 'Calibri' };
                         cell.fill = solid('FFD1FAE5');
@@ -614,7 +615,7 @@ const ViewReport = () => {
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = "Weekend";
 
-                    for (let c = 1; c <= 7; c++) {
+                    for (let c = 1; c <= 8; c++) {
                         const cell = r.getCell(c);
                         cell.fill = solid('FFF2F4F7');
                         cell.border = borders;
@@ -627,7 +628,7 @@ const ViewReport = () => {
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = report.task_category + (report.task_list?.[0] ? ` - ${report.task_list[0]}` : "");
 
-                    for (let c = 1; c <= 7; c++) {
+                    for (let c = 1; c <= 8; c++) {
                         const cell = r.getCell(c);
                         cell.fill = solid('FFE8F8F5');
                         cell.border = borders;
@@ -640,17 +641,19 @@ const ViewReport = () => {
                     const timeSpent = Number(report.time_spent || 0);
                     const isMeeting = report.task_category === "Meeting";
 
+                    const actMins = report.actual_time && Number(report.actual_time) > 0 ? Number((Number(report.actual_time) / 60).toFixed(2)) : "";
                     r.getCell(1).value = dateLabel;
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = getReportCategory(report);
                     r.getCell(4).value = numTasks || "";
                     r.getCell(5).value = timeSpent || "";
-                    r.getCell(6).value = isMeeting ? "" : (numTasks * timeSpent || "");
-                    r.getCell(7).value = isMeeting
+                    r.getCell(6).value = isMeeting ? "" : actMins;
+                    r.getCell(7).value = isMeeting ? "" : (numTasks * timeSpent || "");
+                    r.getCell(8).value = isMeeting
                         ? (Number(report.meeting_count || 0) * timeSpent || "")
                         : "";
 
-                    for (let c = 1; c <= 7; c++) {
+                    for (let c = 1; c <= 8; c++) {
                         const cell = r.getCell(c);
                         cell.border = borders;
                         cell.font = { size: 10, name: 'Calibri' };
@@ -688,6 +691,7 @@ const ViewReport = () => {
                 { key: 'task', width: 34 },
                 { key: 'total_tasks', width: 22 },
                 { key: 'total_time', width: 26 },
+                { key: 'total_actual', width: 26 },
             ];
 
             const row1 = ws.getRow(1);
@@ -695,14 +699,16 @@ const ViewReport = () => {
             setHdr(row1, 1, 'List of Task');
             setHdr(row1, 2, 'Total # of Tasks Done');
             setHdr(row1, 3, 'Total Time Spent (mins)');
+            setHdr(row1, 4, 'Total Actual Time (mins)');
 
             summaryReports.forEach((summary, idx) => {
                 const r = ws.getRow(2 + idx);
                 r.getCell(1).value = summary.task;
                 r.getCell(2).value = summary.totalTasks || 0;
                 r.getCell(3).value = summary.totalTime || 0;
+                r.getCell(4).value = summary.totalActualTime || 0;
 
-                [1, 2, 3].forEach(c => {
+                [1, 2, 3, 4].forEach(c => {
                     const cell = r.getCell(c);
                     cell.border = borders;
                     cell.font = { size: 10, name: 'Calibri' };
@@ -713,10 +719,12 @@ const ViewReport = () => {
 
             // Total row (matches the on-screen table)
             const totalRow = ws.getRow(2 + summaryReports.length);
+            const totalActual = summaryReports.reduce((s, i) => s + (Number(i.totalActualTime) || 0), 0);
             totalRow.getCell(1).value = 'Total';
             totalRow.getCell(2).value = summaryReports.reduce((s, i) => s + i.totalTasks, 0);
             totalRow.getCell(3).value = summaryReports.reduce((s, i) => s + i.totalTime, 0);
-            [1, 2, 3].forEach(c => {
+            totalRow.getCell(4).value = Number(totalActual.toFixed(2));
+            [1, 2, 3, 4].forEach(c => {
                 const cell = totalRow.getCell(c);
                 cell.border = borders;
                 cell.font = { bold: true, size: 10, name: 'Calibri' };
@@ -1211,17 +1219,17 @@ const ViewReport = () => {
                                                 displayReports.map((report, index) => {
                                                     if (report.isTotal) {
                                                         const totalMins = Number(report.working_hours_total || 0) + Number(report.meeting_total || 0);
-                                                        const pct = Math.round((totalMins / 480) * 100);
+                                                        const pct = Math.round((totalMins / 450) * 100);
 
                                                         let badgeClass = 'bg-success text-white';
                                                         let statusLabel = 'Full Shift';
 
                                                         if (totalMins < 450) {
                                                             badgeClass = 'bg-warning text-dark';
-                                                            statusLabel = 'Under 8h';
+                                                            statusLabel = 'Under 7.5h';
                                                         } else if (totalMins > 540) {
                                                             badgeClass = 'bg-danger text-white';
-                                                            statusLabel = totalMins > 600 ? 'Over 8h (Check)' : 'Overtime';
+                                                            statusLabel = totalMins > 540 ? 'Over 7.5h (Check)' : 'Overtime';
                                                         }
                                                         const workHrs = Math.floor(Number(report.working_hours_total || 0) / 60);
                                                         const workMins = Number(report.working_hours_total || 0) % 60;

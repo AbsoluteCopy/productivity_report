@@ -3,7 +3,7 @@ import axios from 'axios';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import API_BASE_URL from "../config";
-import { parseDateInTimezone } from '../utils/dateUtils';
+import { parseDateInTimezone, DEFAULT_TIMEZONE } from '../utils/dateUtils';
 
 
 const ViewUtilizationReport = () => {
@@ -119,7 +119,11 @@ const ViewUtilizationReport = () => {
     const groupedReports = useMemo(() => {
         return Object.values(
             dailyReports.reduce((acc, report) => {
-                const key = report.date;
+                if (!report || !report.date) return acc;
+                const key = typeof report.date === 'string' ? report.date.split('T')[0] : String(report.date);
+
+                const actSec = Number(report.actual_time || 0);
+                const actMins = actSec > 0 ? actSec / 60 : 0;
 
                 if (!acc[key]) {
                     acc[key] = {
@@ -127,12 +131,15 @@ const ViewUtilizationReport = () => {
                         working_minutes:
                             Number(report.number_of_tasks) *
                             Number(report.time_spent || 0),
+                        actual_minutes: actMins,
                         meeting_minutes: Number(report.meeting_minutes || 0),
                     };
                 } else {
                     acc[key].working_minutes +=
                         Number(report.number_of_tasks) *
                         Number(report.time_spent || 0);
+
+                    acc[key].actual_minutes = (acc[key].actual_minutes || 0) + actMins;
 
                     acc[key].meeting_minutes +=
                         Number(report.meeting_minutes || 0);
@@ -162,10 +169,7 @@ const ViewUtilizationReport = () => {
                 day
             );
 
-            const dayOfWeek = date.toLocaleString('en-US', {
-                weekday: 'numeric',
-                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
-            });
+            const dayOfWeek = date.getDay();
 
             if (dayOfWeek === 0 || dayOfWeek === 6) {
 
@@ -182,6 +186,7 @@ const ViewUtilizationReport = () => {
                         id: `weekend-${dateString}`,
                         date: dateString,
                         working_minutes: 0,
+                        actual_minutes: 0,
                         meeting_minutes: 0,
                         isWeekend: true
                     });
@@ -266,10 +271,11 @@ const ViewUtilizationReport = () => {
         ws.columns = [
             { key: 'A', width: 11 }, { key: 'B', width: 12 }, { key: 'C', width: 9 },
             { key: 'D', width: 10 }, { key: 'E', width: 10 }, { key: 'F', width: 10 },
-            { key: 'G', width: 10 }, { key: 'H', width: 10 }, { key: 'I', width: 9 },
-            { key: 'J', width: 9 },  { key: 'K', width: 2 },  { key: 'L', width: 10 },
-            { key: 'M', width: 11 }, { key: 'N', width: 8 },  { key: 'O', width: 9 },
-            { key: 'P', width: 11 }, { key: 'Q', width: 11 },
+            { key: 'G', width: 10 }, { key: 'H', width: 10 }, { key: 'I', width: 10 },
+            { key: 'J', width: 10 }, { key: 'K', width: 9 },  { key: 'L', width: 9 },
+            { key: 'M', width: 2 },  { key: 'N', width: 10 }, { key: 'O', width: 11 },
+            { key: 'P', width: 8 },  { key: 'Q', width: 9 },  { key: 'R', width: 11 },
+            { key: 'S', width: 11 },
         ];
 
         const darkGreen  = 'FF3D6B27';
@@ -294,7 +300,7 @@ const ViewUtilizationReport = () => {
         };
 
         // ROW 1 — Title
-        ws.mergeCells('A1:Q1');
+        ws.mergeCells('A1:S1');
         style(ws.getCell('A1'), hdrGreen, { bold:true, color:'FFFFFFFF', size:13 });
         ws.getCell('A1').value = 'Employee Utilization Report';
         ws.getRow(1).height = 22;
@@ -312,14 +318,14 @@ const ViewUtilizationReport = () => {
         style(ws.getCell('L2'), hdrGreen, { color:'FFFFFFFF' }); ws.getCell('L2').value = 'Month';
         ws.mergeCells('M2:O2'); style(ws.getCell('M2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 });
         ws.getCell('M2').value = monthName;
-        style(ws.getCell('P2'), hdrGreen, { color:'FFFFFFFF' }); ws.getCell('P2').value = 'Year';
-        style(ws.getCell('Q2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 }); ws.getCell('Q2').value = selectedYear;
+        style(ws.getCell('R2'), hdrGreen, { color:'FFFFFFFF' }); ws.getCell('R2').value = 'Year';
+        style(ws.getCell('S2'), 'FFFFFFFF', { bold:true, color:darkGreen, size:10 }); ws.getCell('S2').value = selectedYear;
 
         // ROW 3 — Column headers
         ws.getRow(3).height = 40;
         ['Date','Day','Week\nOffs','Holidays',
-         'Working\nHours\n(mins)','Meetings/\nTraining\n(mins)',
-         'Working\nHours\n(hrs)','Meetings/\nTraining\n(hrs)',
+         'Est. Work\n(mins)','Actual Work\n(mins)','Meetings/\nTraining\n(mins)',
+         'Est. Work\n(hrs)','Actual Work\n(hrs)','Meetings/\nTraining\n(hrs)',
          'Total\nHours w/o\nBreak','Total Hours','',
          'Productive\nHours','Productive\nHours %',
          'Break\nHours','Break\nHours %',
@@ -334,7 +340,8 @@ const ViewUtilizationReport = () => {
         // (data loop continues below)
         displayReports.forEach((report) => {
             const dateObj = parseDateInTimezone(report.date);
-            const [year, month, day] = report.date.split("-");
+            const dateStr = typeof report.date === 'string' ? report.date.split('T')[0] : '';
+            const [year, month, day] = dateStr.split('-');
 
             const dateLabel = `${day}-${dateObj.toLocaleString("en-US", {
                 month: "short",
@@ -353,10 +360,14 @@ const ViewUtilizationReport = () => {
             const isSpecialDay = isWeekend || isHoliday || isPTO || isCompanyEvent;
 
             const workingMins = Number(report.working_minutes || 0);
+            const actualMins = Number(report.actual_minutes || 0);
             const meetingMins = Number(report.meeting_minutes || 0);
 
             const workingHrs = Number(
                 (workingMins / MINUTES_PER_HOUR).toFixed(2)
+            );
+            const actualHrs = Number(
+                (actualMins / MINUTES_PER_HOUR).toFixed(2)
             );
 
             const meetingHrs = Number(
@@ -409,8 +420,10 @@ const ViewUtilizationReport = () => {
                 isWeekend ? 'Weekend' : '',
                 isHoliday ? (report.task_list?.[0] || 'Holiday') : isPTO ? 'PTO' : isCompanyEvent ? 'Company Event' : '',
                 isSpecialDay ? '' : workingMins,
+                isSpecialDay ? '' : (actualMins > 0 ? Number(actualMins.toFixed(2)) : ''),
                 isSpecialDay ? '' : meetingMins,
                 isSpecialDay ? '' : workingHrs,
+                isSpecialDay ? '' : (actualHrs > 0 ? Number(actualHrs.toFixed(2)) : ''),
                 isSpecialDay ? '' : meetingHrs,
                 totalHoursNoBreak, totalHours, '',
                 isSpecialDay ? '' : productiveHours,
@@ -446,9 +459,9 @@ const ViewUtilizationReport = () => {
         style(ws.getCell(`I${fRow}`), footerClr, { bold:true }); ws.getCell(`I${fRow}`).value = 'Days Worked';
         ws.mergeCells(`K${fRow}:L${fRow}`);
         style(ws.getCell(`K${fRow}`), goldClr, { bold:true }); ws.getCell(`K${fRow}`).value = daysWorked;
-        ws.mergeCells(`M${fRow}:P${fRow}`);
+        ws.mergeCells(`M${fRow}:R${fRow}`);
         style(ws.getCell(`M${fRow}`), footerClr, { bold:true }); ws.getCell(`M${fRow}`).value = 'Holidays or PTOs';
-        style(ws.getCell(`Q${fRow}`), goldClr, { bold:true }); ws.getCell(`Q${fRow}`).value = holidaysOrPTOs;
+        style(ws.getCell(`S${fRow}`), goldClr, { bold:true }); ws.getCell(`S${fRow}`).value = holidaysOrPTOs;
 
         // DOWNLOAD
         const output = await workbook.xlsx.writeBuffer();
@@ -637,9 +650,11 @@ const ViewUtilizationReport = () => {
                                                 <th className="py-2 border-0">Status</th>
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0"></th>
-                                                <th className="py-2 border-0 text-center">Work<br />(mins)</th>
+                                                <th className="py-2 border-0 text-center">Est. Work<br />(mins)</th>
+                                                <th className="py-2 border-0 text-center text-success">Actual Work<br />(mins)</th>
                                                 <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
-                                                <th className="py-2 border-0 text-center">Work<br />(hrs)</th>
+                                                <th className="py-2 border-0 text-center">Est. Work<br />(hrs)</th>
+                                                <th className="py-2 border-0 text-center text-success">Actual Work<br />(hrs)</th>
                                                 <th className="py-2 border-0 text-center">Meetings<br />(hrs)</th>
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0 text-center">Req. Hrs<br />w/o Break</th>
@@ -657,7 +672,9 @@ const ViewUtilizationReport = () => {
                                             {
                                                 displayReports.map((report, index) => {
 
-                                                    const [year, month, day] = report.date.split('-');
+                                                    if (!report || !report.date) return null;
+                                                    const dateStr = typeof report.date === 'string' ? report.date.split('T')[0] : '';
+                                                    const [year, month, day] = dateStr.split('-');
 
                                                     const date = new Date(
                                                         year,
@@ -739,11 +756,17 @@ const ViewUtilizationReport = () => {
                                                             <td className="text-center">
                                                                 {!isSpecialDay ? report.working_minutes ?? '' : ''}
                                                             </td>
+                                                            <td className="text-center text-success fw-semibold">
+                                                                {!isSpecialDay ? (report.actual_minutes > 0 ? Number(report.actual_minutes.toFixed(2)) : '—') : ''}
+                                                            </td>
                                                             <td className="text-center">
                                                                 {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
                                                             </td>
                                                             <td className="text-center fw-medium">
                                                                 {!isSpecialDay ? workingHours.toFixed(2) : ''}
+                                                            </td>
+                                                            <td className="text-center text-success fw-semibold">
+                                                                {!isSpecialDay ? (report.actual_minutes > 0 ? (report.actual_minutes / MINUTES_PER_HOUR).toFixed(2) : '—') : ''}
                                                             </td>
                                                             <td className="text-center fw-medium">
                                                                 {!isSpecialDay ? meetingHours.toFixed(2) : ''}

@@ -400,10 +400,36 @@ const DailyReport = () => {
                 center: true,
             },
             {
-                name: "Time Spent",
+                name: "Est. Time",
                 selector: (row) => {
                     if (isRestrictedCategory(row.task_category)) return "";
                     return row.time_spent > 0 ? row.time_spent : "";
+                },
+                cell: (row) => {
+                    if (isRestrictedCategory(row.task_category)) return <span className="text-muted">—</span>;
+                    if (!row.time_spent || Number(row.time_spent) <= 0) return <span className="text-muted">—</span>;
+                    return <span>{row.time_spent} mins</span>;
+                },
+                sortable: true,
+                center: true,
+            },
+            {
+                name: "Actual Time",
+                selector: (row) => {
+                    if (isRestrictedCategory(row.task_category)) return 0;
+                    return row.actual_time > 0 ? Number(row.actual_time) : 0;
+                },
+                cell: (row) => {
+                    if (isRestrictedCategory(row.task_category)) return <span className="text-muted">—</span>;
+                    if (!row.actual_time || Number(row.actual_time) <= 0) {
+                        return <span className="text-muted">—</span>;
+                    }
+                    const mins = Number((Number(row.actual_time) / 60).toFixed(2));
+                    return (
+                        <span className="badge bg-light text-success border border-success-subtle px-2 py-1 fw-semibold" style={{ fontSize: "0.82rem" }}>
+                            {mins} mins
+                        </span>
+                    );
                 },
                 sortable: true,
                 center: true,
@@ -570,7 +596,7 @@ const DailyReport = () => {
                                                 circleContent = "EVT";
                                                 subText = <span className="fw-semibold" style={{ color: "#c2410c" }}>{emp.eventName || "Company Event"}</span>;
                                             } else {
-                                                const pct = Math.min(Math.round((emp.totalMinutes / 480) * 100), 999);
+                                                const pct = Math.min(Math.round((emp.totalMinutes / 450) * 100), 999);
                                                 const hours = Math.floor(emp.totalMinutes / 60);
                                                 const mins = emp.totalMinutes % 60;
 
@@ -634,7 +660,7 @@ const DailyReport = () => {
                                                                 stroke={ringColor}
                                                                 strokeWidth="3"
                                                                 strokeDasharray={81.68}
-                                                                strokeDashoffset={isSpecial ? 0 : 81.68 - (81.68 * Math.min(emp.totalMinutes / 480, 1))}
+                                                                strokeDashoffset={isSpecial ? 0 : 81.68 - (81.68 * Math.min(emp.totalMinutes / 450, 1))}
                                                                 strokeLinecap="round"
                                                                 fill="transparent"
                                                             />
