@@ -1411,7 +1411,12 @@ const ViewReport = () => {
                                                             </tr>
                                                         );
                                                     }
-                                                    const date = parseDateInTimezone(report.date);
+                                                    // report.date is an unambiguous "YYYY-MM-DD" calendar date; parse its
+                                                    // components directly rather than through a Date object, since
+                                                    // Date.getDate()/getFullYear() read the browser's own local
+                                                    // timezone and would shift the day when it differs from Anchorage.
+                                                    const [dYear, dMonth, dDay] = report.date.split('-').map(Number);
+                                                    const date = new Date(Date.UTC(dYear, dMonth - 1, dDay));
                                                     const previousReport = displayReports[index - 1];
                                                     const showDate =
                                                         !previousReport ||
@@ -1432,10 +1437,10 @@ const ViewReport = () => {
                                                         `}>
                                                             <td>
                                                                 {showDate &&
-                                                                    `${date.getDate()}-${date.toLocaleString(
+                                                                    `${dDay}-${date.toLocaleString(
                                                                         'en-US',
-                                                                        { month: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
-                                                                    )}-${String(date.getFullYear()).slice(-2)}`
+                                                                        { month: 'short', timeZone: 'UTC' }
+                                                                    )}-${String(dYear).slice(-2)}`
                                                                 }
                                                             </td>
 
@@ -1443,7 +1448,7 @@ const ViewReport = () => {
                                                                 {showDate &&
                                                                     date.toLocaleDateString(
                                                                         'en-US',
-                                                                        { weekday: 'long', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
+                                                                        { weekday: 'long', timeZone: 'UTC' }
                                                                     )
                                                                 }
                                                             </td>
