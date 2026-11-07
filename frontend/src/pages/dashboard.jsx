@@ -243,7 +243,7 @@ const Home = () => {
                     </div>
                 </div>
             </div>
-            <div className="row mb-4">
+            {/* <div className="row mb-4">
                 <div className="col-12">
                     <div
                         className="d-flex flex-wrap justify-content-between align-items-center p-3 rounded-3 shadow-sm"
@@ -286,7 +286,7 @@ const Home = () => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> */}
 
             <div className="row g-4">
                 <div className="col-md-5 col-lg-4">
