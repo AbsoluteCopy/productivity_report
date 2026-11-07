@@ -170,6 +170,48 @@ export const isMoreThan24HoursOld = (report) => {
 };
 
 /**
+ * Format a MySQL DATETIME string ("YYYY-MM-DD HH:MM:SS") that already represents
+ * a wall-clock value in the configured timezone (e.g. backend's toMySQLDateTime
+ * output). Unlike `new Date(string)`, this reads the stored components directly
+ * instead of letting the browser reinterpret the naive string in its own local
+ * timezone, which would double-shift the displayed time.
+ * @param {string} dtString - "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS"
+ */
+export const parseNaiveDateTime = (dtString) => {
+  if (!dtString) return null;
+  const match = String(dtString).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+  return { year, month, day, hour, minute, second };
+};
+
+/**
+ * Format a MySQL DATETIME string as a 12-hour clock time (e.g. "11:48 AM"),
+ * treating it as an already-local wall-clock value (see parseNaiveDateTime).
+ */
+export const formatNaiveTime = (dtString, { seconds = false } = {}) => {
+  const parts = parseNaiveDateTime(dtString);
+  if (!parts) return '—';
+  const period = parts.hour >= 12 ? 'PM' : 'AM';
+  const hour12 = parts.hour % 12 === 0 ? 12 : parts.hour % 12;
+  const mm = String(parts.minute).padStart(2, '0');
+  if (!seconds) return `${hour12}:${mm} ${period}`;
+  const ss = String(parts.second).padStart(2, '0');
+  return `${hour12}:${mm}:${ss} ${period}`;
+};
+
+/**
+ * Format a MySQL DATETIME string's date portion (e.g. "Nov 6, 2026"),
+ * treating it as an already-local wall-clock value (see parseNaiveDateTime).
+ */
+export const formatNaiveDate = (dtString) => {
+  const parts = parseNaiveDateTime(dtString);
+  if (!parts) return '—';
+  const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return d.toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+/**
  * Format relative time (e.g., "Active 5m ago") in the configured timezone
  * @param {string} dateStr - Date string
  */

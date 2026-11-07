@@ -6,6 +6,7 @@ import DataTable from 'react-data-table-component';
 import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
 import { getCurrentDateInTimezone, parseDateInTimezone, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
+import EmployeeTimelineModal from '../components/EmployeeTimelineModal';
 
 const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event"]);
 const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
@@ -101,6 +102,10 @@ const DailyReport = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [search, setSearch] = useState("");
+    const [selectedTimelineUser, setSelectedTimelineUser] = useState(null);
+    const [selectedUserFilter, setSelectedUserFilter] = useState("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
 
     const isAdminOrHR = useMemo(() => { return ADMIN_ROLES.has(currentUser?.role); }, [currentUser]);
     const isEmployee = useMemo(() => { return currentUser && !isAdminOrHR; }, [currentUser, isAdminOrHR]);
@@ -132,7 +137,7 @@ const DailyReport = () => {
             if (!empMap[userName]) {
                 empMap[userName] = {
                     userName,
-                    userId: r.user_id,
+                    userId: r.user,
                     totalTasks: 0,
                     totalMinutes: 0,
                     isPTO: false,
@@ -179,6 +184,17 @@ const DailyReport = () => {
             return a.userName.localeCompare(b.userName);
         });
     }, [isAdminOrHR, teamSnapshotDate, dailyReports]);
+
+    const userList = useMemo(() => {
+        if (!isAdminOrHR || dailyReports.length === 0) return [];
+        const users = new Set();
+        dailyReports.forEach(report => {
+            if (report.user_name) {
+                users.add(report.user_name);
+            }
+        });
+        return Array.from(users).sort();
+    }, [isAdminOrHR, dailyReports]);
 
     // Check if date is more than 1 month old
     const isMoreThanOneMonthOld = useCallback((dateString) => {
@@ -248,15 +264,29 @@ const DailyReport = () => {
         }, [fetchReports]);
 
     const filteredReports = useMemo(() => {
-        const searchText = search.trim().toLowerCase(); 
-        if (!searchText) { 
-            return dailyReports; 
-        } 
-        return dailyReports.filter((report) => { 
-            const searchableText = [report.user_name, report.date, report.task_category, report.sub_category, Array.isArray(report.task_list) ? report.task_list.join(" ") : report.task_list, report.number_of_tasks, report.time_spent, report.work_type,].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase(); 
-            return searchableText.includes(searchText); 
+        const searchText = search.trim().toLowerCase();
+        let reports = dailyReports;
+
+        if (selectedUserFilter) {
+            reports = reports.filter(report => report.user_name === selectedUserFilter);
+        }
+
+        if (dateFrom) {
+            reports = reports.filter(report => report.date >= dateFrom);
+        }
+
+        if (dateTo) {
+            reports = reports.filter(report => report.date <= dateTo);
+        }
+
+        if (!searchText) {
+            return reports;
+        }
+        return reports.filter((report) => {
+            const searchableText = [report.user_name, report.date, report.task_category, report.sub_category, Array.isArray(report.task_list) ? report.task_list.join(" ") : report.task_list, report.number_of_tasks, report.time_spent, report.work_type,].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase();
+            return searchableText.includes(searchText);
         });
-    }, [search, dailyReports]);
+    }, [search, dailyReports, selectedUserFilter, dateFrom, dateTo]);
 
     const handleView = async (id) => {
         try {
@@ -640,9 +670,11 @@ const DailyReport = () => {
                                                         cursor: "pointer",
                                                         transition: "all 0.2s ease",
                                                     }}
-                                                    title={`Click to filter table for ${emp.userName}`}
+                                                    title={emp.userId ? `View ${emp.userName}'s timeline` : `Click to filter table for ${emp.userName}`}
                                                     onClick={() => {
-                                                        if (isCurrentSearch) {
+                                                        if (emp.userId) {
+                                                            setSelectedTimelineUser({ id: emp.userId, displayName: emp.userName });
+                                                        } else if (isCurrentSearch) {
                                                             setSearch("");
                                                         } else {
                                                             setSearch(emp.userName);
@@ -705,7 +737,41 @@ const DailyReport = () => {
                         <div className="card-body"> {/* Search */}
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div className="text-muted small"> {loading ? "Loading reports..." : `${filteredReports.length} report${filteredReports.length !== 1 ? "s" : ""} found`} </div>
-                                <input type="search" className="form-control" style={{ maxWidth: "300px", }} placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search reports" />
+                                <div className="d-flex gap-2 align-items-center">
+                                    {isAdminOrHR && (
+                                        <select
+                                            className="form-select"
+                                            style={{ maxWidth: "200px" }}
+                                            value={selectedUserFilter}
+                                            onChange={(event) => setSelectedUserFilter(event.target.value)}
+                                            aria-label="Filter by user"
+                                        >
+                                            <option value="">All Users</option>
+                                            {userList.map(user => (
+                                                <option key={user} value={user}>{user}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                    <div className="d-flex gap-2 align-items-center">
+                                        <label className="small text-muted mb-0 fw-semibold">From:</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            style={{ width: "150px" }}
+                                            value={dateFrom}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                        />
+                                        <label className="small text-muted mb-0 fw-semibold">To:</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            style={{ width: "150px" }}
+                                            value={dateTo}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                        />
+                                    </div>
+                                    <input type="search" className="form-control" style={{ maxWidth: "300px", }} placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search reports" />
+                                </div>
                             </div>
                             {/* Table */}
                             <DataTable columns={columns} data={filteredReports} customStyles={customStyles} pagination striped responsive highlightOnHover fixedHeader fixedHeaderScrollHeight="600px" defaultSortFieldId="date" defaultSortAsc={false} persistTableHead noDataComponent={<div className="py-4 text-muted"> {search ? "No reports match your search." : "No daily reports found."} </div>} progressPending={loading} progressComponent={<div className="text-center py-4"> <div className="spinner-border text-success" role="status" > <span className="visually-hidden"> Loading... </span> </div> <div className="mt-2 text-muted"> Loading reports... </div> </div>} />
@@ -715,6 +781,9 @@ const DailyReport = () => {
             </div>
             {/* Report Details Modal */}
             {showModal && selectedReport && (<ReportDetailsModal report={selectedReport} onClose={closeModal} isRestrictedCategory={isRestrictedCategory} />)}
+            {selectedTimelineUser && (
+                <EmployeeTimelineModal user={selectedTimelineUser} onClose={() => setSelectedTimelineUser(null)} />
+            )}
         </div>);
 }; /** * ============================================================= * Report Details Modal * ============================================================= */
 const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {

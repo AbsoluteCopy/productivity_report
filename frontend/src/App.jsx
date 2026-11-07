@@ -14,6 +14,7 @@ import ViewUtilizationReport from './pages/view_utilization_report';
 import ManageAccounts from './pages/manage_accounts';
 import ManageTaskCategory from './pages/manage_task_category';
 import ManageHoliday from './pages/manage_holiday';
+import Attendance from './pages/attendance';
 import ChangePassword from './pages/change_password';
 import NotFound from './pages/404';
 
@@ -86,6 +87,7 @@ function AppContent() {
             <Route path="/manage_accounts" element={<ManageAccounts />} />
             <Route path="/manage_task_category" element={<ManageTaskCategory />} />
             <Route path="/manage_holiday" element={<ManageHoliday />} />
+            <Route path="/attendance" element={<Attendance />} />
             <Route path="/change_password" element={<ChangePassword />} />
           </Route>
         </Route>

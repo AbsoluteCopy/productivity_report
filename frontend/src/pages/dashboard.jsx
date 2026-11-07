@@ -1,24 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Line } from 'react-chartjs-2';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
     CategoryScale,
     LinearScale,
     PointElement,
     LineElement,
+    BarElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend,
 } from 'chart.js'; import API_BASE_URL from "../config";
-import { getCurrentDateTimeInTimezone, formatDateString, formatRelativeTime, parseDateInTimezone } from '../utils/dateUtils';
+import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateString, parseDateInTimezone, formatNaiveTime } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
 import Announcement, { ANNOUNCEMENT_VERSION } from '../components/Announcement'
+import EmployeeTimelineModal from '../components/EmployeeTimelineModal'
 ChartJS.register(
     CategoryScale,
     LinearScale,
     PointElement,
     LineElement,
+    BarElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend
@@ -30,6 +37,7 @@ const Home = () => {
     const [user, setUser] = useState(null);
     const [currentTime, setCurrentTime] = useState(getCurrentDateTimeInTimezone());
     const [recentReports, setRecentReports] = useState([]);
+    const [allReports, setAllReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState('');
     const [monthlyData, setMonthlyData] = useState([]);
@@ -43,6 +51,21 @@ const Home = () => {
     const [availableCompanies, setAvailableCompanies] = useState([]);
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const [selectedTimelineUser, setSelectedTimelineUser] = useState(null);
+    const [teamTab, setTeamTab] = useState('active');
+    const [allUsers, setAllUsers] = useState([]);
+
+    // Team Insights filters
+    const [insightsPeriod, setInsightsPeriod] = useState('30d');
+    const [insightsEmployee, setInsightsEmployee] = useState('all');
+    const [insightsTask, setInsightsTask] = useState('all');
+    const [insightsCustomDate, setInsightsCustomDate] = useState(() => getCurrentDateInTimezone());
+    const [allUsersLoading, setAllUsersLoading] = useState(true);
+
+    // Clock in / clock out
+    const [attendance, setAttendance] = useState(null);
+    const [attendanceLoading, setAttendanceLoading] = useState(true);
+    const [clockActionLoading, setClockActionLoading] = useState(false);
 
     useEffect(() => {
         const userData = localStorage.getItem('user');
@@ -106,10 +129,29 @@ const Home = () => {
         }
     };
 
+    const fetchAllUsers = async () => {
+        try {
+            const { data } = await axios.get(`${API_BASE_URL}/users/`);
+            setAllUsers(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Error fetching all users:', err);
+        } finally {
+            setAllUsersLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (role === 'admin' || role === 'hr' || role === 'supervisor') {
+            fetchAllUsers();
+        }
+    }, [role]);
+
+    const inactiveUsers = allUsers.filter(u => !onlineUsers.some(o => o.id === u.id));
+
     useEffect(() => {
         if (role === 'admin' || role === 'hr' || role === 'supervisor') {
             fetchOnlineUsers();
-            const interval = setInterval(fetchOnlineUsers, 30000);
+            const interval = setInterval(fetchOnlineUsers, 15000);
             return () => clearInterval(interval);
         }
     }, [role, selectedCompanies]);
@@ -161,13 +203,62 @@ const Home = () => {
                     const diff = parseDateInTimezone(b.date || 0) - parseDateInTimezone(a.date || 0);
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
-                const lastThree = sorted.slice(0, 3);
-                setRecentReports(lastThree);
+                setRecentReports(sorted.slice(0, 3));
+                if (['admin', 'hr', 'supervisor'].includes(userRole)) {
+                    setAllReports(sorted);
+                }
             }
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchAttendanceStatus = async () => {
+        try {
+            const { data } = await axios.get(`${API_BASE_URL}/attendance/current/`);
+            setAttendance(data);
+        } catch (err) {
+            console.error('Error fetching attendance status:', err);
+        } finally {
+            setAttendanceLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (user) fetchAttendanceStatus();
+    }, [user]);
+
+    const handleClockIn = async () => {
+        setClockActionLoading(true);
+        try {
+            const { data } = await axios.post(`${API_BASE_URL}/attendance/clock-in/`);
+            setAttendance(data);
+        } catch (err) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Could not clock in',
+                text: err.response?.data?.error || 'Something went wrong.',
+            });
+        } finally {
+            setClockActionLoading(false);
+        }
+    };
+
+    const handleClockOut = async () => {
+        setClockActionLoading(true);
+        try {
+            const { data } = await axios.post(`${API_BASE_URL}/attendance/clock-out/`);
+            setAttendance(data);
+        } catch (err) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Could not clock out',
+                text: err.response?.data?.error || 'Something went wrong.',
+            });
+        } finally {
+            setClockActionLoading(false);
         }
     };
 
@@ -229,6 +320,612 @@ const Home = () => {
 
 
     const { date, time } = currentTime;
+    const isManager = ['admin', 'hr', 'supervisor'].includes(role);
+
+    // Team insights (management only): most common tasks & top contributors, last 30 days.
+    // Dropdown option lists stay stable regardless of the active filters/period.
+    const insightsFilterOptions = useMemo(() => {
+        const employees = new Set();
+        const tasks = new Set();
+        allReports.forEach(r => {
+            if (r.user_name) employees.add(r.user_name);
+            const label = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
+            if (label) tasks.add(label);
+        });
+        return {
+            employees: Array.from(employees).sort(),
+            tasks: Array.from(tasks).sort(),
+        };
+    }, [allReports]);
+
+    const teamInsights = useMemo(() => {
+        if (!isManager || allReports.length === 0) return null;
+
+        let inRange;
+        if (insightsPeriod === 'custom') {
+            inRange = insightsCustomDate ? allReports.filter(r => r.date === insightsCustomDate) : [];
+        } else {
+            const cutoff = new Date();
+            if (insightsPeriod === 'today') {
+                cutoff.setHours(0, 0, 0, 0);
+            } else if (insightsPeriod === 'week') {
+                cutoff.setDate(cutoff.getDate() - 7);
+            } else if (insightsPeriod === '90d') {
+                cutoff.setDate(cutoff.getDate() - 90);
+            } else {
+                cutoff.setDate(cutoff.getDate() - 30); // default: last 30 days ('month' / '30d')
+            }
+            inRange = allReports.filter(r => parseDateInTimezone(r.date) >= cutoff);
+        }
+        if (insightsEmployee !== 'all') {
+            inRange = inRange.filter(r => r.user_name === insightsEmployee);
+        }
+        if (insightsTask !== 'all') {
+            inRange = inRange.filter(r => {
+                const label = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
+                return label === insightsTask;
+            });
+        }
+        const working = inRange.filter(r => !['PTO', 'Holiday', 'Company Event'].includes(r.work_type || r.task_category));
+
+        const taskCounts = {};
+        const contributorStats = {};
+        const workTypeCounts = {};
+        const dailyMinutes = {};
+        let totalMinutes = 0;
+        let totalTasks = 0;
+
+        inRange.forEach(r => {
+            const wt = r.work_type || r.task_category || 'Working';
+            workTypeCounts[wt] = (workTypeCounts[wt] || 0) + 1;
+        });
+
+        working.forEach(r => {
+            const label = r.task_category === 'Others' && r.sub_category ? r.sub_category : r.task_category;
+            if (label) {
+                taskCounts[label] = (taskCounts[label] || 0) + (Number(r.number_of_tasks) || 1);
+            }
+            const name = r.user_name || `User #${r.user}`;
+            if (!contributorStats[name]) contributorStats[name] = { tasks: 0, minutes: 0 };
+            const taskCount = Number(r.number_of_tasks) || 0;
+            const minutes = Number(r.time_spent) || 0;
+            const reportMinutes = taskCount > 0 ? taskCount * minutes : minutes;
+            contributorStats[name].tasks += taskCount;
+            contributorStats[name].minutes += reportMinutes;
+            totalMinutes += reportMinutes;
+            totalTasks += taskCount;
+
+            if (r.date) {
+                dailyMinutes[r.date] = (dailyMinutes[r.date] || 0) + reportMinutes;
+            }
+        });
+
+        const topTasks = Object.entries(taskCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+        const topContributors = Object.entries(contributorStats).sort((a, b) => b[1].minutes - a[1].minutes).slice(0, 8);
+        const workTypeBreakdown = Object.entries(workTypeCounts).sort((a, b) => b[1] - a[1]);
+
+        const sortedDays = Object.keys(dailyMinutes).sort();
+        const dailyTrend = {
+            labels: sortedDays.map(d => formatDateString(d, { month: 'short', day: 'numeric' })),
+            values: sortedDays.map(d => Math.round((dailyMinutes[d] / 60) * 10) / 10),
+        };
+
+        return { topTasks, topContributors, workTypeBreakdown, dailyTrend, totalMinutes, totalTasks, reportCount: inRange.length };
+    }, [isManager, allReports, insightsPeriod, insightsEmployee, insightsTask, insightsCustomDate]);
+
+    const recentReportsCard = (
+        <div className="card shadow-sm h-100 border-0 rounded-4">
+            <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                    <i className="bi bi-journal-text me-2"></i>Recent Reports
+                </h5>
+                {isManager ? (
+                    <Link to="/daily_report" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                        View All <i className="bi bi-arrow-right ms-1"></i>
+                    </Link>
+                ) : role === 'employee' ? (
+                    <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                        <i className="bi bi-plus-lg me-1"></i> New
+                    </Link>
+                ) : null}
+            </div>
+            <div className="card-body p-4">
+                {loading ? (
+                    <div className="text-center py-5">
+                        <div className="spinner-border text-success" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                ) : recentReports.length > 0 ? (
+                    <div className="list-group list-group-flush gap-2">
+                        {recentReports.map((report) => (
+                            <div key={report.id} className="list-group-item border rounded-3 p-3 d-flex justify-content-between align-items-center" style={{ transition: 'all 0.2s' }}>
+                                <div className="d-flex align-items-center">
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                        <i className="bi bi-check2-all fs-5"></i>
+                                    </div>
+                                    <div>
+                                        <h6 className="mb-1 fw-bold text-dark">{report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category}</h6>
+                                        <small className="text-muted fw-medium">
+                                            {isManager && report.user_name && (
+                                                <span className="me-2">
+                                                    <i className="bi bi-person me-1"></i>
+                                                    {report.user_name}
+                                                </span>
+                                            )}
+                                            <i className="bi bi-calendar3 me-1"></i>
+                                            {formatDateString(report.date, {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            })}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div className="text-end d-flex flex-column gap-1">
+                                    <span className="badge rounded-pill" style={{ backgroundColor: '#2F8F83', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
+                                        {report.number_of_tasks} tasks
+                                    </span>
+                                    <span className="badge rounded-pill" style={{ backgroundColor: '#6c757d', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
+                                        <i className="bi bi-hourglass-split me-1"></i>{report.time_spent}m
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-5">
+                        <div className="mb-3">
+                            <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                        </div>
+                        <h6 className="text-muted fw-medium mb-3">No recent reports found</h6>
+                        {role === 'employee' && (
+                            <Link to="/new_data" className="btn btn-primary rounded-pill px-4 py-2 fw-semibold">
+                                Create your first report
+                            </Link>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    const formatPlainDate = (dateStr) => {
+        // dateStr is an unambiguous "YYYY-MM-DD" calendar date already — format its
+        // components directly rather than reinterpreting through a timezone, which
+        // would shift it to the previous day (Anchorage is behind UTC).
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${months[m - 1]} ${d}, ${y}`;
+    };
+
+    const insightsPeriodLabel = insightsPeriod === 'custom'
+        ? (insightsCustomDate ? formatPlainDate(insightsCustomDate) : 'Pick a day')
+        : {
+            today: 'Today',
+            week: 'Last 7 days',
+            month: 'Last 30 days',
+            '30d': 'Last 30 days',
+            '90d': 'Last 90 days',
+        }[insightsPeriod];
+
+    const teamInsightsCard = (
+        <div className="card shadow-sm h-100 border-0 rounded-4">
+            <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                    <i className="bi bi-graph-up-arrow me-2"></i>Team Insights
+                </h5>
+                <span className="text-muted" style={{ fontSize: '0.78rem' }}>{insightsPeriodLabel}</span>
+            </div>
+            <div className="card-body p-4">
+                <div className="d-flex flex-wrap align-items-center gap-2 mb-4 pb-3 border-bottom">
+                    <div className="btn-group" role="group" aria-label="Period">
+                        {[
+                            { key: 'today', label: 'Today' },
+                            { key: 'week', label: 'Weekly' },
+                            { key: '30d', label: 'Monthly' },
+                            { key: '90d', label: '90 Days' },
+                            { key: 'custom', label: 'Pick a Day' },
+                        ].map(opt => (
+                            <button
+                                key={opt.key}
+                                type="button"
+                                className={`btn btn-sm ${insightsPeriod === opt.key ? '' : 'btn-outline-secondary'}`}
+                                style={insightsPeriod === opt.key ? { backgroundColor: '#055d47', borderColor: '#055d47', color: '#fff' } : {}}
+                                onClick={() => setInsightsPeriod(opt.key)}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {insightsPeriod === 'custom' && (
+                        <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            style={{ width: 'auto' }}
+                            value={insightsCustomDate}
+                            onChange={(e) => setInsightsCustomDate(e.target.value)}
+                        />
+                    )}
+
+                    <select
+                        className="form-select form-select-sm"
+                        style={{ width: 'auto', maxWidth: '180px' }}
+                        value={insightsEmployee}
+                        onChange={(e) => setInsightsEmployee(e.target.value)}
+                    >
+                        <option value="all">All Employees</option>
+                        {insightsFilterOptions.employees.map(name => (
+                            <option key={name} value={name}>{name}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        className="form-select form-select-sm text-truncate"
+                        style={{ width: 'auto', maxWidth: '200px' }}
+                        title={insightsTask !== 'all' ? insightsTask : undefined}
+                        value={insightsTask}
+                        onChange={(e) => setInsightsTask(e.target.value)}
+                    >
+                        <option value="all">All Task Categories</option>
+                        {insightsFilterOptions.tasks.map(task => (
+                            <option key={task} value={task}>{task}</option>
+                        ))}
+                    </select>
+
+                    {(insightsEmployee !== 'all' || insightsTask !== 'all' || insightsPeriod !== '30d') && (
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-link text-muted text-decoration-none"
+                            onClick={() => { setInsightsPeriod('30d'); setInsightsEmployee('all'); setInsightsTask('all'); }}
+                        >
+                            Reset
+                        </button>
+                    )}
+                </div>
+
+                {!teamInsights ? (
+                    <div className="text-center py-5">
+                        <div className="spinner-border text-success" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                ) : teamInsights.reportCount === 0 ? (
+                    <div className="text-center py-5">
+                        <i className="bi bi-bar-chart text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                        <h6 className="text-muted fw-medium mt-3 mb-0">No report activity for this filter.</h6>
+                    </div>
+                ) : (
+                    <div className="row g-4">
+                        <div className="col-12">
+                            <div className="p-3 rounded-3 d-flex flex-wrap gap-4" style={{ backgroundColor: 'rgba(5, 93, 71, 0.06)' }}>
+                                <div>
+                                    <div className="text-muted small fw-semibold mb-1">Total Logged</div>
+                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>
+                                        {Math.floor(teamInsights.totalMinutes / 60)}h {teamInsights.totalMinutes % 60}m
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-muted small fw-semibold mb-1">Tasks Completed</div>
+                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>{teamInsights.totalTasks}</div>
+                                </div>
+                                <div>
+                                    <div className="text-muted small fw-semibold mb-1">Reports Filed</div>
+                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>{teamInsights.reportCount}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="col-md-8">
+                            <div className="text-muted small fw-semibold mb-2">
+                                <i className="bi bi-activity me-1"></i>Daily Activity Trend (hours logged)
+                            </div>
+                            {teamInsights.dailyTrend.labels.length === 0 ? (
+                                <div className="text-muted small">No data yet.</div>
+                            ) : (
+                                <div style={{ height: '220px' }}>
+                                    <Line
+                                        data={{
+                                            labels: teamInsights.dailyTrend.labels,
+                                            datasets: [{
+                                                label: 'Hours Logged',
+                                                data: teamInsights.dailyTrend.values,
+                                                borderColor: '#055d47',
+                                                backgroundColor: 'rgba(5, 93, 71, 0.15)',
+                                                fill: true,
+                                                tension: 0.3,
+                                                pointRadius: 2,
+                                            }]
+                                        }}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: { legend: { display: false } },
+                                            scales: { y: { beginAtZero: true, title: { display: true, text: 'Hours' } } },
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="col-md-4">
+                            <div className="text-muted small fw-semibold mb-2">
+                                <i className="bi bi-bar-chart-steps me-1"></i>Hours Logged by Employee
+                            </div>
+                            {teamInsights.topContributors.length === 0 ? (
+                                <div className="text-muted small">No data yet.</div>
+                            ) : (
+                                <div style={{ height: `${Math.max(180, teamInsights.topContributors.length * 32)}px` }}>
+                                    <Bar
+                                        data={{
+                                            labels: teamInsights.topContributors.map(([name]) => name),
+                                            datasets: [{
+                                                label: 'Hours',
+                                                data: teamInsights.topContributors.map(([, stats]) => Math.round((stats.minutes / 60) * 10) / 10),
+                                                backgroundColor: '#055d47',
+                                                borderRadius: 4,
+                                            }]
+                                        }}
+                                        options={{
+                                            indexAxis: 'y',
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: { legend: { display: false } },
+                                            scales: { x: { beginAtZero: true, title: { display: true, text: 'Hours' } } },
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="col-md-6">
+                            <div className="text-muted small fw-semibold mb-2">
+                                <i className="bi bi-list-check me-1"></i>Most Common Tasks
+                            </div>
+                            {teamInsights.topTasks.length === 0 ? (
+                                <div className="text-muted small">No data yet.</div>
+                            ) : (
+                                <div style={{ height: `${Math.max(180, teamInsights.topTasks.length * 32)}px` }}>
+                                    <Bar
+                                        data={{
+                                            labels: teamInsights.topTasks.map(([label]) => label),
+                                            datasets: [{
+                                                label: 'Tasks',
+                                                data: teamInsights.topTasks.map(([, count]) => count),
+                                                backgroundColor: '#2F8F83',
+                                                borderRadius: 4,
+                                            }]
+                                        }}
+                                        options={{
+                                            indexAxis: 'y',
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: { legend: { display: false } },
+                                            scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="col-md-6">
+                            <div className="text-muted small fw-semibold mb-2">
+                                <i className="bi bi-pie-chart me-1"></i>Work Type Breakdown
+                            </div>
+                            {teamInsights.workTypeBreakdown.length === 0 ? (
+                                <div className="text-muted small">No data yet.</div>
+                            ) : (
+                                <div style={{ height: '220px' }}>
+                                    <Doughnut
+                                        data={{
+                                            labels: teamInsights.workTypeBreakdown.map(([label]) => label),
+                                            datasets: [{
+                                                data: teamInsights.workTypeBreakdown.map(([, count]) => count),
+                                                backgroundColor: ['#055d47', '#0dcaf0', '#8b5cf6', '#f97316', '#6c757d'],
+                                            }]
+                                        }}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    const statusDotColor = (status) => status === 'active' ? '#28a745' : status === 'away' ? '#ffc107' : '#adb5bd';
+    const statusLabel = (status) => status === 'active' ? 'Active' : status === 'away' ? 'Away' : 'Offline';
+
+    const teamStatusCard = (
+        <div className="card shadow-sm h-100 border-0 rounded-4">
+            <div className="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2">
+                    <span className="spinner-grow spinner-grow-sm text-success" role="status" style={{ width: '10px', height: '10px' }} />
+                    <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                        <i className="bi bi-people me-2"></i>Team Status
+                    </h5>
+                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
+                        {onlineUsers.filter(u => u.status !== 'offline').length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 rounded-3"
+                    onClick={fetchOnlineUsers}
+                    title="Refresh status"
+                >
+                    <i className="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+
+            <div className="card-body px-4 pt-2 pb-4">
+                <ul className="nav nav-tabs mb-3" style={{ borderBottom: '1px solid #e9ecef' }}>
+                    <li className="nav-item">
+                        <button
+                            type="button"
+                            className={`nav-link ${teamTab === 'active' ? 'active fw-semibold' : 'text-muted'}`}
+                            style={teamTab === 'active' ? { color: '#055d47', borderColor: '#dee2e6 #dee2e6 #fff' } : {}}
+                            onClick={() => setTeamTab('active')}
+                        >
+                            Active ({onlineUsers.length})
+                        </button>
+                    </li>
+                    <li className="nav-item">
+                        <button
+                            type="button"
+                            className={`nav-link ${teamTab === 'inactive' ? 'active fw-semibold' : 'text-muted'}`}
+                            style={teamTab === 'inactive' ? { color: '#055d47', borderColor: '#dee2e6 #dee2e6 #fff' } : {}}
+                            onClick={() => setTeamTab('inactive')}
+                        >
+                            Inactive ({inactiveUsers.length})
+                        </button>
+                    </li>
+                </ul>
+
+                <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
+                    {teamTab === 'active' && (
+                        <div className="mb-3 p-2 rounded-3 border" style={{ backgroundColor: '#f9fafb' }}>
+                            <div className="d-flex flex-wrap align-items-center gap-2">
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm rounded-pill fw-semibold ${selectedCompanies.length === 0 ? 'btn-success' : 'btn-outline-secondary'}`}
+                                    style={selectedCompanies.length === 0 ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.75rem' } : { fontSize: '0.75rem' }}
+                                    onClick={() => setSelectedCompanies([])}
+                                >
+                                    All ({allOnlineCount})
+                                </button>
+                                {availableCompanies.map(comp => {
+                                    const count = companyCounts[comp] || 0;
+                                    const isSelected = selectedCompanies.includes(comp);
+                                    return (
+                                        <button
+                                            key={comp}
+                                            type="button"
+                                            className={`btn btn-sm rounded-pill fw-semibold d-flex align-items-center gap-1 ${isSelected ? 'btn-success' : 'btn-outline-secondary'}`}
+                                            style={isSelected ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.75rem' } : { fontSize: '0.75rem' }}
+                                            onClick={() => toggleCompanySelection(comp)}
+                                        >
+                                            {comp}
+                                            <span className={`badge rounded-pill ms-1 ${isSelected ? 'bg-light text-dark' : 'bg-secondary'}`} style={{ fontSize: '0.65rem' }}>
+                                                {count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {teamTab === 'active' ? (
+                        onlineLoading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-success" role="status">
+                                    <span className="visually-hidden">Loading status...</span>
+                                </div>
+                            </div>
+                        ) : onlineUsers.length > 0 ? (
+                            <div className="d-flex flex-column gap-2">
+                                {onlineUsers.map(u => (
+                                    <button
+                                        key={u.id}
+                                        type="button"
+                                        className="btn btn-light text-start p-2 border rounded-3 d-flex align-items-center gap-2"
+                                        onClick={() => setSelectedTimelineUser(u)}
+                                        title="View timeline"
+                                    >
+                                        <div className="position-relative flex-shrink-0">
+                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                                {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
+                                            </div>
+                                            <span
+                                                className="position-absolute bottom-0 end-0 border border-white rounded-circle"
+                                                style={{ width: '11px', height: '11px', backgroundColor: statusDotColor(u.status) }}
+                                                title={statusLabel(u.status)}
+                                            ></span>
+                                        </div>
+                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.25 }}>
+                                            <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.88rem' }}>
+                                                {u.first_name} {u.last_name}
+                                            </div>
+                                            <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                                                {statusLabel(u.status)} <span className="mx-1">&bull;</span> {u.company || 'General'}
+                                                {u.clocked_in && (
+                                                    <span className="ms-2 badge bg-success" style={{ fontSize: '0.62rem' }}>
+                                                        <i className="bi bi-clock me-1"></i>Clocked in {formatNaiveTime(u.attendance_clock_in)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-people fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                                <p className="mb-0 fw-medium">
+                                    No team activity {selectedCompanies.length > 0 ? `in selected companies (${selectedCompanies.join(', ')})` : ''}.
+                                </p>
+                            </div>
+                        )
+                    ) : (
+                        allUsersLoading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-success" role="status">
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        ) : inactiveUsers.length > 0 ? (
+                            <div className="d-flex flex-column gap-2">
+                                {inactiveUsers.map(u => (
+                                    <button
+                                        key={u.id}
+                                        type="button"
+                                        className="btn btn-light text-start p-2 border rounded-3 d-flex align-items-center gap-2"
+                                        onClick={() => setSelectedTimelineUser(u)}
+                                        title="View timeline"
+                                    >
+                                        <div className="position-relative flex-shrink-0">
+                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: '#f1f3f5', color: '#6c757d' }}>
+                                                {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
+                                            </div>
+                                            <span
+                                                className="position-absolute bottom-0 end-0 border border-white rounded-circle"
+                                                style={{ width: '11px', height: '11px', backgroundColor: '#adb5bd' }}
+                                                title="Offline"
+                                            ></span>
+                                        </div>
+                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.25 }}>
+                                            <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.88rem' }}>
+                                                {u.first_name} {u.last_name}
+                                            </div>
+                                            <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                                                {u.company || 'General'} <span className="mx-1">&bull;</span>
+                                                {u.last_active_at
+                                                    ? ` Last seen ${new Date(u.last_active_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                                                    : ' Never logged in'}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-person-check fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                                <p className="mb-0 fw-medium">Everyone's active right now.</p>
+                            </div>
+                        )
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="container mt-5">
@@ -243,7 +940,7 @@ const Home = () => {
                     </div>
                 </div>
             </div>
-            <div className="row mb-4">
+            {/* <div className="row mb-4">
                 <div className="col-12">
                     <div
                         className="d-flex flex-wrap justify-content-between align-items-center p-3 rounded-3 shadow-sm"
@@ -286,7 +983,7 @@ const Home = () => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> */}
 
             <div className="row g-4">
                 <div className="col-md-5 col-lg-4">
@@ -298,81 +995,40 @@ const Home = () => {
                             <div className="display-5 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
                                 {time}
                             </div>
-                            <p className="text-muted fw-medium mb-0">{date}</p>
-                        </div>
-                    </div>
-                </div>
+                            <p className="text-muted fw-medium mb-3">{date}</p>
 
-                <div className="col-md-7 col-lg-8">
-                    <div className="card shadow-sm h-100 border-0 rounded-4">
-                        <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
-                            <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
-                                <i className="bi bi-journal-text me-2"></i>Recent Reports
-                            </h5>
-                            {['admin', 'hr', 'supervisor'].includes(role) ? (
-                                <Link to="/daily_report" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
-                                    View All <i className="bi bi-arrow-right ms-1"></i>
-                                </Link>
-                            ) : role === 'employee' ? (
-                                <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
-                                    <i className="bi bi-plus-lg me-1"></i> New
-                                </Link>
-                            ) : null}
-                        </div>
-                        <div className="card-body p-4">
-                            {loading ? (
-                                <div className="text-center py-5">
-                                    <div className="spinner-border text-success" role="status">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </div>
-                                </div>
-                            ) : recentReports.length > 0 ? (
-                                <div className="list-group list-group-flush gap-2">
-                                    {recentReports.map((report) => (
-                                        <div key={report.id} className="list-group-item border rounded-3 p-3 d-flex justify-content-between align-items-center" style={{ transition: 'all 0.2s' }}>
-                                            <div className="d-flex align-items-center">
-                                                <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
-                                                    <i className="bi bi-check2-all fs-5"></i>
-                                                </div>
-                                                <div>
-                                                    <h6 className="mb-1 fw-bold text-dark">{report.task_category === 'Others' && report.sub_category ? report.sub_category : report.task_category}</h6>
-                                                    <small className="text-muted fw-medium">
-                                                        {['admin', 'hr', 'supervisor'].includes(role) && report.user_name && (
-                                                            <span className="me-2">
-                                                                <i className="bi bi-person me-1"></i>
-                                                                {report.user_name}
-                                                            </span>
-                                                        )}
-                                                        <i className="bi bi-calendar3 me-1"></i>
-                                                        {formatDateString(report.date, {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                            year: 'numeric'
-                                                        })}
-                                                    </small>
-                                                </div>
-                                            </div>
-                                            <div className="text-end d-flex flex-column gap-1">
-                                                <span className="badge rounded-pill" style={{ backgroundColor: '#2F8F83', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
-                                                    {report.number_of_tasks} tasks
-                                                </span>
-                                                <span className="badge rounded-pill" style={{ backgroundColor: '#6c757d', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
-                                                    <i className="bi bi-hourglass-split me-1"></i>{report.time_spent}m
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-5">
-                                    <div className="mb-3">
-                                        <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                                    </div>
-                                    <h6 className="text-muted fw-medium mb-3">No recent reports found</h6>
-                                    {role === 'employee' && (
-                                        <Link to="/new_data" className="btn btn-primary rounded-pill px-4 py-2 fw-semibold">
-                                            Create your first report
-                                        </Link>
+                            {!attendanceLoading && (
+                                <div className="pt-3 border-top">
+                                    {attendance && !attendance.clock_out ? (
+                                        <>
+                                            <p className="text-success fw-semibold mb-2">
+                                                <i className="bi bi-record-circle-fill me-1"></i>
+                                                Clocked in at {formatNaiveTime(attendance.clock_in)}
+                                            </p>
+                                            <button
+                                                className="btn btn-danger w-100"
+                                                onClick={handleClockOut}
+                                                disabled={clockActionLoading}
+                                            >
+                                                <i className="bi bi-box-arrow-right me-1"></i>
+                                                {clockActionLoading ? 'Clocking out...' : 'Clock Out'}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button
+                                            className="btn w-100 text-white"
+                                            style={{ backgroundColor: '#055d47' }}
+                                            onClick={handleClockIn}
+                                            disabled={clockActionLoading}
+                                        >
+                                            <i className="bi bi-box-arrow-in-right me-1"></i>
+                                            {clockActionLoading ? 'Clocking in...' : 'Clock In'}
+                                        </button>
+                                    )}
+                                    {attendance?.clock_out && (
+                                        <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.85rem' }}>
+                                            Last clocked out at {formatNaiveTime(attendance.clock_out)}
+                                        </p>
                                     )}
                                 </div>
                             )}
@@ -380,141 +1036,19 @@ const Home = () => {
                     </div>
                 </div>
 
-                {/* Online Users Tracker (Admin & HR & Supervisor) */}
-                {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                {isManager ? (
+                    <div className="col-md-7 col-lg-8">
+                        {teamStatusCard}
+                    </div>
+                ) : (
+                    <div className="col-md-7 col-lg-8">
+                        {recentReportsCard}
+                    </div>
+                )}
+
+                {isManager && (
                     <div className="col-12 mt-4">
-                        <div className="card shadow-sm border-0 rounded-4">
-                            <div className="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="spinner-grow spinner-grow-sm text-success" role="status" style={{ width: '10px', height: '10px' }} />
-                                    <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
-                                        <i className="bi bi-people me-2"></i>Who's Online Now
-                                    </h5>
-                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
-                                        {onlineUsers.length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
-                                    </span>
-                                </div>
-                                <div>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 rounded-3"
-                                        onClick={fetchOnlineUsers}
-                                        title="Refresh online status"
-                                    >
-                                        <i className="bi bi-arrow-clockwise"></i> Refresh
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="card-body px-4 pt-2 pb-4">
-                                {/* Multi-Company Filter Bar */}
-                                <div className="mb-4 p-3 rounded-3 border" style={{ backgroundColor: '#f9fafb' }}>
-                                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                        <div className="d-flex align-items-center gap-1 text-muted small fw-semibold">
-                                            <i className="bi bi-funnel"></i>
-                                            <span>Filter by Company (click multiple to monitor at the same time):</span>
-                                        </div>
-                                        {selectedCompanies.length > 0 && (
-                                            <button
-                                                type="button"
-                                                className="btn btn-link btn-sm text-decoration-none p-0 text-muted"
-                                                style={{ fontSize: '0.78rem' }}
-                                                onClick={() => setSelectedCompanies([])}
-                                            >
-                                                Clear filter (show all)
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="d-flex flex-wrap align-items-center gap-2">
-                                        {/* All Companies option */}
-                                        <button
-                                            type="button"
-                                            className={`btn btn-sm rounded-pill fw-semibold ${selectedCompanies.length === 0 ? 'btn-success' : 'btn-outline-secondary'}`}
-                                            style={selectedCompanies.length === 0 ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.8rem' } : { fontSize: '0.8rem' }}
-                                            onClick={() => setSelectedCompanies([])}
-                                        >
-                                            All Companies ({allOnlineCount})
-                                        </button>
-
-                                        {/* Company chips */}
-                                        {availableCompanies.map(comp => {
-                                            const count = companyCounts[comp] || 0;
-                                            const isSelected = selectedCompanies.includes(comp);
-                                            return (
-                                                <button
-                                                    key={comp}
-                                                    type="button"
-                                                    className={`btn btn-sm rounded-pill fw-semibold d-flex align-items-center gap-1 ${isSelected ? 'btn-success' : 'btn-outline-secondary'}`}
-                                                    style={isSelected ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.8rem' } : { fontSize: '0.8rem' }}
-                                                    onClick={() => toggleCompanySelection(comp)}
-                                                >
-                                                    {isSelected && <i className="bi bi-check-lg"></i>}
-                                                    {comp}
-                                                    <span className={`badge rounded-pill ms-1 ${isSelected ? 'bg-light text-dark' : 'bg-secondary'}`} style={{ fontSize: '0.7rem' }}>
-                                                        {count}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Active users grid */}
-                                {onlineLoading ? (
-                                    <div className="text-center py-5">
-                                        <div className="spinner-border text-success" role="status">
-                                            <span className="visually-hidden">Loading online users...</span>
-                                        </div>
-                                    </div>
-                                ) : onlineUsers.length > 0 ? (
-                                    <div className="row g-3">
-                                        {onlineUsers.map(u => (
-                                            <div key={u.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                                                <div className="p-3 border rounded-3 h-100 d-flex flex-column justify-content-between" style={{ backgroundColor: '#ffffff', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-                                                    <div className="d-flex align-items-start gap-2 mb-2">
-                                                        <div className="position-relative flex-shrink-0">
-                                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '40px', height: '40px', fontSize: '0.9rem', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
-                                                                {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
-                                                            </div>
-                                                            <span className="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle" style={{ width: '10px', height: '10px' }} title="Online"></span>
-                                                        </div>
-                                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.2 }}>
-                                                            <div className="fw-bold text-dark text-truncate" title={`${u.first_name} ${u.last_name}`} style={{ fontSize: '0.9rem' }}>
-                                                                {u.first_name} {u.last_name}
-                                                            </div>
-                                                            <span className="badge mt-1" style={{
-                                                                fontSize: '0.65rem',
-                                                                backgroundColor: u.role === 'admin' ? '#fff3cd' : u.role === 'hr' ? '#cff4fc' : '#d1e7dd',
-                                                                color: u.role === 'admin' ? '#664d03' : u.role === 'hr' ? '#055160' : '#0f5132',
-                                                                textTransform: 'uppercase'
-                                                            }}>
-                                                                {u.role}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="border-top pt-2 mt-2 d-flex justify-content-between align-items-center" style={{ fontSize: '0.75rem' }}>
-                                                        <span className="text-muted text-truncate me-1" title={u.company || 'No Company'}>
-                                                            <i className="bi bi-building me-1"></i>{u.company || 'General'}
-                                                        </span>
-                                                        <span className="text-success fw-semibold flex-shrink-0">
-                                                            {formatRelativeTime(u.last_active_at)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-5 text-muted">
-                                        <i className="bi bi-people fs-1 d-block mb-2 text-secondary opacity-50"></i>
-                                        <p className="mb-0 fw-medium">
-                                            No users currently online {selectedCompanies.length > 0 ? `in selected companies (${selectedCompanies.join(', ')})` : ''}.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        {teamInsightsCard}
                     </div>
                 )}
 
@@ -618,6 +1152,9 @@ const Home = () => {
             </div>
             {showAnnouncements && (
                 <Announcement onClose={handleCloseAnnouncements} />
+            )}
+            {selectedTimelineUser && (
+                <EmployeeTimelineModal user={selectedTimelineUser} onClose={() => setSelectedTimelineUser(null)} />
             )}
         </div>
     );
