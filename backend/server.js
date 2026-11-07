@@ -68,8 +68,50 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
       await pool.query("ALTER TABLE daily_reports ADD COLUMN attachment VARCHAR(255) NULL DEFAULT NULL AFTER description");
       console.log("Added column 'attachment' to daily_reports table.");
     }
+    if (!existing.has('time_added')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN time_added DATETIME NULL DEFAULT NULL");
+      console.log("Added column 'time_added' to daily_reports table.");
+    }
+    if (!existing.has('time_finished')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN time_finished DATETIME NULL DEFAULT NULL");
+      console.log("Added column 'time_finished' to daily_reports table.");
+    }
   } catch (err) {
     console.error("Migration check error for daily_reports columns:", err);
+  }
+})();
+
+// Auto-migrate: Ensure logs table exists
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS logs (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        type ENUM('sign in', 'sign out') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (err) {
+    console.error("Migration check error for logs table:", err);
+  }
+})();
+
+// Auto-migrate: Ensure attendance table exists
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        clock_in DATETIME NOT NULL,
+        clock_out DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_attendance_user_id (user_id)
+      )
+    `);
+  } catch (err) {
+    console.error("Migration check error for attendance table:", err);
   }
 })();
 
@@ -142,6 +184,28 @@ const loginLimiter = rateLimit({
   max: 20,
   message: { error: 'Too many login attempts. Please try again later.' }
 });
+
+// App-wide reporting timezone (matches frontend's DEFAULT_TIMEZONE in dateUtils.js).
+const APP_TIMEZONE = process.env.VITE_DEFAULT_TIMEZONE || 'America/Anchorage';
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: APP_TIMEZONE,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: false,
+});
+
+// Helper: Convert an ISO datetime string (or Date) to MySQL DATETIME format,
+// normalized to APP_TIMEZONE so the stored wall-clock value is correct
+// regardless of what timezone the server/host machine itself is set to.
+const toMySQLDateTime = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const parts = Object.fromEntries(dateTimeFormatter.formatToParts(d).map(p => [p.type, p.value]));
+  // hour12: false can still report midnight as "24" per the Intl spec
+  const hour = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute}:${parts.second}`;
+};
 
 // Helper: Format user object (omit password hash)
 const formatUser = (user) => {
@@ -429,13 +493,25 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
       return res.status(403).json({ error: 'Permission denied. Only Admin, HR, and Supervisor can view online users.' });
     }
 
-    // 1. Fetch users active within last 5 minutes
+    // 1. Fetch users active within last 5 minutes, or currently clocked in
+    //    (even if their browser heartbeat has gone stale).
     const [onlineRows] = await pool.query(
-      `SELECT id, id_number, first_name, last_name, email, role, company, last_active_at
-       FROM users
-       WHERE last_active_at >= NOW() - INTERVAL 5 MINUTE
-       ORDER BY last_active_at DESC`
+      `SELECT u.id, u.id_number, u.first_name, u.last_name, u.email, u.role, u.company, u.last_active_at,
+              a.clock_in AS attendance_clock_in
+       FROM users u
+       LEFT JOIN attendance a ON a.user_id = u.id AND a.clock_out IS NULL
+       WHERE u.last_active_at >= NOW() - INTERVAL 5 MINUTE OR a.id IS NOT NULL
+       ORDER BY (a.id IS NOT NULL) DESC, u.last_active_at DESC`
     );
+    const isRecentlyActive = (u) => u.last_active_at && new Date(u.last_active_at) >= new Date(Date.now() - 5 * 60 * 1000);
+    onlineRows.forEach(u => {
+      u.clocked_in = !!u.attendance_clock_in;
+      u.status = (u.last_active_at && new Date(u.last_active_at) >= new Date(Date.now() - 2 * 60 * 1000))
+        ? 'active'
+        : isRecentlyActive(u)
+          ? 'away'
+          : 'offline';
+    });
 
     // 2. Fetch all known companies for the filter tabs/chips
     const [companyRows] = await pool.query(
@@ -447,6 +523,7 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     const companyCounts = {};
     allCompanies.forEach(c => { companyCounts[c] = 0; });
     onlineRows.forEach(u => {
+      if (u.status === 'offline') return; // clocked in but not actually online
       const c = (u.company || '').trim();
       if (c) {
         companyCounts[c] = (companyCounts[c] || 0) + 1;
@@ -472,8 +549,8 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     }
 
     return res.json({
-      total_online: filteredUsers.length,
-      all_online_count: onlineRows.length,
+      total_online: filteredUsers.filter(u => u.status !== 'offline').length,
+      all_online_count: onlineRows.filter(u => u.status !== 'offline').length,
       company_counts: companyCounts,
       companies: allCompanies,
       users: filteredUsers
@@ -925,8 +1002,8 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
         Number(actual_time) || null,                      // seconds
         (description || '').trim() || null,
         req.file ? req.file.filename : null,
-        time_added || null,
-        time_finished || null]
+        toMySQLDateTime(time_added),
+        toMySQLDateTime(time_finished)]
     );
 
     const [created] = await pool.query('SELECT * FROM daily_reports WHERE id = ?', [result.insertId]);
@@ -989,8 +1066,8 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     const { description, actual_time } = req.body;
     if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
     if (actual_time !== undefined) { updates.push('actual_time = ?'); params.push(actual_time !== null && actual_time !== '' ? actual_time : null); }
-    if (time_added !== undefined) { updates.push('time_added = ?'); params.push(time_added || null); }
-    if (time_finished !== undefined) { updates.push('time_finished = ?'); params.push(time_finished || null); }
+    if (time_added !== undefined) { updates.push('time_added = ?'); params.push(toMySQLDateTime(time_added)); }
+    if (time_finished !== undefined) { updates.push('time_finished = ?'); params.push(toMySQLDateTime(time_finished)); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;
@@ -1420,6 +1497,105 @@ app.get(['/api/admin/backup-sql', '/api/admin/backup-sql/'], authenticate, async
     await cleanup();
     if (res.headersSent) return res.destroy(err);
     return res.status(500).json({ error: 'Internal server error generating backup.' });
+  }
+});
+
+// Attendance: current open clock-in for the logged-in user (null if clocked out)
+app.get(['/api/attendance/current', '/api/attendance/current/'], authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM attendance WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1',
+      [req.user.id]
+    );
+    return res.json(rows[0] || null);
+  } catch (err) {
+    console.error('Fetch current attendance error:', err);
+    return res.status(500).json({ error: 'Internal server error fetching attendance status.' });
+  }
+});
+
+// Attendance: clock in
+app.post(['/api/attendance/clock-in', '/api/attendance/clock-in/'], authenticate, async (req, res) => {
+  try {
+    const [open] = await pool.query(
+      'SELECT id FROM attendance WHERE user_id = ? AND clock_out IS NULL LIMIT 1',
+      [req.user.id]
+    );
+    if (open.length > 0) {
+      return res.status(400).json({ error: 'Already clocked in.' });
+    }
+    const now = toMySQLDateTime(new Date());
+    const [result] = await pool.query(
+      'INSERT INTO attendance (user_id, clock_in) VALUES (?, ?)',
+      [req.user.id, now]
+    );
+    const [created] = await pool.query('SELECT * FROM attendance WHERE id = ?', [result.insertId]);
+    return res.status(201).json(created[0]);
+  } catch (err) {
+    console.error('Clock in error:', err);
+    return res.status(500).json({ error: 'Internal server error during clock in.' });
+  }
+});
+
+// Attendance: clock out
+app.post(['/api/attendance/clock-out', '/api/attendance/clock-out/'], authenticate, async (req, res) => {
+  try {
+    const [open] = await pool.query(
+      'SELECT id FROM attendance WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1',
+      [req.user.id]
+    );
+    if (open.length === 0) {
+      return res.status(400).json({ error: 'Not currently clocked in.' });
+    }
+    const now = toMySQLDateTime(new Date());
+    await pool.query('UPDATE attendance SET clock_out = ? WHERE id = ?', [now, open[0].id]);
+    const [updated] = await pool.query('SELECT * FROM attendance WHERE id = ?', [open[0].id]);
+    return res.json(updated[0]);
+  } catch (err) {
+    console.error('Clock out error:', err);
+    return res.status(500).json({ error: 'Internal server error during clock out.' });
+  }
+});
+
+// Attendance: management list (admin/hr/supervisor only)
+app.get(['/api/attendance', '/api/attendance/'], authenticate, async (req, res) => {
+  try {
+    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Not authorized to view attendance records.' });
+    }
+
+    const { user_id, start_date, end_date } = req.query;
+    let query = `
+      SELECT a.*, u.first_name, u.last_name, u.id_number, u.company
+      FROM attendance a
+      JOIN users u ON u.id = a.user_id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (req.user.role !== 'admin' && req.user.company) {
+      query += ' AND u.company = ?';
+      params.push(req.user.company);
+    }
+    if (user_id) {
+      query += ' AND a.user_id = ?';
+      params.push(user_id);
+    }
+    if (start_date) {
+      query += ' AND DATE(a.clock_in) >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      query += ' AND DATE(a.clock_in) <= ?';
+      params.push(end_date);
+    }
+    query += ' ORDER BY a.clock_in DESC LIMIT 500';
+
+    const [rows] = await pool.query(query, params);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Fetch attendance records error:', err);
+    return res.status(500).json({ error: 'Internal server error fetching attendance records.' });
   }
 });
 

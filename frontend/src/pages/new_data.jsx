@@ -1417,7 +1417,7 @@ const NewData = () => {
             });
         }
     };
-    if (run) {
+    if (run && !editId) {
         // ---- Final summary ----
         if (run.finished) {
             const tExp = run.results.reduce((s, r) => s + (r.expectedSeconds || 0), 0);
@@ -2104,7 +2104,7 @@ const NewData = () => {
                                                                     <div className="input-group">
                                                                         <input
                                                                             type="number"
-                                                                            step="0.1"
+                                                                            step="0.01"
                                                                             min="0"
                                                                             className="form-control"
                                                                             value={cat.actualTime ?? ''}
