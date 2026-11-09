@@ -141,7 +141,7 @@ const Home = () => {
     };
 
     useEffect(() => {
-        if (role === 'admin' || role === 'hr' || role === 'supervisor') {
+        if (['admin', 'hr', 'supervisor', 'viewer'].includes(role)) {
             fetchAllUsers();
         }
     }, [role]);
@@ -149,7 +149,7 @@ const Home = () => {
     const inactiveUsers = allUsers.filter(u => !onlineUsers.some(o => o.id === u.id));
 
     useEffect(() => {
-        if (role === 'admin' || role === 'hr' || role === 'supervisor') {
+        if (['admin', 'hr', 'supervisor', 'viewer'].includes(role)) {
             fetchOnlineUsers();
             const interval = setInterval(fetchOnlineUsers, 15000);
             return () => clearInterval(interval);
@@ -192,7 +192,7 @@ const Home = () => {
             const userRole = currentUser?.role || role;
             const userId = currentUser?.id || user?.id;
             let response;
-            if (['admin', 'hr', 'supervisor'].includes(userRole)) {
+            if (['admin', 'hr', 'supervisor', 'viewer'].includes(userRole)) {
                 response = await fetch(`${API_BASE_URL}/daily-reports/`, { headers });
             } else {
                 response = await fetch(`${API_BASE_URL}/users/${userId}/reports/`, { headers });
@@ -204,7 +204,7 @@ const Home = () => {
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
                 setRecentReports(sorted.slice(0, 3));
-                if (['admin', 'hr', 'supervisor'].includes(userRole)) {
+                if (['admin', 'hr', 'supervisor', 'viewer'].includes(userRole)) {
                     setAllReports(sorted);
                 }
             }
@@ -227,8 +227,8 @@ const Home = () => {
     };
 
     useEffect(() => {
-        if (user) fetchAttendanceStatus();
-    }, [user]);
+        if (user && !['admin', 'viewer'].includes(role)) fetchAttendanceStatus();
+    }, [user, role]);
 
     const handleClockIn = async () => {
         setClockActionLoading(true);
@@ -321,6 +321,10 @@ const Home = () => {
 
     const { date, time } = currentTime;
     const isManager = ['admin', 'hr', 'supervisor'].includes(role);
+    // Viewer gets the same Team Status/Team Insights analytics as managers
+    // (company-scoped server-side), but keeps their own report pages/links
+    // rather than the manager ones used inside recentReportsCard.
+    const canSeeAnalytics = ['admin', 'hr', 'supervisor', 'viewer'].includes(role);
 
     // Team insights (management only): most common tasks & top contributors, last 30 days.
     // Dropdown option lists stay stable regardless of the active filters/period.
@@ -339,7 +343,7 @@ const Home = () => {
     }, [allReports]);
 
     const teamInsights = useMemo(() => {
-        if (!isManager || allReports.length === 0) return null;
+        if (!canSeeAnalytics || allReports.length === 0) return null;
 
         let inRange;
         if (insightsPeriod === 'custom') {
@@ -411,7 +415,7 @@ const Home = () => {
         };
 
         return { topTasks, topContributors, workTypeBreakdown, dailyTrend, totalMinutes, totalTasks, reportCount: inRange.length };
-    }, [isManager, allReports, insightsPeriod, insightsEmployee, insightsTask, insightsCustomDate]);
+    }, [canSeeAnalytics, allReports, insightsPeriod, insightsEmployee, insightsTask, insightsCustomDate]);
 
     const recentReportsCard = (
         <div className="card shadow-sm h-100 border-0 rounded-4">
@@ -997,7 +1001,7 @@ const Home = () => {
                             </div>
                             <p className="text-muted fw-medium mb-3">{date}</p>
 
-                            {!attendanceLoading && (
+                            {!attendanceLoading && !['admin', 'viewer'].includes(role) && (
                                 <div className="pt-3 border-top">
                                     {attendance && !attendance.clock_out ? (
                                         <>
@@ -1036,7 +1040,7 @@ const Home = () => {
                     </div>
                 </div>
 
-                {isManager ? (
+                {canSeeAnalytics ? (
                     <div className="col-md-7 col-lg-8">
                         {teamStatusCard}
                     </div>
@@ -1046,7 +1050,7 @@ const Home = () => {
                     </div>
                 )}
 
-                {isManager && (
+                {canSeeAnalytics && (
                     <div className="col-12 mt-4">
                         {teamInsightsCard}
                     </div>

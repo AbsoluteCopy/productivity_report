@@ -48,15 +48,9 @@ function Navbar() {
         <nav className="navbar navbar-expand-lg navbar-dark main-background shadow">
             <div className="container">
 
-                {(role === 'viewer') ? (
-                    <span className="navbar-brand fw-bold">
-                        Productivity Report
-                    </span>
-                ) : (
-                    <Link className="navbar-brand fw-bold" to="/dashboard">
-                        Productivity Report
-                    </Link>
-                )}
+                <Link className="navbar-brand fw-bold" to="/dashboard">
+                    Productivity Report
+                </Link>
 
                 <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span className="navbar-toggler-icon"></span>
@@ -65,7 +59,7 @@ function Navbar() {
                 <div className="collapse navbar-collapse" id="navbarNav" ref={navbarRef}>
                     <ul className="navbar-nav ms-4">
 
-                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor') && (
+                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor' || role === 'viewer') && (
                             <>
                                 <li className="nav-item">
                                     <Link
