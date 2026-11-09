@@ -46,8 +46,8 @@ app.use(cors({
   origin: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(',') : '*',
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb', inflate: false }));
+app.use(express.urlencoded({ extended: true, limit: '10mb', inflate: false }));
 
 // Auto-migrate: Ensure actual_time, description, and attachment columns exist in daily_reports table
 (async () => {
