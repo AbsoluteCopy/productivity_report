@@ -3,32 +3,25 @@ import React, { useState } from 'react';
 
 export const updates = [
     {
+        id: 6,
+        title: 'Attendance Tracking & Management Dashboard',
+        description: 'Employees can now clock in/out right from the dashboard. Managers get a live Team Status panel (who’s active, away, or offline) plus Team Insights — charts for daily activity, hours by employee, most common tasks, and work type breakdown, filterable by day, week, month, or a custom date.',
+        image: '/images/updates/team-status.jpg',
+        date: 'November 9, 2026'
+    },
+    {
+        id: 5,
+        title: 'Employee Timeline & Attendance Page',
+        description: 'Click any employee to see their day laid out — clock in/out times and every task with its start and end time. A new Attendance page shows clock in/out history and a 14-day trend for the whole team.',
+        image: '/images/updates/attendance.jpg',
+        date: 'November 9, 2026'
+    },
+    {
         id: 4,
         title: 'Real-Time Tracking & 7.5-Hour Shift Targets',
         description: 'Real-time actual time tracking is now integrated across Daily Reports, View Reports, Utilization Reports, and Excel exports. Daily work shift targets are also now aligned to 7.5 hrs (450 mins).',
-        image: '/images/updates/features.png',
+        image: '/images/updates/team-insights.jpg',
         date: 'November 5, 2026'
-    },
-    {
-        id: 1,
-        title: 'New Dashboard Design',
-        description: 'We have improved the dashboard interface to provide a cleaner and more user-friendly experience.',
-        image: '/images/updates/dashboard.png',
-        date: 'November 3, 2026'
-    },
-    {
-        id: 2,
-        title: 'Improved Reports',
-        description: 'Generate reports faster with our newly improved reporting module and enhanced filtering options.',
-        image: '/images/updates/reports.png',
-        date: 'November 2, 2026'
-    },
-    {
-        id: 3,
-        title: 'New Features Available',
-        description: 'Explore our latest features and improvements designed to make your workflow easier.',
-        image: '/images/updates/features.png',
-        date: 'October 30, 2026'
     }
 ];
 
@@ -98,6 +91,11 @@ const Announcement = ({ onClose }) => {
                                     maxWidth: '100%',
                                     maxHeight: '100%',
                                     objectFit: 'contain'
+                                }}
+                                onError={(e) => {
+                                    // Hide a broken image reference instead of showing a broken-icon box.
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
                                 }}
                             />
                         </div>
