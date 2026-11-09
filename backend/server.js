@@ -489,8 +489,8 @@ app.post(['/api/users/heartbeat', '/api/users/heartbeat/'], authenticate, async 
 // 6.2. Online Users - Admin and HR multi-company monitor
 app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Permission denied. Only Admin, HR, and Supervisor can view online users.' });
+    if (!['admin', 'hr', 'supervisor', 'viewer'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Permission denied. Only Admin, HR, Supervisor, and Viewer can view online users.' });
     }
 
     // 1. Fetch users active within last 5 minutes, or currently clocked in
@@ -513,11 +513,18 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
           : 'offline';
     });
 
-    // 2. Fetch all known companies for the filter tabs/chips
-    const [companyRows] = await pool.query(
-      `SELECT DISTINCT company FROM users WHERE company IS NOT NULL AND TRIM(company) != '' ORDER BY company ASC`
-    );
-    const allCompanies = companyRows.map(r => r.company.trim()).filter(Boolean);
+    // 2. Fetch known companies for the filter tabs/chips. Viewer is locked to
+    //    their own company and must never see other companies' names.
+    const isCompanyLocked = req.user.role === 'viewer' && !!req.user.company;
+    let allCompanies;
+    if (isCompanyLocked) {
+      allCompanies = [req.user.company.trim()];
+    } else {
+      const [companyRows] = await pool.query(
+        `SELECT DISTINCT company FROM users WHERE company IS NOT NULL AND TRIM(company) != '' ORDER BY company ASC`
+      );
+      allCompanies = companyRows.map(r => r.company.trim()).filter(Boolean);
+    }
 
     // 3. Tally online counts per company
     const companyCounts = {};
@@ -532,7 +539,8 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
 
     // 4. Multi-company filter support (e.g. ?companies=CompA,CompB or ?company=CompA)
     let selectedCompanies = [];
-    if (req.user.role === 'supervisor' && req.user.company) {
+    if ((req.user.role === 'supervisor' || isCompanyLocked) && req.user.company) {
+      // Hard-locked to their own company; query params below can't widen this.
       selectedCompanies = [req.user.company.trim().toLowerCase()];
     } else if (req.query.companies) {
       selectedCompanies = req.query.companies.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
@@ -1186,7 +1194,7 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
     if (uRows.length === 0) return res.status(404).json({ error: 'User not found.' });
 
     const targetUser = uRows[0];
-    if (req.user.role !== 'admin' && !(['hr', 'supervisor'].includes(req.user.role) && req.user.company === targetUser.company) && req.user.id != targetUserId) {
+    if (req.user.role !== 'admin' && !(['hr', 'supervisor', 'viewer'].includes(req.user.role) && req.user.company === targetUser.company) && req.user.id != targetUserId) {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
@@ -1560,7 +1568,7 @@ app.post(['/api/attendance/clock-out', '/api/attendance/clock-out/'], authentica
 // Attendance: management list (admin/hr/supervisor only)
 app.get(['/api/attendance', '/api/attendance/'], authenticate, async (req, res) => {
   try {
-    if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
+    if (!['admin', 'hr', 'supervisor', 'viewer'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Not authorized to view attendance records.' });
     }
 
