@@ -17,7 +17,7 @@ import {
 } from 'chart.js'; import API_BASE_URL from "../config";
 import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateString, parseDateInTimezone, formatNaiveTime } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
-import Announcement, { ANNOUNCEMENT_VERSION } from '../components/Announcement'
+import Announcement, { getAnnouncementVersion, getUpdatesForRole } from '../components/Announcement'
 import EmployeeTimelineModal from '../components/EmployeeTimelineModal'
 ChartJS.register(
     CategoryScale,
@@ -86,7 +86,8 @@ const Home = () => {
             console.error('Unable to read announcement status:', e);
         }
 
-        if (seenVersion === ANNOUNCEMENT_VERSION) return; // already seen
+        if (getUpdatesForRole(user.role).length === 0) return; // nothing to show this role
+        if (seenVersion === getAnnouncementVersion(user.role)) return; // already seen
 
         const timer = setTimeout(() => {
             setShowAnnouncements(true);
@@ -98,7 +99,7 @@ const Home = () => {
     const handleCloseAnnouncements = () => {
         setShowAnnouncements(false);
         try {
-            localStorage.setItem(getAnnouncementKey(user?.id), ANNOUNCEMENT_VERSION);
+            localStorage.setItem(getAnnouncementKey(user?.id), getAnnouncementVersion(user?.role));
         } catch (e) {
             console.error('Unable to save announcement status:', e);
         }
@@ -1155,7 +1156,7 @@ const Home = () => {
                 )}
             </div>
             {showAnnouncements && (
-                <Announcement onClose={handleCloseAnnouncements} />
+                <Announcement onClose={handleCloseAnnouncements} role={user?.role} />
             )}
             {selectedTimelineUser && (
                 <EmployeeTimelineModal user={selectedTimelineUser} onClose={() => setSelectedTimelineUser(null)} />

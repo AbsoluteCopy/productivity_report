@@ -1,20 +1,33 @@
 
 import React, { useState } from 'react';
 
+// `roles: undefined` (omitted) means visible to everyone. Scope an entry to
+// specific roles when its content doesn't apply/isn't accessible to others,
+// e.g. the management dashboard doesn't exist for employees.
 export const updates = [
     {
-        id: 6,
-        title: 'Attendance Tracking & Management Dashboard',
-        description: 'Employees can now clock in/out right from the dashboard. Managers get a live Team Status panel (who’s active, away, or offline) plus Team Insights — charts for daily activity, hours by employee, most common tasks, and work type breakdown, filterable by day, week, month, or a custom date.',
+        id: 7,
+        title: 'Clock In / Clock Out',
+        description: 'You can now clock in and out right from your dashboard to track your work hours.',
         image: '/images/updates/team-status.jpg',
-        date: 'November 9, 2026'
+        date: 'November 9, 2026',
+        roles: ['employee', 'hr', 'supervisor']
+    },
+    {
+        id: 6,
+        title: 'Management Dashboard: Team Status & Team Insights',
+        description: 'Get a live Team Status panel (who’s active, away, or offline) plus Team Insights — charts for daily activity, hours by employee, most common tasks, and work type breakdown, filterable by day, week, month, or a custom date.',
+        image: '/images/updates/team-status.jpg',
+        date: 'November 9, 2026',
+        roles: ['admin', 'hr', 'supervisor', 'viewer']
     },
     {
         id: 5,
         title: 'Employee Timeline & Attendance Page',
         description: 'Click any employee to see their day laid out — clock in/out times and every task with its start and end time. A new Attendance page shows clock in/out history and a 14-day trend for the whole team.',
         image: '/images/updates/attendance.jpg',
-        date: 'November 9, 2026'
+        date: 'November 9, 2026',
+        roles: ['admin', 'hr', 'supervisor']
     },
     {
         id: 4,
@@ -22,21 +35,33 @@ export const updates = [
         description: 'Real-time actual time tracking is now integrated across Daily Reports, View Reports, Utilization Reports, and Excel exports. Daily work shift targets are also now aligned to 7.5 hrs (450 mins).',
         image: '/images/updates/team-insights.jpg',
         date: 'November 5, 2026'
+        // no roles = everyone
     }
 ];
 
-// Changes whenever a new update is added at the top of the list
-export const ANNOUNCEMENT_VERSION = `${updates[0].id}-${updates[0].date}`;
+// Entries this role can actually see, newest first (array order is already
+// newest-first, so just filter it).
+export const getUpdatesForRole = (role) =>
+    updates.filter(u => !u.roles || u.roles.includes(role));
 
-const Announcement = ({ onClose }) => {
+// Changes whenever the newest update *this role can see* changes - so an
+// admin-only addition doesn't re-trigger the popup for employees, etc.
+export const getAnnouncementVersion = (role) => {
+    const visible = getUpdatesForRole(role);
+    if (visible.length === 0) return 'none';
+    return `${visible[0].id}-${visible[0].date}`;
+};
+
+const Announcement = ({ onClose, role }) => {
+    const visibleUpdates = getUpdatesForRole(role);
     const [activeSlide, setActiveSlide] = useState(0);
 
     const nextSlide = () => {
-        setActiveSlide((prev) => (prev + 1) % updates.length);
+        setActiveSlide((prev) => (prev + 1) % visibleUpdates.length);
     };
 
     const prevSlide = () => {
-        setActiveSlide((prev) => (prev - 1 + updates.length) % updates.length);
+        setActiveSlide((prev) => (prev - 1 + visibleUpdates.length) % visibleUpdates.length);
     };
 
     return (
@@ -84,8 +109,8 @@ const Announcement = ({ onClose }) => {
                             style={{ height: '400px' }}
                         >
                             <img
-                                src={updates[activeSlide].image}
-                                alt={updates[activeSlide].title}
+                                src={visibleUpdates[activeSlide].image}
+                                alt={visibleUpdates[activeSlide].title}
                                 className="img-fluid"
                                 style={{
                                     maxWidth: '100%',
@@ -109,16 +134,16 @@ const Announcement = ({ onClose }) => {
 
                                 <small className="text-muted">
                                     <i className="bi bi-calendar3 me-1"></i>
-                                    {updates[activeSlide].date}
+                                    {visibleUpdates[activeSlide].date}
                                 </small>
                             </div>
 
                             <h5 className="fw-bold mb-2">
-                                {updates[activeSlide].title}
+                                {visibleUpdates[activeSlide].title}
                             </h5>
 
                             <p className="text-muted mb-0">
-                                {updates[activeSlide].description}
+                                {visibleUpdates[activeSlide].description}
                             </p>
                         </div>
 
@@ -137,7 +162,7 @@ const Announcement = ({ onClose }) => {
                             </button>
 
                             <span className="small text-muted">
-                                {activeSlide + 1} / {updates.length}
+                                {activeSlide + 1} / {visibleUpdates.length}
                             </span>
 
                             <button
