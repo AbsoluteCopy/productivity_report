@@ -215,7 +215,7 @@ const ViewUtilizationReport = () => {
     });
 
     const totalProductiveHours = workedDays.reduce((sum, report) => {
-        const workingHours = Number(report.working_minutes || 0) / MINUTES_PER_HOUR;
+        const workingHours = Number(report.actual_minutes || 0) / MINUTES_PER_HOUR;
         const meetingHours = Number(report.meeting_minutes || 0) / MINUTES_PER_HOUR;
 
         return sum + workingHours + meetingHours;
@@ -224,7 +224,7 @@ const ViewUtilizationReport = () => {
     const averageProductivity =
         workedDays.length > 0
             ? workedDays.reduce((sum, report) => {
-                const workingHours = Number(report.working_minutes || 0) / MINUTES_PER_HOUR;
+                const workingHours = Number(report.actual_minutes || 0) / MINUTES_PER_HOUR;
                 const meetingHours = Number(report.meeting_minutes || 0) / MINUTES_PER_HOUR;
 
                 const productiveHours = workingHours + meetingHours;
@@ -324,8 +324,8 @@ const ViewUtilizationReport = () => {
         // ROW 3 — Column headers
         ws.getRow(3).height = 40;
         ['Date','Day','Week\nOffs','Holidays',
-         'Est. Work\n(mins)','Actual Work\n(mins)','Meetings/\nTraining\n(mins)',
-         'Est. Work\n(hrs)','Actual Work\n(hrs)','Meetings/\nTraining\n(hrs)',
+         'Suggested Work\n(mins)','Actual Work\n(mins)','Meetings/\nTraining\n(mins)',
+         'Suggested Work\n(hrs)','Actual Work\n(hrs)','Meetings/\nTraining\n(hrs)',
          'Total\nHours w/o\nBreak','Total Hours','',
          'Productive\nHours','Productive\nHours %',
          'Break\nHours','Break\nHours %',
@@ -376,7 +376,7 @@ const ViewUtilizationReport = () => {
 
             const productiveHours = isSpecialDay
                 ? ""
-                : workingHrs + meetingHrs;
+                : actualHrs + meetingHrs;
 
             const breakHours = isSpecialDay ? "" : 1;
             const totalHoursNoBreak = isSpecialDay
@@ -650,12 +650,12 @@ const ViewUtilizationReport = () => {
                                                 <th className="py-2 border-0">Status</th>
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0"></th>
-                                                <th className="py-2 border-0 text-center">Est. Work<br />(mins)</th>
+                                                <th className="py-2 border-0 text-center">Suggested Work<br />(mins)</th>
                                                 {role !== 'viewer' && (
                                                     <th className="py-2 border-0 text-center text-success">Actual Work<br />(mins)</th>
                                                 )}
                                                 <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
-                                                <th className="py-2 border-0 text-center">Est. Work<br />(hrs)</th>
+                                                <th className="py-2 border-0 text-center">Suggested Work<br />(hrs)</th>
                                                 {role !== 'viewer' && (
                                                     <th className="py-2 border-0 text-center text-success">Actual Work<br />(hrs)</th>
                                                 )}
@@ -699,6 +699,11 @@ const ViewUtilizationReport = () => {
                                                             ? Number((report.working_minutes / MINUTES_PER_HOUR).toFixed(2))
                                                             : 0;
 
+                                                    const actualHoursForProductivity =
+                                                        report.actual_minutes
+                                                            ? Number((report.actual_minutes / MINUTES_PER_HOUR).toFixed(2))
+                                                            : 0;
+
                                                     const meetingHours =
                                                         report.meeting_minutes
                                                             ? Number((report.meeting_minutes / MINUTES_PER_HOUR).toFixed(2))
@@ -706,7 +711,7 @@ const ViewUtilizationReport = () => {
                                                     const totalRequiredHours = WORK_DAY_HOURS;
                                                     const productiveHours = isSpecialDay
                                                         ? 0
-                                                        : workingHours + meetingHours;
+                                                        : actualHoursForProductivity + meetingHours;
 
                                                     const breakHours = isSpecialDay
                                                         ? 0

@@ -163,16 +163,21 @@ const DailyReport = () => {
                 const eName = (Array.isArray(r.task_list) ? r.task_list[0] : r.task_list) || r.sub_category || 'Company Event';
                 empMap[userName].eventName = eName;
             } else {
+                // Prefer actual time worked (actual_time, in seconds) over the
+                // suggested/target time when it was recorded; only fall back to
+                // the suggested-time estimate for reports with no actual time
+                // (e.g. entries created without going through the task timer).
+                const actualMins = r.actual_time ? Math.round(Number(r.actual_time) / 60) : null;
                 if (r.task_category === 'Meeting') {
                     const mCount = Number(r.meeting_count || r.number_of_tasks || 1);
                     const mTime = Number(r.time_spent || 0);
-                    empMap[userName].totalMinutes += mCount * mTime;
+                    empMap[userName].totalMinutes += actualMins !== null ? actualMins : mCount * mTime;
                     empMap[userName].totalTasks += mCount;
                 } else {
                     const count = Number(r.number_of_tasks || (Array.isArray(r.task_list) ? r.task_list.length : 0));
                     const time = Number(r.time_spent || 0);
                     empMap[userName].totalTasks += count;
-                    empMap[userName].totalMinutes += count > 0 ? (count * time) : time;
+                    empMap[userName].totalMinutes += actualMins !== null ? actualMins : (count > 0 ? (count * time) : time);
                 }
             }
         });
@@ -421,7 +426,7 @@ const DailyReport = () => {
                 center: true,
             },
             {
-                name: "Est. Time",
+                name: "Suggested Time",
                 selector: (row) => {
                     if (isRestrictedCategory(row.task_category)) return "";
                     return row.time_spent > 0 ? row.time_spent : "";
