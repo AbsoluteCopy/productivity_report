@@ -34,9 +34,11 @@ function Navbar() {
 
     const handleLogout = (e) => {
         e.preventDefault();
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
+        // Route through /logout so the backend is told to mark this user
+        // offline immediately (clears last_active_at) instead of just
+        // clearing local storage and leaving them showing as active/away
+        // on Team Status until the heartbeat times out.
+        navigate("/logout");
     };
     useEffect(() => {
         if (window.innerWidth < 992 && navbarRef.current) {
