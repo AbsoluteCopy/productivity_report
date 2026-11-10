@@ -456,6 +456,15 @@ const DailyReport = () => {
                 center: true,
             },
             {
+                name: "Description",
+                selector: (row) => row.description || "",
+                cell: (row) => row.description
+                    ? <span title={row.description}>{row.description}</span>
+                    : <span className="text-muted">—</span>,
+                wrap: true,
+                grow: 1.5,
+            },
+            {
                 name: "Options",
                 cell: (row) => {
                     const isOldRecord = isEmployee && isMoreThan24HoursOld(row);
@@ -859,6 +868,17 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                                 </li>
                             ))}
                         </ul>
+                    </div>
+                </div>
+            )}
+            {/* Description */}
+            {report.description && (
+                <div className="card shadow-sm border-0 mt-3">
+                    <div className="card-header bg-white">
+                        <h6 className="mb-0 fw-bold"> Description </h6>
+                    </div>
+                    <div className="card-body">
+                        <p className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{report.description}</p>
                     </div>
                 </div>
             )}

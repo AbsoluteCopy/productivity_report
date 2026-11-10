@@ -717,11 +717,12 @@ const ViewReport = () => {
                 { key: 'end', width: 14 },
                 { key: 'working', width: 22 },
                 { key: 'meeting', width: 24 },
+                { key: 'description', width: 40 },
             ];
 
             const row1 = ws.getRow(1);
             row1.height = 28;
-            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Actual Time Spent (mins)', 'Start Time', 'End Time', 'Working Hours (mins)', 'Meetings/Training (mins)']
+            ['Date', 'Day', 'Tasks', '# of Tasks', 'Time Spent (mins)', 'Actual Time Spent (mins)', 'Start Time', 'End Time', 'Working Hours (mins)', 'Meetings/Training (mins)', 'Description']
                 .forEach((h, i) => setHdr(row1, i + 1, h));
 
             let currentRow = 2;
@@ -742,7 +743,7 @@ const ViewReport = () => {
                     r.getCell(7).value = report.working_hours_total ?? "";
                     r.getCell(8).value = report.meeting_total ?? "";
 
-                    for (let c = 1; c <= 8; c++) {
+                    for (let c = 1; c <= 11; c++) {
                         const cell = r.getCell(c);
                         cell.font = { bold: true, size: 10, name: 'Calibri' };
                         cell.fill = solid('FFD1FAE5');
@@ -760,7 +761,7 @@ const ViewReport = () => {
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = "Weekend";
 
-                    for (let c = 1; c <= 8; c++) {
+                    for (let c = 1; c <= 11; c++) {
                         const cell = r.getCell(c);
                         cell.fill = solid('FFF2F4F7');
                         cell.border = borders;
@@ -773,7 +774,7 @@ const ViewReport = () => {
                     r.getCell(2).value = dayLabel;
                     r.getCell(3).value = report.task_category + (report.task_list?.[0] ? ` - ${report.task_list[0]}` : "");
 
-                    for (let c = 1; c <= 8; c++) {
+                    for (let c = 1; c <= 11; c++) {
                         const cell = r.getCell(c);
                         cell.fill = solid('FFE8F8F5');
                         cell.border = borders;
@@ -797,12 +798,13 @@ const ViewReport = () => {
                     r.getCell(8).value = isMeeting
                         ? (Number(report.meeting_count || 0) * timeSpent || "")
                         : "";
+                    r.getCell(11).value = report.description || "";
 
-                    for (let c = 1; c <= 8; c++) {
+                    for (let c = 1; c <= 11; c++) {
                         const cell = r.getCell(c);
                         cell.border = borders;
                         cell.font = { size: 10, name: 'Calibri' };
-                        cell.alignment = (c <= 2 || c >= 4) ? centerAlign : leftAlign;
+                        cell.alignment = (c <= 2 || c >= 4) && c !== 11 ? centerAlign : leftAlign;
                     }
                     currentRow++;
 
@@ -813,7 +815,7 @@ const ViewReport = () => {
                             itemRow.height = 18;
                             itemRow.getCell(3).value = item;
 
-                            for (let c = 1; c <= 7; c++) {
+                            for (let c = 1; c <= 11; c++) {
                                 const cell = itemRow.getCell(c);
                                 cell.border = borders;
                                 cell.font = { size: 9, italic: true, color: { argb: 'FF475467' }, name: 'Calibri' };
@@ -1348,6 +1350,7 @@ const ViewReport = () => {
                                                 )}
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
+                                                <th className='main-background text-white py-2'>Description</th>
                                                 {canEdit && (
                                                     <th className='main-background text-white py-2 text-center' style={{ width: '120px' }}>Action</th>
                                                 )}
@@ -1409,6 +1412,7 @@ const ViewReport = () => {
                                                                         )}
                                                                     </div>
                                                                 </td>
+                                                                <td></td>
                                                                 {canEdit && <td></td>}
                                                             </tr>
                                                         );
@@ -1508,6 +1512,7 @@ const ViewReport = () => {
                                                             </td>
 
                                                             <td>{isMeeting ? (Number(report.meeting_count || 0) * Number(report.time_spent || 0) || '') : (report.meeting_count || '')}</td>
+                                                            <td>{report.description || ''}</td>
                                                             {canEdit && (
                                                                 <td className="text-center align-middle">
                                                                     {report.id && !report.isWeekend ? (
