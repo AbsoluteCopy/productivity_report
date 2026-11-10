@@ -1437,11 +1437,21 @@ const NewData = () => {
                                 })}
                             </ul>
                             <div className={`text-center fs-5 fw-bold mb-3 ${overall.cls}`}>Overall: {overall.text}</div>
-                            <button className="btn btn-success w-100 fw-bold"
-                                style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
-                                onClick={() => { setRun(null); resetForm(); navigate('/daily_report'); }}>
-                                Done
-                            </button>
+                            <div className="row">
+                                <div className="col-6">
+                                    <button className="btn btn-success w-100 fw-bold"
+                                        style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
+                                        onClick={() => { setRun(null); resetForm(); navigate('/daily_report'); }}>
+                                        Done
+                                    </button>
+                                </div>
+                                <div className="col-6">
+                                    <button className="btn btn-outline-success w-100 fw-bold"
+                                        onClick={() => { setRun(null); resetForm(); navigate('/new_data'); }}>
+                                        New Data
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
