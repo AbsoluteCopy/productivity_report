@@ -147,7 +147,25 @@ const Home = () => {
         }
     }, [role]);
 
-    const inactiveUsers = allUsers.filter(u => !onlineUsers.some(o => o.id === u.id));
+    // Only genuinely active/away users (recent heartbeat) count as "online" -
+    // someone who closed their browser without clicking "Clock Out" still
+    // shows up in `onlineUsers` (their attendance row is still open) but with
+    // status 'offline'; they belong in the inactive list, flagged so an admin
+    // can spot the orphaned clock-in, not counted as if they were working.
+    const activeOrAwayUsers = onlineUsers.filter(u => u.status !== 'offline');
+    const staleClockedInById = useMemo(() => {
+        const m = {};
+        onlineUsers.forEach(u => {
+            if (u.status === 'offline' && u.clocked_in) m[u.id] = u;
+        });
+        return m;
+    }, [onlineUsers]);
+    const inactiveUsers = allUsers
+        .filter(u => !activeOrAwayUsers.some(o => o.id === u.id))
+        .map(u => staleClockedInById[u.id]
+            ? { ...u, clocked_in: true, attendance_clock_in: staleClockedInById[u.id].attendance_clock_in, stale_clock_in: true }
+            : u
+        );
 
     useEffect(() => {
         if (['admin', 'hr', 'supervisor', 'viewer'].includes(role)) {
@@ -761,7 +779,7 @@ const Home = () => {
                         <i className="bi bi-people me-2"></i>Team Status
                     </h5>
                     <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
-                        {onlineUsers.filter(u => u.status !== 'offline').length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
+                        {activeOrAwayUsers.length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
                     </span>
                 </div>
                 <button
@@ -783,7 +801,7 @@ const Home = () => {
                             style={teamTab === 'active' ? { color: '#055d47', borderColor: '#dee2e6 #dee2e6 #fff' } : {}}
                             onClick={() => setTeamTab('active')}
                         >
-                            Active ({onlineUsers.length})
+                            Active ({activeOrAwayUsers.length})
                         </button>
                     </li>
                     <li className="nav-item">
@@ -839,9 +857,9 @@ const Home = () => {
                                     <span className="visually-hidden">Loading status...</span>
                                 </div>
                             </div>
-                        ) : onlineUsers.length > 0 ? (
+                        ) : activeOrAwayUsers.length > 0 ? (
                             <div className="d-flex flex-column gap-2">
-                                {onlineUsers.map(u => (
+                                {activeOrAwayUsers.map(u => (
                                     <button
                                         key={u.id}
                                         type="button"
@@ -919,6 +937,11 @@ const Home = () => {
                                                 {u.last_active_at
                                                     ? ` Last seen ${formatUTCDateTimeInTimezone(u.last_active_at)}`
                                                     : ' Never logged in'}
+                                                {u.stale_clock_in && (
+                                                    <span className="ms-2 badge bg-warning text-dark" style={{ fontSize: '0.62rem' }}>
+                                                        <i className="bi bi-exclamation-triangle me-1"></i>Still clocked in
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </button>

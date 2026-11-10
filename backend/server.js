@@ -494,23 +494,31 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     }
 
     // 1. Fetch users active within last 5 minutes, or currently clocked in
-    //    (even if their browser heartbeat has gone stale).
+    //    (even if their browser heartbeat has gone stale). The active/away
+    //    threshold is computed here in SQL (TIMESTAMPDIFF against MySQL's own
+    //    NOW()) rather than by re-parsing last_active_at as a JS Date -
+    //    mysql2 reads DATETIME columns using the Node process's own host
+    //    timezone when none is configured, which silently corrupts the
+    //    comparison on any host whose OS timezone isn't UTC (harmless on
+    //    production only because its host happens to run on UTC).
     const [onlineRows] = await pool.query(
       `SELECT u.id, u.id_number, u.first_name, u.last_name, u.email, u.role, u.company, u.last_active_at,
-              a.clock_in AS attendance_clock_in
+              a.clock_in AS attendance_clock_in,
+              TIMESTAMPDIFF(MINUTE, u.last_active_at, NOW()) AS minutes_since_active
        FROM users u
        LEFT JOIN attendance a ON a.user_id = u.id AND a.clock_out IS NULL
        WHERE u.last_active_at >= NOW() - INTERVAL 5 MINUTE OR a.id IS NOT NULL
        ORDER BY (a.id IS NOT NULL) DESC, u.last_active_at DESC`
     );
-    const isRecentlyActive = (u) => u.last_active_at && new Date(u.last_active_at) >= new Date(Date.now() - 5 * 60 * 1000);
     onlineRows.forEach(u => {
       u.clocked_in = !!u.attendance_clock_in;
-      u.status = (u.last_active_at && new Date(u.last_active_at) >= new Date(Date.now() - 2 * 60 * 1000))
+      const mins = u.minutes_since_active;
+      u.status = (mins !== null && mins >= 0 && mins <= 2)
         ? 'active'
-        : isRecentlyActive(u)
+        : (mins !== null && mins >= 0 && mins <= 5)
           ? 'away'
           : 'offline';
+      delete u.minutes_since_active;
     });
 
     // 2. Fetch known companies for the filter tabs/chips. Viewer is locked to
