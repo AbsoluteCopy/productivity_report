@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
-import { getCurrentDateInTimezone, parseDateInTimezone, formatDateString, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
+import { getCurrentDateInTimezone, parseDateInTimezone, formatDateString } from '../utils/dateUtils';
 
 const CategorySelect = ({ cat, taskCategories, onSelect }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -568,25 +568,10 @@ const NewData = () => {
     const fetchReportForEdit = async (id) => {
         try {
             const token = localStorage.getItem('token');
-            const currentUser = JSON.parse(localStorage.getItem('user'));
             const response = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = response.data;
-
-            // Check 24-hour edit window for employees
-            if (currentUser && currentUser.role === 'employee') {
-                if (checkIsMoreThan24HoursOld(data)) {
-                    await Swal.fire({
-                        icon: 'warning',
-                        title: 'Edit Window Expired',
-                        text: 'Employees can only edit their tasks within a 24-hour window.',
-                        confirmButtonColor: '#065d48'
-                    });
-                    navigate('/daily_report');
-                    return;
-                }
-            }
 
             setFormData({
                 date: data.date,
@@ -1731,7 +1716,7 @@ const NewData = () => {
                                         </label>
                                         <input type="date" name="date" value={formData.date}
                                             onChange={handleChange} required
-                                            className="form-control" disabled={isEditMode || formData.work_type === "Working"}
+                                            className="form-control" disabled={isEditMode}
                                         />
                                     </div>
                                     <div className="col-lg-6 col-sm-12">
