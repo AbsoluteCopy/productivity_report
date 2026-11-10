@@ -889,6 +889,12 @@ const Home = () => {
                                                     </span>
                                                 )}
                                             </div>
+                                            {u.current_task_label && (
+                                                <div className="text-truncate" style={{ fontSize: '0.72rem', color: '#055d47' }}>
+                                                    <i className="bi bi-lightning-charge-fill me-1"></i>
+                                                    Working on: <span className="fw-semibold">{u.current_task_label}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </button>
                                 ))}

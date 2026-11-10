@@ -293,7 +293,17 @@ const NewData = () => {
         return { text: `${pct}% slower than selected time`, cls: 'text-danger' };
     };
 
-    const startNext = () => setRun(prev => ({ ...prev, startedAt: Date.now() }));
+    // Lets Team Status show what a user is working on right now. Best-effort -
+    // failures here shouldn't block the actual timer/report flow.
+    const reportCurrentTask = (label) => {
+        axios.post(`${API_BASE_URL}/users/current-task/`, { label }).catch(() => {});
+    };
+    const clearCurrentTask = () => reportCurrentTask(null);
+
+    const startNext = () => setRun(prev => {
+        reportCurrentTask(prev.queue[prev.index]?.label);
+        return { ...prev, startedAt: Date.now() };
+    });
 
     const cancelRun = async () => {
         const r = await Swal.fire({
@@ -301,7 +311,7 @@ const NewData = () => {
             text: 'Categories already ended are saved. The current timer and unstarted categories will be discarded.',
             icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, cancel'
         });
-        if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); }
+        if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); clearCurrentTask(); }
     };
 
     const endTask = async () => {
@@ -372,6 +382,7 @@ const NewData = () => {
 
             setDescription('');
             setAttachment(null);
+            clearCurrentTask();
 
             setRun(
                 isLast
@@ -1215,6 +1226,7 @@ const NewData = () => {
                 };
             });
             warnedRef.current = null;
+            reportCurrentTask(queue[0]?.label);
             setRun({ queue, index: 0, startedAt: Date.now(), results: [], finished: false });
             return;
         }
@@ -1891,7 +1903,7 @@ const NewData = () => {
                                                         </div>
                                                         <div className="d-flex align-items-center gap-3 flex-wrap">
                                                             <div className="px-3 py-1 bg-white rounded-3 border text-center">
-                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. Total</small>
+                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Suggested Total</small>
                                                                 <span className="fw-bold" style={{ color: '#065d48' }}>
                                                                     {categories.reduce((sum, c) => sum + (c.category === 'Meeting' ? (Number(c.meetingCount) || 1) * (Number(c.timeSpent) || 0) : (c.tasks?.length || 0) * (Number(c.timeSpent) || 0)), 0)} mins
                                                                 </span>
@@ -1947,12 +1959,12 @@ const NewData = () => {
                                                                 </h5>
                                                                 {cat.category && cat.category !== 'Meeting' && (
                                                                     <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                                        <i className="bi bi-clock me-1"></i>Est. Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
+                                                                        <i className="bi bi-clock me-1"></i>Suggested Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
                                                                     </span>
                                                                 )}
                                                                 {cat.category === 'Meeting' && (
                                                                     <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                                        <i className="bi bi-clock me-1"></i>Meeting Est.: {totalCatEstMinutes} mins
+                                                                        <i className="bi bi-clock me-1"></i>Meeting Suggested: {totalCatEstMinutes} mins
                                                                     </span>
                                                                 )}
                                                                 {isEditMode && catActualMinutes !== null && (

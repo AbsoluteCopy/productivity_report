@@ -130,6 +130,27 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   }
 })();
 
+// Auto-migrate: Track what task a user is currently running the live timer
+// on, so Team Status can show it in real time.
+(async () => {
+  try {
+    const [cols] = await pool.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('current_task_label', 'current_task_started_at')"
+    );
+    const have = new Set(cols.map(c => c.COLUMN_NAME));
+    if (!have.has('current_task_label')) {
+      await pool.query("ALTER TABLE users ADD COLUMN current_task_label VARCHAR(255) NULL DEFAULT NULL");
+      console.log("Added column 'current_task_label' to users table.");
+    }
+    if (!have.has('current_task_started_at')) {
+      await pool.query("ALTER TABLE users ADD COLUMN current_task_started_at DATETIME NULL DEFAULT NULL");
+      console.log("Added column 'current_task_started_at' to users table.");
+    }
+  } catch (err) {
+    console.error("Migration check error for current_task columns:", err);
+  }
+})();
+
 // Auto-migrate: Allow users to sign in with a username, email, or both
 (async () => {
   try {
@@ -486,6 +507,29 @@ app.post(['/api/users/heartbeat', '/api/users/heartbeat/'], authenticate, async 
   }
 });
 
+// 6.1b. Set/clear the task the current user's live timer is running on, so
+// Team Status can show it in real time. Called by the frontend when a task
+// timer starts, and cleared when it ends/is cancelled.
+app.post(['/api/users/current-task', '/api/users/current-task/'], authenticate, async (req, res) => {
+  try {
+    const { label } = req.body;
+    if (label) {
+      await pool.query(
+        'UPDATE users SET current_task_label = ?, current_task_started_at = NOW() WHERE id = ?',
+        [String(label).slice(0, 255), req.user.id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE users SET current_task_label = NULL, current_task_started_at = NULL WHERE id = ?',
+        [req.user.id]
+      );
+    }
+    return res.json({ status: 'ok' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Error updating current task.' });
+  }
+});
+
 // 6.2. Online Users - Admin and HR multi-company monitor
 app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, res) => {
   try {
@@ -503,6 +547,7 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     //    production only because its host happens to run on UTC).
     const [onlineRows] = await pool.query(
       `SELECT u.id, u.id_number, u.first_name, u.last_name, u.email, u.role, u.company, u.last_active_at,
+              u.current_task_label, u.current_task_started_at,
               a.clock_in AS attendance_clock_in,
               TIMESTAMPDIFF(MINUTE, u.last_active_at, NOW()) AS minutes_since_active
        FROM users u
