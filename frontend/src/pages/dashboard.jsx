@@ -326,6 +326,10 @@ const Home = () => {
     // (company-scoped server-side), but keeps their own report pages/links
     // rather than the manager ones used inside recentReportsCard.
     const canSeeAnalytics = ['admin', 'hr', 'supervisor', 'viewer'].includes(role);
+    // TEMP PROD-ONLY: viewer loses access to real-time data (live Team Status
+    // + actual-time tracking elsewhere) until reverted. Remove this flag and
+    // its usages below to restore.
+    const canSeeLiveStatus = canSeeAnalytics && role !== 'viewer';
 
     // Team insights (management only): most common tasks & top contributors, last 30 days.
     // Dropdown option lists stay stable regardless of the active filters/period.
@@ -1041,7 +1045,7 @@ const Home = () => {
                     </div>
                 </div>
 
-                {canSeeAnalytics ? (
+                {canSeeLiveStatus ? (
                     <div className="col-md-7 col-lg-8">
                         {teamStatusCard}
                     </div>
