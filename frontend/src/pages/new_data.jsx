@@ -1439,8 +1439,8 @@ const NewData = () => {
                             <div className={`text-center fs-5 fw-bold mb-3 ${overall.cls}`}>Overall: {overall.text}</div>
                             <button className="btn btn-success w-100 fw-bold"
                                 style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
-                                onClick={() => { setRun(null); resetForm(); navigate('/daily_report'); }}>
-                                Done
+                                onClick={() => { setRun(null); resetForm(); }}>
+                                Log Another Task
                             </button>
                         </div>
                     </div>
@@ -2239,11 +2239,11 @@ const NewData = () => {
                                                 </div>
                                             );
                                         })}
-                                        {!isEditMode && (
-                                            <div className="d-flex gap-2 mb-3">
-                                                <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
-                                                    + Add Another Category
-                                                </button>
+                                        <div className="d-flex gap-2 mb-3">
+                                            <button type="button" className="btn btn-outline-success flex-grow-1" onClick={addCategory}>
+                                                + Add Another Category
+                                            </button>
+                                            {!isEditMode && (
                                                 <button
                                                     type="button"
                                                     className="btn btn-outline-secondary d-flex align-items-center"
@@ -2257,8 +2257,8 @@ const NewData = () => {
                                                     }
                                                     {copyLoading ? ' Loading...' : ' Copy from Previous Day'}
                                                 </button>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </>
                                 )}
                                 {isEditMode ? (
