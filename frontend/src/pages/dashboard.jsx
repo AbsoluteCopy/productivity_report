@@ -15,7 +15,7 @@ import {
     Tooltip,
     Legend,
 } from 'chart.js'; import API_BASE_URL from "../config";
-import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateString, parseDateInTimezone, formatNaiveTime } from '../utils/dateUtils';
+import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateString, parseDateInTimezone, formatNaiveTime, formatUTCDateTimeInTimezone } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
 import Announcement, { getAnnouncementVersion, getUpdatesForRole } from '../components/Announcement'
 import EmployeeTimelineModal from '../components/EmployeeTimelineModal'
@@ -917,7 +917,7 @@ const Home = () => {
                                             <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
                                                 {u.company || 'General'} <span className="mx-1">&bull;</span>
                                                 {u.last_active_at
-                                                    ? ` Last seen ${new Date(u.last_active_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                                                    ? ` Last seen ${formatUTCDateTimeInTimezone(u.last_active_at)}`
                                                     : ' Never logged in'}
                                             </div>
                                         </div>

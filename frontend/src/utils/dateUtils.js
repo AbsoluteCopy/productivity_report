@@ -212,6 +212,37 @@ export const formatNaiveDate = (dtString) => {
 };
 
 /**
+ * Format a MySQL DATETIME string that is genuinely stored in UTC (e.g.
+ * `users.last_active_at`, set via plain `NOW()` on a server whose clock is
+ * UTC - unlike daily_reports' naive-Alaska fields written through
+ * toMySQLDateTime()) as a short date + time in the configured timezone.
+ * Use this instead of `new Date(dtString).toLocaleString()`, which parses
+ * the string as the viewer's own local time rather than UTC and then
+ * re-displays it in that same local time, silently mislabeling a UTC
+ * timestamp as if it were already correct for the viewer.
+ */
+export const formatUTCDateTimeInTimezone = (dtString) => {
+  if (!dtString) return '—';
+  const isoUTC = `${String(dtString).replace(' ', 'T')}Z`;
+  const d = new Date(isoUTC);
+  if (isNaN(d.getTime())) return '—';
+  return formatDateInTimezone(d, 'locale', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
+/**
+ * Minutes elapsed since a UTC MySQL DATETIME string (see
+ * formatUTCDateTimeInTimezone) - a plain epoch diff is correct here since
+ * both `dtString` and `Date.now()` are genuinely UTC-based.
+ */
+export const minutesSinceUTC = (dtString) => {
+  if (!dtString) return null;
+  const isoUTC = `${String(dtString).replace(' ', 'T')}Z`;
+  const past = new Date(isoUTC).getTime();
+  if (isNaN(past)) return null;
+  return Math.floor((Date.now() - past) / 60000);
+};
+
+/**
  * Format relative time (e.g., "Active 5m ago") in the configured timezone
  * @param {string} dateStr - Date string
  */
