@@ -17,6 +17,7 @@ import ManageHoliday from './pages/manage_holiday';
 import Attendance from './pages/attendance';
 import ChangePassword from './pages/change_password';
 import NotFound from './pages/404';
+import VersionBadge from './components/VersionBadge';
 
 import { useEffect } from 'react';
 import axios from 'axios';
@@ -96,6 +97,7 @@ function AppContent() {
         <Route path="/logout" element={<Logout />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <VersionBadge />
     </div>
   );
 }
