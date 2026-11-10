@@ -206,10 +206,14 @@ const ManageAccounts = () => {
                 let rIdx = 3;
                 empReports.forEach(r => {
                     const dStr = String(r.date).slice(0, 10);
+                    // parseDateInTimezone builds this as a UTC-midnight marker
+                    // for the pure calendar date, not a real moment in any
+                    // timezone - reading it back via Alaska (UTC-9) shifts it
+                    // into the previous day, mislabeling every weekday.
                     const dateObj = parseDateInTimezone(dStr);
-                    const dayStr = dateObj.toLocaleDateString('en-US', { 
+                    const dayStr = dateObj.toLocaleDateString('en-US', {
                         weekday: 'long',
-                        timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                        timeZone: 'UTC'
                     });
 
                     const cat = r.task_category || '';

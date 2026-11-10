@@ -630,12 +630,16 @@ const NewData = () => {
     };
 
     const isWeekend = (dateString) => {
-        // Parse as a calendar date in the configured timezone
+        // parseDateInTimezone builds this as a UTC-midnight marker for the
+        // pure calendar date (not a real moment in any timezone) - it must be
+        // read back out as UTC too, or converting it to a real timezone like
+        // Alaska (UTC-9) shifts it into the previous day and misreads the
+        // weekday (e.g. Monday showing as Sunday).
         const date = parseDateInTimezone(dateString);
 
         const weekday = date.toLocaleDateString("en-US", {
             weekday: "short",
-            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+            timeZone: 'UTC'
         });
 
         return weekday === "Sat" || weekday === "Sun";

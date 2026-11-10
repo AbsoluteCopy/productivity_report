@@ -693,11 +693,16 @@ const ViewReport = () => {
 
         const formatLabel = (dateStr) => {
             const [year, month, day] = dateStr.split("-");
+            // parseDateInTimezone builds this as a UTC-midnight marker for the
+            // pure calendar date, not a real moment in any timezone - reading
+            // it back via a real timezone like Alaska (UTC-9) shifts it into
+            // the previous day, so every weekday label here would be off by
+            // one (and month-name near month boundaries too).
             const dateObj = parseDateInTimezone(dateStr);
             return {
                 dateObj,
-                dateLabel: `${day}-${dateObj.toLocaleString("en-US", { month: "short", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' })}-${String(year).slice(-2)}`,
-                dayLabel: dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' })
+                dateLabel: `${day}-${dateObj.toLocaleString("en-US", { month: "short", timeZone: 'UTC' })}-${String(year).slice(-2)}`,
+                dayLabel: dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: 'UTC' })
             };
         };
 
@@ -997,10 +1002,14 @@ const ViewReport = () => {
         if (!date) return '';
 
         const [year, month, day] = date.split('-');
+        // parseDateInTimezone builds this as a UTC-midnight marker for the
+        // pure calendar date, not a real moment in any timezone - reading it
+        // back via a real timezone like Alaska (UTC-9) can shift it into the
+        // previous day (and, on the 1st of a month, the previous month).
         const dateObj = parseDateInTimezone(date);
         const monthName = dateObj.toLocaleString('en-US', {
             month: 'long',
-            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+            timeZone: 'UTC'
         });
 
         return `${day}-${monthName}-${year.slice(2)}`;

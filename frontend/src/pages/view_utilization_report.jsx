@@ -339,18 +339,23 @@ const ViewUtilizationReport = () => {
         let rowNumber = 4;
         // (data loop continues below)
         displayReports.forEach((report) => {
+            // parseDateInTimezone builds this as a UTC-midnight marker for
+            // the pure calendar date, not a real moment in any timezone -
+            // reading it back via a real timezone like Alaska (UTC-9) shifts
+            // it into the previous day, mislabeling every weekday (and the
+            // month name near month boundaries).
             const dateObj = parseDateInTimezone(report.date);
             const dateStr = typeof report.date === 'string' ? report.date.split('T')[0] : '';
             const [year, month, day] = dateStr.split('-');
 
             const dateLabel = `${day}-${dateObj.toLocaleString("en-US", {
                 month: "short",
-                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                timeZone: 'UTC'
             })}-${String(year).slice(-2)}`;
 
             const dayLabel = dateObj.toLocaleDateString("en-US", {
                 weekday: "long",
-                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                timeZone: 'UTC'
             });
 
             const isHoliday = report.task_category === "Holiday";
