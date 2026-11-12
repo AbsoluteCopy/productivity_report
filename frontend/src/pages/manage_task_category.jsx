@@ -343,7 +343,7 @@ const ManageTaskCategory = () => {
                                     value={formData.default_time || ''}
                                     onChange={handleChange}
                                 />
-                                <small className="text-muted" style={{ fontSize: '0.8rem' }}>
+                                <small className="text-muted fs-08">
                                     When selected on Daily Report, Time Spent will automatically default to this duration.
                                 </small>
                             </div>

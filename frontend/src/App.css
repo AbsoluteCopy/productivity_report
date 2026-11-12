@@ -125,3 +125,133 @@ img {
 .pointer{
   cursor:pointer!important;
 }
+
+/* ===== Utilities extracted from repeated inline styles ===== */
+
+/* Text colors */
+.text-green {
+  color: #055d47 !important;
+}
+.text-green-dark {
+  color: #065d48 !important;
+}
+.text-ink {
+  color: #08060d !important;
+}
+
+/* Font sizes */
+.fs-062 {
+  font-size: 0.62rem !important;
+}
+.fs-065 {
+  font-size: 0.65rem !important;
+}
+.fs-072 {
+  font-size: 0.72rem !important;
+}
+.fs-075 {
+  font-size: 0.75rem !important;
+}
+.fs-078 {
+  font-size: 0.78rem !important;
+}
+.fs-08 {
+  font-size: 0.8rem !important;
+}
+.fs-085 {
+  font-size: 0.85rem !important;
+}
+.fs-088 {
+  font-size: 0.88rem !important;
+}
+
+/* Letter spacing / uppercase labels */
+.ls-05 {
+  letter-spacing: 0.5px;
+}
+.ls-1 {
+  letter-spacing: 1px;
+}
+.label-caps {
+  font-size: 0.72rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Sizing helpers */
+.lh-125 {
+  line-height: 1.25;
+}
+.w-150 {
+  width: 150px;
+}
+.min-w-150 {
+  min-width: 150px;
+}
+.h-220 {
+  height: 220px;
+}
+.h-280 {
+  height: 280px;
+}
+.h-400 {
+  height: 400px;
+}
+
+/* Repeated composite styles */
+.icon-circle-green {
+  width: 40px;
+  height: 40px;
+  background-color: rgba(5, 93, 71, 0.1);
+  color: #055d47;
+}
+.stat-number {
+  color: #055d47 !important;
+  font-size: 1.4rem;
+}
+.btn-soft-green {
+  background-color: rgba(5, 93, 71, 0.1) !important;
+  color: #055d47 !important;
+  font-weight: 600;
+  border-radius: 8px;
+}
+.badge-soft-green {
+  background-color: rgba(5, 93, 71, 0.1) !important;
+  color: #055d47 !important;
+  font-size: 12px !important;
+}
+.badge-soft-green-sm {
+  background-color: rgba(6, 93, 72, 0.1) !important;
+  color: #065d48 !important;
+  font-size: 0.78rem !important;
+  font-weight: 600;
+}
+.badge-gray {
+  background-color: #6c757d !important;
+  font-size: 0.75rem !important;
+  padding: 0.4em 0.8em !important;
+}
+.card-offwhite {
+  background-color: #fdfdfd !important;
+}
+.card-brand-gradient {
+  background: linear-gradient(135deg, #055d47 0%, #2F8F83 100%) !important;
+  color: white !important;
+}
+.btn-brand-solid {
+  background-color: #065d48 !important;
+  border-color: #065d48 !important;
+}
+.empty-state-icon {
+  font-size: 3rem;
+  opacity: 0.5;
+}
+.hidden-file-input {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  pointer-events: none;
+}

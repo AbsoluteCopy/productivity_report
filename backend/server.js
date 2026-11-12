@@ -76,6 +76,18 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
       await pool.query("ALTER TABLE daily_reports ADD COLUMN time_finished DATETIME NULL DEFAULT NULL");
       console.log("Added column 'time_finished' to daily_reports table.");
     }
+    if (!existing.has('is_paused')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN is_paused INT NOT NULL DEFAULT 0");
+      console.log("Added column 'is_paused' to daily_reports table.");
+    }
+    if (!existing.has('status')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN status VARCHAR(20) NULL DEFAULT NULL AFTER is_paused");
+      console.log("Added column 'status' to daily_reports table.");
+    }
+    if (!existing.has('paused_time')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN paused_time INT NULL DEFAULT NULL");
+      console.log("Added column 'paused_time' to daily_reports table.");
+    }
   } catch (err) {
     console.error("Migration check error for daily_reports columns:", err);
   }
@@ -228,6 +240,11 @@ const toMySQLDateTime = (value) => {
   return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute}:${parts.second}`;
 };
 
+const reportNotDeleted = (alias = '') => {
+  const column = alias ? `${alias}.status` : 'status';
+  return `(${column} IS NULL OR ${column} <> 'Deleted')`;
+};
+
 // Helper: Format user object (omit password hash)
 const formatUser = (user) => {
   const { password, ...safeUser } = user;
@@ -281,6 +298,16 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
     if (!passwordMatches) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
+
+    const currentAppDate = toMySQLDateTime(new Date()).slice(0, 10);
+    await pool.query(
+      `UPDATE daily_reports
+       SET status = 'Deleted', updated_at = NOW()
+       WHERE is_paused = 1
+         AND date < ?
+         AND ${reportNotDeleted()}`,
+      [currentAppDate]
+    ).catch(err => console.error('Stale paused report cleanup error:', err));
 
     await pool.query(
       'INSERT INTO logs (user_id, type) VALUES (?, ?)',
@@ -795,6 +822,7 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
       FROM daily_reports r
       JOIN users u ON r.user_id = u.id
       WHERE 1=1
+        AND ${reportNotDeleted('r')}
     `;
     let params = [];
 
@@ -840,6 +868,8 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
         attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
         time_added: r.time_added,
         time_finished: r.time_finished,
+        is_paused: r.is_paused || 0,
+        paused_time: r.paused_time ?? null,
       };
     });
 
@@ -875,6 +905,7 @@ app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplica
         END
       ) = LOWER(?)
         AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+        AND ${reportNotDeleted('r')}
     `;
     const params = [effectiveCategory, trimmedTask];
 
@@ -924,6 +955,7 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       FROM daily_reports r
       JOIN users u ON r.user_id = u.id
       WHERE r.id = ?
+        AND ${reportNotDeleted('r')}
     `, [req.params.id]);
 
     if (rows.length === 0) return res.status(404).json({ error: 'Daily report not found.' });
@@ -961,6 +993,8 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
       time_added: r.time_added,
       time_finished: r.time_finished,
+      is_paused: r.is_paused || 0,
+      paused_time: r.paused_time ?? null,
     });
   } catch (err) {
     console.error('Fetch single report error:', err);
@@ -975,7 +1009,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
   });
   try {
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks,
-      time_spent, meeting_count, user, actual_time, description, time_added, time_finished } = req.body;
+      time_spent, meeting_count, user, actual_time, description, time_added, time_finished, is_paused, paused_time } = req.body;
 
     // multipart sends everything as strings
     if (typeof task_list === 'string') {
@@ -1031,6 +1065,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
             END
           ) = LOWER(?)
             AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+            AND ${reportNotDeleted('r')}
           LIMIT 1
         `, [effectiveCategory, t.trim()]);
 
@@ -1056,15 +1091,17 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
     const [result] = await pool.query(
       `INSERT INTO daily_reports
         (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks,
-         time_spent, meeting_count, actual_time, description, attachment, time_added, time_finished, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+         time_spent, meeting_count, actual_time, description, attachment, time_added, time_finished, is_paused, paused_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson,
         number_of_tasks || 0, time_spent || 0, meeting_count || 0,
         Number(actual_time) || null,                      // seconds
         (description || '').trim() || null,
         req.file ? req.file.filename : null,
         toMySQLDateTime(time_added),
-        toMySQLDateTime(time_finished)]
+        toMySQLDateTime(time_finished),
+        Number(is_paused) === 1 ? 1 : 0,
+        paused_time !== undefined && paused_time !== null && paused_time !== '' ? Number(paused_time) : null]
     );
 
     const [created] = await pool.query('SELECT * FROM daily_reports WHERE id = ?', [result.insertId]);
@@ -1077,7 +1114,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
 
 app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT r.*, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ?', [req.params.id]);
+    const [rows] = await pool.query(`SELECT r.*, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ? AND ${reportNotDeleted('r')}`, [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Daily report not found.' });
 
     const report = rows[0];
@@ -1090,7 +1127,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, time_added, time_finished } = req.body;
+    let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, time_added, time_finished, is_paused, paused_time } = req.body;
     let updates = [];
     let params = [];
     let cleanTaskList = [];
@@ -1118,8 +1155,10 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     const { description, actual_time } = req.body;
     if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
     if (actual_time !== undefined) { updates.push('actual_time = ?'); params.push(actual_time !== null && actual_time !== '' ? actual_time : null); }
+    if (paused_time !== undefined) { updates.push('paused_time = ?'); params.push(paused_time !== null && paused_time !== '' ? Number(paused_time) : null); }
     if (time_added !== undefined) { updates.push('time_added = ?'); params.push(toMySQLDateTime(time_added)); }
     if (time_finished !== undefined) { updates.push('time_finished = ?'); params.push(toMySQLDateTime(time_finished)); }
+    if (is_paused !== undefined) { updates.push('is_paused = ?'); params.push(Number(is_paused) === 1 ? 1 : 0); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
     const targetCategory = task_category || report.task_category;
@@ -1143,6 +1182,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
             END
           ) = LOWER(?)
             AND JSON_CONTAINS(LOWER(r.task_list), JSON_QUOTE(LOWER(?)))
+            AND ${reportNotDeleted('r')}
             AND r.id != ?
           LIMIT 1
         `, [effectiveCategory, t.trim(), req.params.id]);
@@ -1184,7 +1224,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
 
 app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT r.*, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ?', [req.params.id]);
+    const [rows] = await pool.query(`SELECT r.*, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ? AND ${reportNotDeleted('r')}`, [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Daily report not found.' });
 
     const report = rows[0];
@@ -1206,7 +1246,7 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
       }
     }
 
-    await pool.query('DELETE FROM daily_reports WHERE id = ?', [req.params.id]);
+    await pool.query("UPDATE daily_reports SET status = 'Deleted', updated_at = NOW() WHERE id = ?", [req.params.id]);
     return res.status(204).send();
   } catch (err) {
     return res.status(500).json({ error: 'Error deleting daily report.' });
@@ -1216,7 +1256,7 @@ app.delete(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, 
 app.get(['/api/daily-reports/:id/attachment'], authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT r.user_id, r.attachment, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ?',
+      `SELECT r.user_id, r.attachment, u.company FROM daily_reports r JOIN users u ON r.user_id = u.id WHERE r.id = ? AND ${reportNotDeleted('r')}`,
       [req.params.id]
     );
     if (rows.length === 0 || !rows[0].attachment) return res.status(404).json({ error: 'Attachment not found.' });
@@ -1243,7 +1283,7 @@ app.get(['/api/users/:user_id/reports', '/api/users/:user_id/reports/'], authent
     }
 
     const { year, month, date } = req.query;
-    let query = 'SELECT * FROM daily_reports WHERE user_id = ?';
+    let query = `SELECT * FROM daily_reports WHERE user_id = ? AND ${reportNotDeleted()}`;
     let params = [targetUserId];
 
     if (date) { query += ' AND date = ?'; params.push(date); }

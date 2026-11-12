@@ -105,8 +105,7 @@ const Announcement = ({ onClose, role }) => {
 
                         {/* Image */}
                         <div
-                            className="bg-light d-flex align-items-center justify-content-center"
-                            style={{ height: '400px' }}
+                            className="bg-light d-flex align-items-center justify-content-center h-400"
                         >
                             <img
                                 src={visibleUpdates[activeSlide].image}

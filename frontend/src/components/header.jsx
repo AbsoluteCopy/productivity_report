@@ -164,7 +164,7 @@ function Navbar() {
                                 </div>
 
                                 <div className="d-flex flex-column text-start" style={{ lineHeight: '1.2' }}>
-                                    <span className="fw-semibold text-white" style={{ fontSize: '0.88rem' }}>
+                                    <span className="fw-semibold text-white fs-088">
                                         {userName || "User"}
                                     </span>
                                     <div className="d-flex align-items-center gap-1 flex-wrap">

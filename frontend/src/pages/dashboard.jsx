@@ -443,15 +443,15 @@ const Home = () => {
     const recentReportsCard = (
         <div className="card shadow-sm h-100 border-0 rounded-4">
             <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
-                <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                <h5 className="fw-bold mb-0 text-green">
                     <i className="bi bi-journal-text me-2"></i>Recent Reports
                 </h5>
                 {isManager ? (
-                    <Link to="/daily_report" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                    <Link to="/daily_report" className="btn btn-sm btn-soft-green">
                         View All <i className="bi bi-arrow-right ms-1"></i>
                     </Link>
                 ) : role === 'employee' ? (
-                    <Link to="/new_data" className="btn btn-sm" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontWeight: '600', borderRadius: '8px' }}>
+                    <Link to="/new_data" className="btn btn-sm btn-soft-green">
                         <i className="bi bi-plus-lg me-1"></i> New
                     </Link>
                 ) : null}
@@ -468,7 +468,7 @@ const Home = () => {
                         {recentReports.map((report) => (
                             <div key={report.id} className="list-group-item border rounded-3 p-3 d-flex justify-content-between align-items-center" style={{ transition: 'all 0.2s' }}>
                                 <div className="d-flex align-items-center">
-                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3 icon-circle-green">
                                         <i className="bi bi-check2-all fs-5"></i>
                                     </div>
                                     <div>
@@ -491,10 +491,13 @@ const Home = () => {
                                 </div>
                                 <div className="text-end d-flex flex-column gap-1">
                                     <span className="badge rounded-pill" style={{ backgroundColor: '#2F8F83', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
-                                        {report.number_of_tasks} tasks
+                                        No. of Task: {report.number_of_tasks}
                                     </span>
-                                    <span className="badge rounded-pill" style={{ backgroundColor: '#6c757d', fontSize: '0.75rem', padding: '0.4em 0.8em' }}>
-                                        <i className="bi bi-hourglass-split me-1"></i>{report.time_spent}m
+                                    <span className="badge rounded-pill badge-gray">
+                                        Suggested Time: <i className="bi bi-hourglass-split me-1"></i>{report.time_spent}m
+                                    </span>
+                                    <span className="badge rounded-pill badge-gray">
+                                        Actual Time: <i className="bi bi-hourglass-split me-1"></i>{report.actual_time}m
                                     </span>
                                 </div>
                             </div>
@@ -503,7 +506,7 @@ const Home = () => {
                 ) : (
                     <div className="text-center py-5">
                         <div className="mb-3">
-                            <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                            <i className="bi bi-inbox text-muted empty-state-icon"></i>
                         </div>
                         <h6 className="text-muted fw-medium mb-3">No recent reports found</h6>
                         {role === 'employee' && (
@@ -539,7 +542,7 @@ const Home = () => {
     const teamInsightsCard = (
         <div className="card shadow-sm h-100 border-0 rounded-4">
             <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
-                <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                <h5 className="fw-bold mb-0 text-green">
                     <i className="bi bi-graph-up-arrow me-2"></i>Team Insights
                 </h5>
                 <span className="text-muted" style={{ fontSize: '0.78rem' }}>{insightsPeriodLabel}</span>
@@ -620,7 +623,7 @@ const Home = () => {
                     </div>
                 ) : teamInsights.reportCount === 0 ? (
                     <div className="text-center py-5">
-                        <i className="bi bi-bar-chart text-muted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                        <i className="bi bi-bar-chart text-muted empty-state-icon"></i>
                         <h6 className="text-muted fw-medium mt-3 mb-0">No report activity for this filter.</h6>
                     </div>
                 ) : (
@@ -629,17 +632,17 @@ const Home = () => {
                             <div className="p-3 rounded-3 d-flex flex-wrap gap-4" style={{ backgroundColor: 'rgba(5, 93, 71, 0.06)' }}>
                                 <div>
                                     <div className="text-muted small fw-semibold mb-1">Total Logged</div>
-                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>
+                                    <div className="fw-bold stat-number">
                                         {Math.floor(teamInsights.totalMinutes / 60)}h {teamInsights.totalMinutes % 60}m
                                     </div>
                                 </div>
                                 <div>
                                     <div className="text-muted small fw-semibold mb-1">Tasks Completed</div>
-                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>{teamInsights.totalTasks}</div>
+                                    <div className="fw-bold stat-number">{teamInsights.totalTasks}</div>
                                 </div>
                                 <div>
                                     <div className="text-muted small fw-semibold mb-1">Reports Filed</div>
-                                    <div className="fw-bold" style={{ color: '#055d47', fontSize: '1.4rem' }}>{teamInsights.reportCount}</div>
+                                    <div className="fw-bold stat-number">{teamInsights.reportCount}</div>
                                 </div>
                             </div>
                         </div>
@@ -651,7 +654,7 @@ const Home = () => {
                             {teamInsights.dailyTrend.labels.length === 0 ? (
                                 <div className="text-muted small">No data yet.</div>
                             ) : (
-                                <div style={{ height: '220px' }}>
+                                <div className="h-220">
                                     <Line
                                         data={{
                                             labels: teamInsights.dailyTrend.labels,
@@ -743,7 +746,7 @@ const Home = () => {
                             {teamInsights.workTypeBreakdown.length === 0 ? (
                                 <div className="text-muted small">No data yet.</div>
                             ) : (
-                                <div style={{ height: '220px' }}>
+                                <div className="h-220">
                                     <Doughnut
                                         data={{
                                             labels: teamInsights.workTypeBreakdown.map(([label]) => label),
@@ -775,7 +778,7 @@ const Home = () => {
             <div className="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <div className="d-flex align-items-center gap-2">
                     <span className="spinner-grow spinner-grow-sm text-success" role="status" style={{ width: '10px', height: '10px' }} />
-                    <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                    <h5 className="fw-bold mb-0 text-green">
                         <i className="bi bi-people me-2"></i>Team Status
                     </h5>
                     <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
@@ -840,7 +843,7 @@ const Home = () => {
                                             onClick={() => toggleCompanySelection(comp)}
                                         >
                                             {comp}
-                                            <span className={`badge rounded-pill ms-1 ${isSelected ? 'bg-light text-dark' : 'bg-secondary'}`} style={{ fontSize: '0.65rem' }}>
+                                            <span className={`badge rounded-pill ms-1 fs-065 ${isSelected ? 'bg-light text-dark' : 'bg-secondary'}`}>
                                                 {count}
                                             </span>
                                         </button>
@@ -877,14 +880,14 @@ const Home = () => {
                                                 title={statusLabel(u.status)}
                                             ></span>
                                         </div>
-                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.25 }}>
-                                            <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.88rem' }}>
+                                        <div className="text-truncate flex-grow-1 lh-125">
+                                            <div className="fw-bold text-dark text-truncate fs-088">
                                                 {u.first_name} {u.last_name}
                                             </div>
-                                            <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                                            <div className="text-muted text-truncate fs-072">
                                                 {statusLabel(u.status)} <span className="mx-1">&bull;</span> {u.company || 'General'}
                                                 {u.clocked_in && (
-                                                    <span className="ms-2 badge bg-success" style={{ fontSize: '0.62rem' }}>
+                                                    <span className="ms-2 badge bg-success fs-062">
                                                         <i className="bi bi-clock me-1"></i>Clocked in {formatNaiveTime(u.attendance_clock_in)}
                                                     </span>
                                                 )}
@@ -934,17 +937,17 @@ const Home = () => {
                                                 title="Offline"
                                             ></span>
                                         </div>
-                                        <div className="text-truncate flex-grow-1" style={{ lineHeight: 1.25 }}>
-                                            <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.88rem' }}>
+                                        <div className="text-truncate flex-grow-1 lh-125">
+                                            <div className="fw-bold text-dark text-truncate fs-088">
                                                 {u.first_name} {u.last_name}
                                             </div>
-                                            <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                                            <div className="text-muted text-truncate fs-072">
                                                 {u.company || 'General'} <span className="mx-1">&bull;</span>
                                                 {u.last_active_at
                                                     ? ` Last seen ${formatUTCDateTimeInTimezone(u.last_active_at)}`
                                                     : ' Never logged in'}
                                                 {u.stale_clock_in && (
-                                                    <span className="ms-2 badge bg-warning text-dark" style={{ fontSize: '0.62rem' }}>
+                                                    <span className="ms-2 badge bg-warning text-dark fs-062">
                                                         <i className="bi bi-exclamation-triangle me-1"></i>Still clocked in
                                                     </span>
                                                 )}
@@ -966,10 +969,10 @@ const Home = () => {
     );
 
     return (
-        <div className="container mt-5">
+        <div className="container mt-3">
             <div className="row mb-1">
                 <div className="col-12">
-                    <div className="p-4 rounded-4 shadow-sm" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
+                    <div className="p-4 rounded-4 shadow-sm card-brand-gradient">
                         <h2 className="fw-bold mb-1">
                             Welcome back, {user ? `${user.first_name}` : 'User'}!
                         </h2>
@@ -1001,7 +1004,7 @@ const Home = () => {
                             </div>
 
                             <div>
-                                <h6 className="fw-bold mb-1" style={{ color: '#055d47' }}>
+                                <h6 className="fw-bold mb-1 text-green">
                                     What's New?
                                 </h6>
                                 <small className="text-muted">
@@ -1030,41 +1033,48 @@ const Home = () => {
                             <div className="mb-3">
                                 <AnalogClock />
                             </div>
-                            <div className="display-5 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
+                            <div className="display-6 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
                                 {time}
                             </div>
                             <p className="text-muted fw-medium mb-3">{date}</p>
 
                             {!attendanceLoading && !['admin', 'viewer'].includes(role) && (
                                 <div className="pt-3 border-top">
-                                    {attendance && !attendance.clock_out ? (
-                                        <>
-                                            <p className="text-success fw-semibold mb-2">
-                                                <i className="bi bi-record-circle-fill me-1"></i>
-                                                Clocked in at {formatNaiveTime(attendance.clock_in)}
-                                            </p>
+                                    <div className="row">
+                                        <div className="col-12">
+                                            <p className="text-muted fw-medium mb-3">Status : <span className={attendance && !attendance.clock_out ? 'text-success' : 'text-danger'}>{attendance && !attendance.clock_out ? 'Clocked In' : 'Clocked Out'}</span></p>
+                                        </div>
+                                        <div className="col-6">
                                             <button
-                                                className="btn btn-danger w-100"
+                                                className={`btn btn-success w-100 text-white ${attendance && !attendance.clock_out ? 'disabled' : ''}`}
+                                                onClick={handleClockIn}
+                                                disabled={clockActionLoading || (attendance && !attendance.clock_out)}
+                                            >
+                                                <i className="bi bi-box-arrow-in-right me-1"></i>
+                                                {clockActionLoading ? 'Clocking in...' : 'Clock In'}
+                                            </button>
+                                        </div>
+                                        <div className="col-6">
+                                            <button
+                                                className={`btn btn-danger w-100 ${attendance && attendance.clock_out ? 'disabled' : ''}`}
                                                 onClick={handleClockOut}
-                                                disabled={clockActionLoading}
+                                                disabled={clockActionLoading || (attendance && attendance.clock_out)}
                                             >
                                                 <i className="bi bi-box-arrow-right me-1"></i>
                                                 {clockActionLoading ? 'Clocking out...' : 'Clock Out'}
                                             </button>
+                                        </div>
+                                    </div>
+
+                                    {(attendance && !attendance.clock_out) && (
+                                        <>
+                                            <p className="text-muted mt-2 mb-0 fs-085">
+                                                Clocked in at {formatNaiveTime(attendance.clock_in)}
+                                            </p>
                                         </>
-                                    ) : (
-                                        <button
-                                            className="btn w-100 text-white"
-                                            style={{ backgroundColor: '#055d47' }}
-                                            onClick={handleClockIn}
-                                            disabled={clockActionLoading}
-                                        >
-                                            <i className="bi bi-box-arrow-in-right me-1"></i>
-                                            {clockActionLoading ? 'Clocking in...' : 'Clock In'}
-                                        </button>
                                     )}
                                     {attendance?.clock_out && (
-                                        <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.85rem' }}>
+                                        <p className="text-muted mt-2 mb-0 fs-085">
                                             Last clocked out at {formatNaiveTime(attendance.clock_out)}
                                         </p>
                                     )}
@@ -1094,7 +1104,7 @@ const Home = () => {
                     <div className="col-12 mt-4">
                         <div className="card shadow-sm border-0 rounded-4">
                             <div className="card-header bg-white border-0 pt-4 pb-0 px-4">
-                                <h5 className="fw-bold mb-0" style={{ color: '#055d47' }}>
+                                <h5 className="fw-bold mb-0 text-green">
                                     <i className="bi bi-graph-up me-2"></i>Monthly Overview
                                 </h5>
                             </div>

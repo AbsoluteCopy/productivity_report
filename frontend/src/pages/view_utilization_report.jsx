@@ -480,8 +480,7 @@ const ViewUtilizationReport = () => {
                         style={{ color: "#08060d", letterSpacing: "-0.5px" }}
                     >
                         <i
-                            className="bi bi-graph-up-arrow me-2"
-                            style={{ color: "#055d47" }}
+                            className="bi bi-graph-up-arrow me-2 text-green"
                         ></i>
                         Utilization Report
                     </h2>
@@ -562,9 +561,9 @@ const ViewUtilizationReport = () => {
             {!loading && (
                 <div className="row g-4 mb-4">
                     <div className="col-md-3">
-                        <div className="card border-0 rounded-4 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #055d47 0%, #2F8F83 100%)', color: 'white' }}>
+                        <div className="card border-0 rounded-4 shadow-sm h-100 card-brand-gradient">
                             <div className="card-body p-4 d-flex flex-column justify-content-center">
-                                <h6 className="opacity-75 fw-semibold mb-2 text-uppercase" style={{ letterSpacing: '1px' }}>Avg. Productivity</h6>
+                                <h6 className="opacity-75 fw-semibold mb-2 text-uppercase ls-1">Avg. Productivity</h6>
                                 <h2 className="fw-bold mb-0 display-6">{Math.round(averageProductivity)}%</h2>
                             </div>
                         </div>
@@ -573,10 +572,10 @@ const ViewUtilizationReport = () => {
                         <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
                             <div className="card-body p-4">
                                 <div className="d-flex align-items-center mb-2">
-                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3 icon-circle-green">
                                         <i className="bi bi-clock-history fs-5"></i>
                                     </div>
-                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Productive Hours</h6>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase ls-1">Productive Hours</h6>
                                 </div>
                                 <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{totalProductiveHours.toFixed(2)} <span className="fs-6 text-muted fw-normal">hrs</span></h3>
                             </div>
@@ -586,10 +585,10 @@ const ViewUtilizationReport = () => {
                         <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
                             <div className="card-body p-4">
                                 <div className="d-flex align-items-center mb-2">
-                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3 icon-circle-green">
                                         <i className="bi bi-calendar-check fs-5"></i>
                                     </div>
-                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Days Worked</h6>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase ls-1">Days Worked</h6>
                                 </div>
                                 <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{daysWorked} <span className="fs-6 text-muted fw-normal">days</span></h3>
                             </div>
@@ -602,7 +601,7 @@ const ViewUtilizationReport = () => {
                                     <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', backgroundColor: 'rgba(220, 53, 69, 0.1)', color: '#dc3545' }}>
                                         <i className="bi bi-cup-hot fs-5"></i>
                                     </div>
-                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Holidays / PTO</h6>
+                                    <h6 className="text-muted fw-semibold mb-0 text-uppercase ls-1">Holidays / PTO</h6>
                                 </div>
                                 <h3 className="fw-bold mb-0 text-dark ps-5 ms-2">{holidaysOrPTOs} <span className="fs-6 text-muted fw-normal">days</span></h3>
                             </div>
@@ -792,7 +791,7 @@ const ViewUtilizationReport = () => {
                                                                 {!isSpecialDay ? totalRequiredHours : ''}
                                                             </td>
                                                             <td></td>
-                                                            <td className="text-center fw-bold" style={{ color: '#055d47' }}>
+                                                            <td className="text-center fw-bold text-green">
                                                                 {!isSpecialDay ? productiveHours.toFixed(2) : ''}
                                                             </td>
                                                             <td className="text-center fw-bold">
