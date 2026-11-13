@@ -151,6 +151,25 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   }
 })();
 
+// Auto-migrate: Track explicit logout time separately from last_active_at,
+// so logging out can make Team Status show someone offline immediately
+// without erasing their real "last seen" history (last_active_at used to be
+// nulled on logout, which made the dashboard wrongly claim they'd "never
+// logged in").
+(async () => {
+  try {
+    const [cols] = await pool.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_logout_at'"
+    );
+    if (cols.length === 0) {
+      await pool.query("ALTER TABLE users ADD COLUMN last_logout_at DATETIME NULL DEFAULT NULL");
+      console.log("Added column 'last_logout_at' to users table.");
+    }
+  } catch (err) {
+    console.error("Migration check error for last_logout_at:", err);
+  }
+})();
+
 // Auto-migrate: Allow users to sign in with a username, email, or both
 (async () => {
   try {
@@ -318,7 +337,7 @@ app.post(['/api/logout', '/api/logout/'], authenticate, async (req, res) => {
     );
 
     await pool.query(
-      'UPDATE users SET token_version = token_version + 1, last_active_at = NULL WHERE id = ?',
+      'UPDATE users SET token_version = token_version + 1, last_logout_at = NOW() WHERE id = ?',
       [req.user.id]
     );
 
@@ -549,7 +568,8 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
       `SELECT u.id, u.id_number, u.first_name, u.last_name, u.email, u.role, u.company, u.last_active_at,
               u.current_task_label, u.current_task_started_at,
               a.clock_in AS attendance_clock_in,
-              TIMESTAMPDIFF(MINUTE, u.last_active_at, NOW()) AS minutes_since_active
+              TIMESTAMPDIFF(MINUTE, u.last_active_at, NOW()) AS minutes_since_active,
+              (u.last_logout_at IS NOT NULL AND u.last_logout_at >= u.last_active_at) AS explicitly_logged_out
        FROM users u
        LEFT JOIN attendance a ON a.user_id = u.id AND a.clock_out IS NULL
        WHERE u.last_active_at >= NOW() - INTERVAL 5 MINUTE OR a.id IS NOT NULL
@@ -558,12 +578,15 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     onlineRows.forEach(u => {
       u.clocked_in = !!u.attendance_clock_in;
       const mins = u.minutes_since_active;
-      u.status = (mins !== null && mins >= 0 && mins <= 2)
-        ? 'active'
-        : (mins !== null && mins >= 0 && mins <= 5)
-          ? 'away'
-          : 'offline';
+      u.status = u.explicitly_logged_out
+        ? 'offline'
+        : (mins !== null && mins >= 0 && mins <= 2)
+          ? 'active'
+          : (mins !== null && mins >= 0 && mins <= 5)
+            ? 'away'
+            : 'offline';
       delete u.minutes_since_active;
+      delete u.explicitly_logged_out;
     });
 
     // 2. Fetch known companies for the filter tabs/chips. Viewer is locked to
