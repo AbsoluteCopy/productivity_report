@@ -539,7 +539,7 @@ const ViewUtilizationReport = () => {
                             ))}
                         </select>
                     </div>
-                    {dailyReports.length > 0 && (
+                    {dailyReports.length > 0 && role !== 'viewer' && (
                         <button
                             onClick={exportUtilizationReport}
                             className="btn"
@@ -651,10 +651,14 @@ const ViewUtilizationReport = () => {
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0 text-center">Est. Work<br />(mins)</th>
-                                                <th className="py-2 border-0 text-center text-success">Actual Work<br />(mins)</th>
+                                                {role !== 'viewer' && (
+                                                    <th className="py-2 border-0 text-center text-success">Actual Work<br />(mins)</th>
+                                                )}
                                                 <th className="py-2 border-0 text-center">Meetings<br />(mins)</th>
                                                 <th className="py-2 border-0 text-center">Est. Work<br />(hrs)</th>
-                                                <th className="py-2 border-0 text-center text-success">Actual Work<br />(hrs)</th>
+                                                {role !== 'viewer' && (
+                                                    <th className="py-2 border-0 text-center text-success">Actual Work<br />(hrs)</th>
+                                                )}
                                                 <th className="py-2 border-0 text-center">Meetings<br />(hrs)</th>
                                                 <th className="py-2 border-0"></th>
                                                 <th className="py-2 border-0 text-center">Req. Hrs<br />w/o Break</th>
@@ -756,18 +760,22 @@ const ViewUtilizationReport = () => {
                                                             <td className="text-center">
                                                                 {!isSpecialDay ? report.working_minutes ?? '' : ''}
                                                             </td>
-                                                            <td className="text-center text-success fw-semibold">
-                                                                {!isSpecialDay ? (report.actual_minutes > 0 ? Number(report.actual_minutes.toFixed(2)) : '—') : ''}
-                                                            </td>
+                                                            {role !== 'viewer' && (
+                                                                <td className="text-center text-success fw-semibold">
+                                                                    {!isSpecialDay ? (report.actual_minutes > 0 ? Number(report.actual_minutes.toFixed(2)) : '—') : ''}
+                                                                </td>
+                                                            )}
                                                             <td className="text-center">
                                                                 {!isSpecialDay ? report.meeting_minutes ?? '' : ''}
                                                             </td>
                                                             <td className="text-center fw-medium">
                                                                 {!isSpecialDay ? workingHours.toFixed(2) : ''}
                                                             </td>
-                                                            <td className="text-center text-success fw-semibold">
-                                                                {!isSpecialDay ? (report.actual_minutes > 0 ? (report.actual_minutes / MINUTES_PER_HOUR).toFixed(2) : '—') : ''}
-                                                            </td>
+                                                            {role !== 'viewer' && (
+                                                                <td className="text-center text-success fw-semibold">
+                                                                    {!isSpecialDay ? (report.actual_minutes > 0 ? (report.actual_minutes / MINUTES_PER_HOUR).toFixed(2) : '—') : ''}
+                                                                </td>
+                                                            )}
                                                             <td className="text-center fw-medium">
                                                                 {!isSpecialDay ? meetingHours.toFixed(2) : ''}
                                                             </td>

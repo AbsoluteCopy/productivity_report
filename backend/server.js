@@ -1037,15 +1037,6 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    // 24-hour edit window for employees on their tasks
-    if (req.user.role === 'employee') {
-      const createdTime = report.created_at ? new Date(report.created_at).getTime() : new Date(report.date).getTime();
-      const hoursAgo = (Date.now() - createdTime) / (1000 * 60 * 60);
-      if (hoursAgo > 24) {
-        return res.status(403).json({ error: 'Employees can only edit tasks within a 24-hour window.' });
-      }
-    }
-
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks, time_spent, meeting_count, time_added, time_finished } = req.body;
     let updates = [];
     let params = [];

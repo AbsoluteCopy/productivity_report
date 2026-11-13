@@ -1316,7 +1316,7 @@ const ViewReport = () => {
                     <div className="tab-content" id="reportTabsContent">
                         <div className="tab-pane fade show active" id="daily-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2">
-                                {dailyReports.length === 0 ? null : (
+                                {dailyReports.length === 0 || role === 'viewer' ? null : (
                                     <button onClick={() => exportDailyReport('dailyreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
@@ -1343,7 +1343,9 @@ const ViewReport = () => {
                                                 <th className='main-background text-white py-2'>Task</th>
                                                 <th className='main-background text-white py-2'># of Task</th>
                                                 <th className='main-background text-white py-2'>Time Spent(mins)</th>
-                                                <th className='main-background text-white py-2'>Actual Time Spent(mins)</th>
+                                                {role !== 'viewer' && (
+                                                    <th className='main-background text-white py-2'>Actual Time Spent(mins)</th>
+                                                )}
                                                 <th className='main-background text-white py-2'>Working Hours(mins)</th>
                                                 <th className='main-background text-white py-2'>Meeting Trainings(mins)</th>
                                                 {canEdit && (
@@ -1388,7 +1390,7 @@ const ViewReport = () => {
                                                                 </td>
                                                                 <td></td>
                                                                 <td></td>
-                                                                <td></td>
+                                                                {role !== 'viewer' && <td></td>}
                                                                 <td>
                                                                     <div>
                                                                         <span>{report.working_hours_total}</span>
@@ -1494,7 +1496,9 @@ const ViewReport = () => {
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.number_of_tasks}</td>
 
                                                             <td>{isLeave || report.number_of_tasks === 0 ? '' : report.time_spent}</td>
-                                                            <td>{isLeave || report.number_of_tasks === 0 || report.number_of_tasks === '' ? '' : actualTime}</td>
+                                                            {role !== 'viewer' && (
+                                                                <td>{isLeave || report.number_of_tasks === 0 || report.number_of_tasks === '' ? '' : actualTime}</td>
+                                                            )}
 
                                                             <td>
                                                                 {isLeave || report.number_of_tasks === 0 || isMeeting
@@ -1542,7 +1546,7 @@ const ViewReport = () => {
 
                         <div className="tab-pane fade" id="summary-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2">
-                                {dailyReports.length === 0 ? null : (
+                                {dailyReports.length === 0 || role === 'viewer' ? null : (
                                     <button onClick={() => exportDailyReport('summaryreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
@@ -1591,7 +1595,9 @@ const ViewReport = () => {
                                             <th className='main-background text-white py-2'>List of Task</th>
                                             <th className='main-background text-white py-2'>Total # of Task Done</th>
                                             <th className='main-background text-white py-2'>Total Time Spent (mins)</th>
-                                            <th className='main-background text-white py-2'>Total Actual Time Spent (mins)</th>
+                                            {role !== 'viewer' && (
+                                                <th className='main-background text-white py-2'>Total Actual Time Spent (mins)</th>
+                                            )}
                                         </tr>
                                     </thead>
 
@@ -1602,7 +1608,7 @@ const ViewReport = () => {
                                                 <td>{item.task}</td>
                                                 <td>{item.totalTasks}</td>
                                                 <td>{item.totalTime}</td>
-                                                <td>{item.totalActualTime}</td>
+                                                {role !== 'viewer' && <td>{item.totalActualTime}</td>}
                                             </tr>
 
                                         ))}
@@ -1630,15 +1636,17 @@ const ViewReport = () => {
                                                     )
                                                 }
                                             </td>
-                                            <td>
-                                                {
-                                                    Number(summaryReports.reduce(
-                                                        (sum, item) =>
-                                                            sum + (Number(item.totalActualTime) || 0),
-                                                        0
-                                                    ).toFixed(2))
-                                                }
-                                            </td>
+                                            {role !== 'viewer' && (
+                                                <td>
+                                                    {
+                                                        Number(summaryReports.reduce(
+                                                            (sum, item) =>
+                                                                sum + (Number(item.totalActualTime) || 0),
+                                                            0
+                                                        ).toFixed(2))
+                                                    }
+                                                </td>
+                                            )}
 
                                         </tr>
 
@@ -1652,7 +1660,7 @@ const ViewReport = () => {
 
                         <div className="tab-pane fade" id="items-report" role="tabpanel">
                             <div className="d-flex justify-content-end mt-3 me-2 mb-2">
-                                {dailyReports.length === 0 ? null : (
+                                {dailyReports.length === 0 || role === 'viewer' ? null : (
                                     <button onClick={() => exportDailyReport('itemsreport')} className="btn btn-primary btn-sm">
                                         <i className="bi bi-file-earmark-excel"></i> Export to Excel
                                     </button>
