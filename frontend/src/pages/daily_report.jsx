@@ -311,6 +311,10 @@ const DailyReport = () => {
         }
     };
 
+    const handleResume = useCallback((id) => {
+        navigate(`/new_data?resume=${id}`);
+    }, [navigate]);
+
     const handleEdit = useCallback((id) => {
         const report = dailyReports.find((item) => item.id === id);
         if (!report) return;
@@ -406,6 +410,16 @@ const DailyReport = () => {
             {
                 name: "Category",
                 selector: (row) => getDisplayCategory(row),
+                cell: (row) => (
+                    <span>
+                        {getDisplayCategory(row)}
+                        {Number(row.is_paused) === 1 && (
+                            <span className="badge bg-warning text-dark ms-1" style={{ fontSize: "0.7rem" }}>
+                                Paused
+                            </span>
+                        )}
+                    </span>
+                ),
                 sortable: true,
                 wrap: true,
             },
@@ -474,11 +488,25 @@ const DailyReport = () => {
                 cell: (row) => {
                     const isOldRecord = isEmployee && isMoreThan24HoursOld(row);
                     const canEdit = isEmployee || isAdminOrHR;
+                    const isOwner = String(row.user ?? row.user_id) === String(currentUser?.id);
+                    const canResume = Number(row.is_paused) === 1 && (isOwner || isAdminOrHR);
                     const editTitle = "Edit Report";
                     const deleteTitle = isOldRecord ? "Employees can only delete tasks within 24 hours" : "Delete Report";
 
                     return (
                         <div className="d-flex gap-1">
+                            {/* Resume */}
+                            {canResume && (
+                                <button
+                                    type="button"
+                                    className="btn btn-warning btn-sm"
+                                    title="Resume Paused Task"
+                                    aria-label="Resume Paused Task"
+                                    onClick={() => handleResume(row.id)}
+                                >
+                                    <i className="bi bi-play-circle"></i>
+                                </button>
+                            )}
                             {/* View */}
                             <button
                                 type="button"
@@ -528,7 +556,7 @@ const DailyReport = () => {
             }
         );
         return baseColumns;
-    }, [getDisplayCategory, handleDeleteReport, handleEdit, handleView, isAdminOrHR, isEmployee, isMoreThanOneMonthOld, isMoreThan24HoursOld, isRestrictedCategory, currentUser]);
+    }, [getDisplayCategory, handleDeleteReport, handleEdit, handleResume, handleView, isAdminOrHR, isEmployee, isMoreThanOneMonthOld, isMoreThan24HoursOld, isRestrictedCategory, currentUser]);
 
     const customStyles = useMemo(() => ({ headCells: { style: { fontWeight: "700", backgroundColor: "#f8f9fa", fontSize: "14px", }, }, cells: { style: { fontSize: "14px", }, }, rows: { style: { minHeight: "55px", }, }, }), []);
 
@@ -562,11 +590,11 @@ const DailyReport = () => {
                             <div className="p-3 border-bottom" style={{ backgroundColor: "#fafdfb" }}>
                                 <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                                     <div className="d-flex align-items-center gap-2">
-                                        <i className="bi bi-clock-history fs-5" style={{ color: "#065d48" }}></i>
+                                        <i className="bi bi-clock-history fs-5 text-green-dark"></i>
                                         <span className="fw-bold" style={{ color: "#065d48", fontSize: "0.95rem" }}>
                                             Team Shift Audit &amp; Progress
                                         </span>
-                                        <span className="badge bg-light text-dark border ms-1" style={{ fontSize: "0.75rem" }}>
+                                        <span className="badge bg-light text-dark border ms-1 fs-075">
                                             {teamSnapshotDate}
                                         </span>
                                     </div>
@@ -574,8 +602,7 @@ const DailyReport = () => {
                                         <label className="small text-muted mb-0 fw-semibold">Audit Date:</label>
                                         <input
                                             type="date"
-                                            className="form-control form-control-sm"
-                                            style={{ width: "150px" }}
+                                            className="form-control form-control-sm w-150"
                                             value={teamSnapshotDate}
                                             onChange={(e) => setTeamSnapshotDate(e.target.value)}
                                         />
@@ -650,8 +677,8 @@ const DailyReport = () => {
                                                             {hours > 0 ? `${hours}h ` : ""}{mins}m
                                                         </span>{" "}
                                                         &bull; {emp.totalTasks} task{emp.totalTasks !== 1 ? "s" : ""}
-                                                        {emp.isPTO && <span className="badge bg-primary-subtle text-primary border ms-1" style={{ fontSize: '0.65rem' }}>+PTO</span>}
-                                                        {emp.isHoliday && <span className="badge bg-purple-subtle text-purple border ms-1" style={{ fontSize: '0.65rem' }}>+Holiday</span>}
+                                                        {emp.isPTO && <span className="badge bg-primary-subtle text-primary border ms-1 fs-065">+PTO</span>}
+                                                        {emp.isHoliday && <span className="badge bg-purple-subtle text-purple border ms-1 fs-065">+Holiday</span>}
                                                     </>
                                                 );
                                             }
@@ -722,7 +749,7 @@ const DailyReport = () => {
                                                             </span>
                                                             <i className={`bi ${statusIcon}`} style={{ fontSize: "0.75rem", color: badgeText }}></i>
                                                         </div>
-                                                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                        <div className="text-muted fs-072">
                                                             {subText}
                                                         </div>
                                                     </div>
@@ -755,16 +782,14 @@ const DailyReport = () => {
                                         <label className="small text-muted mb-0 fw-semibold">From:</label>
                                         <input
                                             type="date"
-                                            className="form-control form-control-sm"
-                                            style={{ width: "150px" }}
+                                            className="form-control form-control-sm w-150"
                                             value={dateFrom}
                                             onChange={(e) => setDateFrom(e.target.value)}
                                         />
                                         <label className="small text-muted mb-0 fw-semibold">To:</label>
                                         <input
                                             type="date"
-                                            className="form-control form-control-sm"
-                                            style={{ width: "150px" }}
+                                            className="form-control form-control-sm w-150"
                                             value={dateTo}
                                             onChange={(e) => setDateTo(e.target.value)}
                                         />
@@ -809,6 +834,12 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                             <div className="col-md-6">
                                 <small className="text-muted d-block"> Employee </small>
                                 <div className="fw-semibold"> {report.user_name} </div>
+                            </div>
+                        )}
+                        {Number(report.is_paused) === 1 && (
+                            <div className="col-md-6">
+                                <small className="text-muted d-block"> Status </small>
+                                <span className="badge bg-warning text-dark fs-6"> Paused </span>
                             </div>
                         )}
                     </div>

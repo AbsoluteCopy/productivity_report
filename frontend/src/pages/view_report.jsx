@@ -610,11 +610,11 @@ const ViewReport = () => {
         maintainAspectRatio: false,
         scales: {
             x: {
-                min: 0,
-                max: 24,
+                min: 6,
+                max: 21,
                 title: {
                     display: true,
-                    text: 'Time (24-hour format)'
+                    text: 'Time (6 AM - 9 PM)'
                 },
                 ticks: {
                     callback: function(value) {
@@ -1406,7 +1406,7 @@ const ViewReport = () => {
                                                                 <td>
                                                                     <div>
                                                                         <span>{report.working_hours_total}</span>
-                                                                        <small className="text-muted d-block fw-normal" style={{ fontSize: '0.75rem' }}>
+                                                                        <small className="text-muted d-block fw-normal fs-075">
                                                                             {workHrs > 0 ? `${workHrs}h ` : ''}{workMins}m
                                                                         </small>
                                                                     </div>
@@ -1415,7 +1415,7 @@ const ViewReport = () => {
                                                                     <div>
                                                                         <span>{report.meeting_total || 0}</span>
                                                                         {Number(report.meeting_total || 0) > 0 && (
-                                                                            <small className="text-muted d-block fw-normal" style={{ fontSize: '0.75rem' }}>
+                                                                            <small className="text-muted d-block fw-normal fs-075">
                                                                                 {meetHrs > 0 ? `${meetHrs}h ` : ''}{meetMins}m
                                                                             </small>
                                                                         )}
@@ -1471,6 +1471,11 @@ const ViewReport = () => {
                                                                 <div>
                                                                     {displayCat}
                                                                     {(report.task_category === 'Holiday' || report.task_category === 'Company Event') && report.task_list?.[0] ? ` - ${report.task_list[0]}` : ''}
+                                                                    {Number(report.is_paused) === 1 && (
+                                                                        <span className="badge bg-warning text-dark ms-1" style={{ fontSize: '0.7rem' }}>
+                                                                            Paused
+                                                                        </span>
+                                                                    )}
                                                                 </div>
 
                                                                 {!report.isWeekend &&
@@ -1526,21 +1531,29 @@ const ViewReport = () => {
                                                                 <td className="text-center align-middle">
                                                                     {report.id && !report.isWeekend ? (
                                                                         <div className="d-flex justify-content-center gap-1">
+                                                                            {Number(report.is_paused) === 1 && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn btn-sm btn-outline-warning py-0 px-2 fs-08"
+                                                                                    title="Resume Paused Task"
+                                                                                    onClick={() => navigate(`/new_data?resume=${report.id}`)}
+                                                                                >
+                                                                                    <i className="bi bi-play-circle me-1"></i>Resume
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 type="button"
-                                                                                className="btn btn-sm btn-outline-primary py-0 px-2"
+                                                                                className="btn btn-sm btn-outline-primary py-0 px-2 fs-08"
                                                                                 title="Edit Report"
                                                                                 onClick={() => handleEdit(report)}
-                                                                                style={{ fontSize: '0.8rem' }}
                                                                             >
                                                                                 <i className="bi bi-pencil-square me-1"></i>Edit
                                                                             </button>
                                                                             <button
                                                                                 type="button"
-                                                                                className="btn btn-sm btn-outline-danger py-0 px-2"
+                                                                                className="btn btn-sm btn-outline-danger py-0 px-2 fs-08"
                                                                                 title="Delete Report"
                                                                                 onClick={() => handleDelete(report)}
-                                                                                style={{ fontSize: '0.8rem' }}
                                                                             >
                                                                                 <i className="bi bi-trash"></i>
                                                                             </button>
@@ -1570,30 +1583,30 @@ const ViewReport = () => {
                                 {dailyReports.length > 0 && (taskChartLabels.length > 0 || timeChartLabels.length > 0) && (
                                     <div className="row g-4 mb-4">
                                         <div className="col-md-6">
-                                            <div className="card shadow-sm border-0 rounded-4 h-100" style={{ backgroundColor: '#fdfdfd' }}>
+                                            <div className="card shadow-sm border-0 rounded-4 h-100 card-offwhite">
                                                 <div className="card-body p-4">
                                                     <div className="d-flex justify-content-between align-items-center mb-3">
-                                                        <h6 className="fw-bold mb-0" style={{ color: '#08060d' }}>Total Tasks by Category</h6>
-                                                        <span className="badge" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '12px' }}>
+                                                        <h6 className="fw-bold mb-0 text-ink">Total Tasks by Category</h6>
+                                                        <span className="badge badge-soft-green">
                                                             {taskChartCounts.reduce((a, b) => a + b, 0)} total tasks
                                                         </span>
                                                     </div>
-                                                    <div style={{ height: '280px' }}>
+                                                    <div className="h-280">
                                                         <Pie data={tasksPieChartData} options={tasksPieChartOptions} />
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="col-md-6">
-                                            <div className="card shadow-sm border-0 rounded-4 h-100" style={{ backgroundColor: '#fdfdfd' }}>
+                                            <div className="card shadow-sm border-0 rounded-4 h-100 card-offwhite">
                                                 <div className="card-body p-4">
                                                     <div className="d-flex justify-content-between align-items-center mb-3">
-                                                        <h6 className="fw-bold mb-0" style={{ color: '#08060d' }}>Time Spent by Category</h6>
-                                                        <span className="badge" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '12px' }}>
+                                                        <h6 className="fw-bold mb-0 text-ink">Time Spent by Category</h6>
+                                                        <span className="badge badge-soft-green">
                                                             {timeChartMinutes.reduce((a, b) => a + b, 0)} total mins
                                                         </span>
                                                     </div>
-                                                    <div style={{ height: '280px' }}>
+                                                    <div className="h-280">
                                                         <Pie data={pieChartData} options={pieChartOptions} />
                                                     </div>
                                                 </div>
@@ -1687,13 +1700,13 @@ const ViewReport = () => {
                         <div className="tab-pane fade" id="user-activity-report" role="tabpanel">
                             <div className="row">
                                 <div className="col-12">
-                                    <div className="card shadow-sm border-0 rounded-4" style={{ backgroundColor: '#fdfdfd' }}>
+                                    <div className="card shadow-sm border-0 rounded-4 card-offwhite">
                                         <div className="card-body p-4">
-                                            <h6 className="fw-bold mb-3" style={{ color: '#08060d' }}>
-                                                User Activity Timeline (24-hour format)
+                                            <h6 className="fw-bold mb-3 text-ink">
+                                                User Activity Timeline (6 AM - 9 PM)
                                             </h6>
                                             {activityData.length > 0 ? (
-                                                <div style={{ height: '400px' }}>
+                                                <div className="h-400">
                                                     <Bar data={activityChartData} options={activityChartOptions} />
                                                 </div>
                                             ) : (

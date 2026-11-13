@@ -52,8 +52,7 @@ export default function NotFound() {
 
                 <button 
                     onClick={() => window.history.back()} 
-                    className="btn btn-light rounded-pill px-4 py-3 fw-bold shadow" 
-                    style={{ color: "#055d47" }}
+                    className="btn btn-light rounded-pill px-4 py-3 fw-bold shadow text-green"
                 >
                     ← Back to Home
                 </button>

@@ -80,7 +80,7 @@ const EmployeeTimelineModal = ({ user, onClose }) => {
                             <>
                                 <div className="card border-0 shadow-sm mb-3">
                                     <div className="card-body">
-                                        <h6 className="fw-bold mb-2" style={{ color: '#055d47' }}>
+                                        <h6 className="fw-bold mb-2 text-green">
                                             <i className="bi bi-door-open me-2"></i>Attendance
                                         </h6>
                                         {attendance.length === 0 ? (
@@ -103,7 +103,7 @@ const EmployeeTimelineModal = ({ user, onClose }) => {
 
                                 <div className="card border-0 shadow-sm">
                                     <div className="card-body">
-                                        <h6 className="fw-bold mb-3" style={{ color: '#055d47' }}>
+                                        <h6 className="fw-bold mb-3 text-green">
                                             <i className="bi bi-list-task me-2"></i>Tasks
                                         </h6>
                                         {tasks.length === 0 ? (

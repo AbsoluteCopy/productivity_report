@@ -45,7 +45,7 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                 <span className="text-truncate me-2" style={{ color: displayLabel ? '#212529' : '#6c757d' }}>
                     {displayLabel || 'Select a category'}
                 </span>
-                <i className={`bi ${isOpen ? 'bi-chevron-up' : 'bi-chevron-down'} text-muted`} style={{ fontSize: '0.85rem' }}></i>
+                <i className={`bi ${isOpen ? 'bi-chevron-up' : 'bi-chevron-down'} text-muted fs-085`}></i>
             </div>
 
             {/* Hidden input for HTML5 form required validation */}
@@ -198,8 +198,10 @@ const NewData = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const editId = searchParams.get('edit');
+    const resumeId = searchParams.get('resume');
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingUserName, setEditingUserName] = useState('');
+    const [editingIsPaused, setEditingIsPaused] = useState(false);
     const [formData, setFormData] = useState({
         date: getCurrentDateInTimezone(),
         work_type: 'Working'
@@ -264,8 +266,10 @@ const NewData = () => {
         return () => clearInterval(t);
     }, [timerActive, run?.index]);
 
-    const elapsedSec = timerActive ? Math.max(0, Math.floor((now - run.startedAt) / 1000)) : 0;
     const current = run && !run.finished ? run.queue[run.index] : null;
+    const elapsedSec = timerActive
+        ? Math.max(0, Math.floor((now - run.startedAt) / 1000)) + (current?.baseSeconds || 0)
+        : 0;
     const overtime = !!(current && current.expectedSeconds > 0 && elapsedSec > current.expectedSeconds);
 
     // one-time warning when going beyond (time per task × number of tasks)
@@ -300,10 +304,25 @@ const NewData = () => {
     };
     const clearCurrentTask = () => reportCurrentTask(null);
 
-    const startNext = () => setRun(prev => {
-        reportCurrentTask(prev.queue[prev.index]?.label);
-        return { ...prev, startedAt: Date.now() };
-    });
+    // Back-dated Working entries skip the timer and are saved immediately
+    // without an actual_time value.
+    const isBackDatedItem = (item) => {
+        const d = item?.payload?.date;
+        const wt = item?.payload?.work_type;
+        return !!d && (!wt || wt === 'Working') && d < new Date().toISOString().split('T')[0];
+    };
+
+    const startNext = () => {
+        const cur = run.queue[run.index];
+        if (cur && isBackDatedItem(cur)) {
+            saveRunTask(false);
+            return;
+        }
+        setRun(prev => {
+            reportCurrentTask(prev.queue[prev.index]?.label);
+            return { ...prev, startedAt: Date.now() };
+        });
+    };
 
     const cancelRun = async () => {
         const r = await Swal.fire({
@@ -314,31 +333,74 @@ const NewData = () => {
         if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); clearCurrentTask(); }
     };
 
-    const endTask = async () => {
+    const saveRunTask = async (paused) => {
+        const cur = run.queue[run.index];
+        const backDated = isBackDatedItem(cur);
+        const actualSeconds = backDated
+            ? 0
+            : Math.max(
+                1,
+                Math.floor((Date.now() - (run.startedAt || Date.now())) / 1000)
+            );
 
-        const actualSeconds = Math.max(
-            1,
-            Math.floor((Date.now() - run.startedAt) / 1000)
-        );
+        if (cur.resumeReportId) {
+            setSaving(true);
+            try {
+                const body = {
+                    date: cur.payload.date,
+                    task_category: cur.payload.task_category,
+                    sub_category: cur.payload.sub_category || null,
+                    work_type: cur.payload.work_type || 'Working',
+                    task_list: cur.payload.task_list,
+                    number_of_tasks: cur.payload.number_of_tasks || 0,
+                    time_spent: cur.payload.time_spent || 0,
+                    meeting_count: cur.payload.meeting_count || 0,
+                    ...(backDated ? {} : { actual_time: (Number(cur.resumePrevActual) || 0) + actualSeconds }),
+                    is_paused: paused ? 1 : 0,
+                    ...(paused ? { paused_time: (Number(cur.resumePrevActual) || 0) + actualSeconds } : {}),
+                };
+                if (!paused) {
+                    body.time_finished = new Date().toISOString();
+                }
+                if (description.trim()) {
+                    body.description = description.trim();
+                }
 
-        const result = await Swal.fire({
-            title: 'Finish Task?',
-            text: `This task took ${Math.floor(actualSeconds / 60)} minute(s). Do you want to end it?`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, End it',
-            cancelButtonText: 'Continue Working',
-            reverseButtons: true,
-            confirmButtonColor: '#28a745',
-        });
+                await axios.put(`${API_BASE_URL}/daily-reports/${cur.resumeReportId}/`, body);
 
-        if (!result.isConfirmed) {
+                setRun(null);
+                setDescription('');
+                setAttachment(null);
+                clearCurrentTask();
+
+                Swal.fire({
+                    title: 'Saved!',
+                    text: paused
+                        ? 'Task has been paused and saved successfully.'
+                        : 'Paused task resumed and completed successfully.',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Could not save',
+                    text:
+                        error.response?.data?.error ||
+                        'Error saving this task. Your timer is still running, please try again.',
+                    icon: 'error'
+                });
+            } finally {
+                setSaving(false);
+            }
             return;
         }
 
-        const cur = run.queue[run.index];
-        const timeAdded = new Date(run.startedAt).toISOString();
-        const timeFinished = new Date().toISOString();
+        const timeAdded = run.startedAt
+            ? new Date(run.startedAt).toISOString()
+            : new Date().toISOString();
+        const timeFinished = paused ? null : new Date().toISOString();
         setSaving(true);
 
         try {
@@ -356,10 +418,12 @@ const NewData = () => {
             ].forEach(k => fd.append(k, cur.payload[k] ?? ''));
 
             fd.append('task_list', JSON.stringify(cur.payload.task_list));
-            fd.append('actual_time', actualSeconds);
+            fd.append('actual_time', backDated ? '' : actualSeconds);
             fd.append('description', description.trim());
             fd.append('time_added', timeAdded);
-            fd.append('time_finished', timeFinished);
+            fd.append('time_finished', timeFinished ?? '');
+            fd.append('is_paused', paused ? '1' : '0');
+            fd.append('paused_time', paused ? String(actualSeconds) : '0');
 
             if (attachment) {
                 fd.append('attachment', attachment);
@@ -385,19 +449,23 @@ const NewData = () => {
             clearCurrentTask();
 
             setRun(
-                isLast
-                    ? { ...run, results, startedAt: null, finished: true }
-                    : {
-                        ...run,
-                        results,
-                        index: run.index + 1,
-                        startedAt: null
-                    }
+                paused
+                    ? null
+                    : isLast
+                        ? { ...run, results, startedAt: null, finished: true }
+                        : {
+                            ...run,
+                            results,
+                            index: run.index + 1,
+                            startedAt: null
+                        }
             );
 
             Swal.fire({
                 title: 'Saved!',
-                text: 'Task has been completed successfully.',
+                text: paused
+                    ? 'Task has been paused and saved successfully.'
+                    : 'Task has been completed successfully.',
                 icon: 'success',
                 timer: 1500,
                 showConfirmButton: false
@@ -415,6 +483,53 @@ const NewData = () => {
             });
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Back-dated Working items are saved as soon as they become current,
+    // without ever showing the timer.
+    const autoSavedRef = useRef(null);
+    useEffect(() => {
+        if (!run || run.finished || run.startedAt) return;
+        const cur = run.queue[run.index];
+        if (!cur || !isBackDatedItem(cur)) return;
+        const key = `${run.id}:${run.index}:${run.results.length}`;
+        if (autoSavedRef.current === key) return;
+        autoSavedRef.current = key;
+        saveRunTask(false);
+    }, [run]); // eslint-disable-line
+
+    const endTask = async () => {
+        const result = await Swal.fire({
+            title: 'Finish Task?',
+            text: `This task took ${Math.floor(elapsedSec / 60)} minute(s). Do you want to end it?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, End it',
+            cancelButtonText: 'Continue Working',
+            reverseButtons: true,
+            confirmButtonColor: '#28a745',
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        await saveRunTask(false);
+    };
+
+    const pauseTask = async () => {
+        const r = await Swal.fire({
+            title: 'Pause Task?',
+            text: 'This will save the current task and stop the remaining tasks. Do you want to pause?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Pause it',
+            cancelButtonText: 'Continue Working',
+            reverseButtons: true,
+        });
+        if (r.isConfirmed) {
+            await saveRunTask(true);
         }
     };
 
@@ -460,8 +575,13 @@ const NewData = () => {
     const dailyTotals = useMemo(() => {
         let currentTasks = 0;
         let currentMinutes = 0;
+        let currentActual = 0;
 
         categories.forEach((cat) => {
+            const actual = Number(cat.actualTime);
+            if (cat.actualTime !== '' && cat.actualTime !== null && cat.actualTime !== undefined && !isNaN(actual)) {
+                currentActual += actual;
+            }
             if (cat.category === 'Meeting') {
                 const mCount = Number(cat.meetingCount) || 1;
                 const mTime = Number(cat.timeSpent) || 0;
@@ -484,7 +604,7 @@ const NewData = () => {
         const remainingMins = minutes % 60;
         const percent = Math.min(Math.round((minutes / targetMinutes) * 100), 999);
 
-        const actualMinutes = priorTotals.priorActual + currentMinutes;
+        const actualMinutes = priorTotals.priorActual + currentActual;
         const totalActualHours = Math.floor(actualMinutes / 60);
         const remainingActualMins = actualMinutes % 60;
         const actualPercent = Math.min(Math.round((actualMinutes / targetMinutes) * 100), 999);
@@ -502,6 +622,7 @@ const NewData = () => {
             priorActual: priorTotals.priorActual,
             currentTasks,
             currentMinutes,
+            currentActual,
             actualPercent,
             totalActualHours,
             remainingActualMins,
@@ -527,8 +648,10 @@ const NewData = () => {
         if (editId) {
             setIsEditMode(true);
             fetchReportForEdit(editId);
+        } else if (resumeId) {
+            startResumeTask(resumeId);
         }
-    }, [editId]);
+    }, [editId, resumeId]);
 
     useEffect(() => {
         fetchCategories();
@@ -594,6 +717,7 @@ const NewData = () => {
             });
 
             setEditingUserName(data.user_name || '');
+            setEditingIsPaused(Number(data.is_paused) === 1);
             if (data.date && data.user) {
                 fetchExistingDayReports(data.date, data.user);
             }
@@ -626,6 +750,58 @@ const NewData = () => {
             });
             navigate('/daily_report');
             return;
+        }
+    };
+
+    const startResumeTask = async (id) => {
+        try {
+            const token = localStorage.getItem('token');
+            const { data } = await axios.get(`${API_BASE_URL}/daily-reports/${id}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (Number(data.is_paused) !== 1) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Not Paused',
+                    text: 'This task is not paused.',
+                });
+                return;
+            }
+
+            const isMeeting = data.task_category === 'Meeting';
+            const taskCount = Number(data.number_of_tasks || 0);
+            const units = isMeeting ? Math.max(Number(data.meeting_count) || 1, 1) : taskCount;
+            const prevActual = Number(data.paused_time) || Number(data.actual_time) || 0;
+            const item = {
+                payload: {
+                    user: data.user,
+                    date: data.date,
+                    task_category: data.task_category,
+                    task_list: Array.isArray(data.task_list) ? data.task_list : [],
+                    number_of_tasks: taskCount,
+                    time_spent: Number(data.time_spent) || 0,
+                    meeting_count: Number(data.meeting_count) || 0,
+                    work_type: data.work_type || 'Working',
+                    sub_category: data.sub_category || '',
+                },
+                label: data.sub_category && data.task_category === 'Others' ? data.sub_category : data.task_category,
+                expectedSeconds: (Number(data.time_spent) || 0) * units * 60,
+                resumeReportId: data.id,
+                resumePrevActual: prevActual,
+                baseSeconds: prevActual,
+            };
+
+            warnedRef.current = null;
+            reportCurrentTask(item.label);
+            setRun({ queue: [item], index: 0, startedAt: isBackDatedItem(item) ? null : Date.now(), results: [], finished: false, id: Date.now() });
+        } catch (err) {
+            console.error('Error loading paused task:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to load the paused task.',
+            });
         }
     };
 
@@ -1231,7 +1407,7 @@ const NewData = () => {
             });
             warnedRef.current = null;
             reportCurrentTask(queue[0]?.label);
-            setRun({ queue, index: 0, startedAt: Date.now(), results: [], finished: false });
+            setRun({ queue, index: 0, startedAt: isBackDatedItem(queue[0]) ? null : Date.now(), results: [], finished: false, id: Date.now() });
             return;
         }
 
@@ -1428,7 +1604,7 @@ const NewData = () => {
                 <div className="container py-4">
                     <div className="card shadow-sm mx-auto" style={{ maxWidth: 720 }}>
                         <div className="card-body p-4">
-                            <h3 className="fw-bold text-center mb-3" style={{ color: '#065d48' }}>All Tasks Completed</h3>
+                            <h3 className="fw-bold text-center mb-3 text-green-dark">All Tasks Completed</h3>
                             <ul className="list-group mb-3">
                                 {run.results.map((r, i) => {
                                     const c = compareText(r.actualSeconds, r.expectedSeconds);
@@ -1441,7 +1617,7 @@ const NewData = () => {
                                                 <small className="text-muted">
                                                     Selected: {r.expectedSeconds ? fmtClock(r.expectedSeconds) : '—'} • Actual: {fmtClock(r.actualSeconds)}
                                                 </small>
-                                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                                <div className="text-muted fs-085">
                                                     <i className="bi bi-clock-history me-1"></i>Started: {startTime}
                                                     <span className="mx-2">•</span>
                                                     <i className="bi bi-clock me-1"></i>Finished: {endTime}
@@ -1453,8 +1629,7 @@ const NewData = () => {
                                 })}
                             </ul>
                             <div className={`text-center fs-5 fw-bold mb-3 ${overall.cls}`}>Overall: {overall.text}</div>
-                            <button className="btn btn-success w-100 fw-bold"
-                                style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
+                            <button className="btn btn-success w-100 fw-bold btn-brand-solid"
                                 onClick={() => { setRun(null); resetForm(); }}>
                                 Log Another Task
                             </button>
@@ -1479,10 +1654,13 @@ const NewData = () => {
                             <div className="card-body p-4">
                                 <div className="d-flex justify-content-between align-items-center mb-3">
                                     <span className="badge bg-secondary">Category {run.index + 1} of {run.queue.length}</span>
+                                    {cur.resumeReportId && (
+                                        <span className="badge bg-warning text-dark">Resuming paused task</span>
+                                    )}
                                     <button type="button" className="btn btn-sm btn-outline-danger" onClick={cancelRun} disabled={saving}>Cancel</button>
                                 </div>
 
-                                <h3 className="fw-bold mb-2" style={{ color: '#065d48' }}>{cur.label}</h3>
+                                <h3 className="fw-bold mb-2 text-green-dark">{cur.label}</h3>
 
                                 <div className="d-flex justify-content-center my-4">
                                     {(() => {
@@ -1560,12 +1738,12 @@ const NewData = () => {
                                         }}
                                     >
                                         <div className="fw-semibold text-warning-emphasis">
-                                            Target duration reached
+                                            Suggested time reached
                                         </div>
 
                                         <small className="text-muted">
                                             You've spent {fmtClock(elapsedSec - cur.expectedSeconds)} &nbsp;
-                                            beyond the originally planned duration on this task.
+                                            beyond the suggested time duration on this task.
                                             Feel free to continue working and finish when ready.
                                         </small>
                                     </div>
@@ -1582,23 +1760,27 @@ const NewData = () => {
                                 {running ? (
                                     <>
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Description</label>
+                                            <label className="form-label fw-semibold text-green-dark">Description</label>
                                             <textarea className="form-control" rows={3} value={description}
                                                 onChange={e => setDescription(e.target.value)}
                                                 placeholder="What did you do for this task?" />
                                         </div>
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>Attachment (optional, max 10 MB)</label>
+                                            <label className="form-label fw-semibold text-green-dark">Attachment (optional, max 10 MB)</label>
                                             <input type="file" className="form-control"
                                                 onChange={e => setAttachment(e.target.files[0] || null)} />
                                         </div>
-                                        <button className="btn btn-danger w-100 fw-bold py-2" onClick={endTask} disabled={saving}>
-                                            {saving ? 'Saving...' : <><i className="bi bi-stop-circle me-1"></i>End Task</>}
-                                        </button>
+                                        <div className="d-flex gap-2">
+                                            <button className="btn btn-danger flex-fill fw-bold py-2" onClick={endTask} disabled={saving}>
+                                                {saving ? 'Saving...' : <><i className="bi bi-stop-circle me-1"></i>End Task</>}
+                                            </button>
+                                            <button className="btn btn-warning flex-fill fw-bold py-2" onClick={pauseTask} disabled={saving}>
+                                                {saving ? 'Saving...' : <><i className="bi bi-pause-circle me-1"></i>Pause Task</>}
+                                            </button>
+                                        </div>
                                     </>
                                 ) : (
-                                    <button className="btn btn-success w-100 fw-bold py-2" onClick={startNext}
-                                        style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}>
+                                    <button className="btn btn-success w-100 fw-bold py-2 btn-brand-solid" onClick={startNext}>
                                         <i className="bi bi-play-circle me-1"></i>Start {cur.label}
                                     </button>
                                 )}
@@ -1682,7 +1864,7 @@ const NewData = () => {
                                             : "bg-success"
                                             }`}
                                     >
-                                        {overtime ? "Beyond planned duration" : "On Track"}
+                                        {overtime ? "Beyond suggested time" : "On Track"}
                                     </span>
                                 </div>
 
@@ -1706,8 +1888,13 @@ const NewData = () => {
                                     ← Back
                                 </button>
 
-                                <h2 className="text-center fw-bold mb-0" style={{ color: '#065d48' }}>
+                                <h2 className="text-center fw-bold mb-0 text-green-dark">
                                     {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
+                                    {isEditMode && editingIsPaused && (
+                                        <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.55em', verticalAlign: 'middle' }}>
+                                            Paused
+                                        </span>
+                                    )}
                                 </h2>
 
                                 <div>
@@ -1727,17 +1914,18 @@ const NewData = () => {
                             <form onSubmit={handleSubmit}>
                                 <div className="row mb-4">
                                     <div className="mb-3 col-lg-6">
-                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                        <label className="form-label fw-semibold text-green-dark">
                                             Date *
                                         </label>
                                         <input type="date" name="date" value={formData.date}
                                             onChange={handleChange} required
                                             className="form-control" disabled={isEditMode}
+                                            max={formData.work_type === "Working" ? new Date().toISOString().split('T')[0] : undefined}
                                         />
                                     </div>
                                     <div className="col-lg-6 col-sm-12">
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                            <label className="form-label fw-semibold text-green-dark">
                                                 Option *
                                             </label>
                                             <br />
@@ -1763,7 +1951,7 @@ const NewData = () => {
                                         <div className="col-12">
                                             <div className="col-12">
                                                 <div className="mb-3">
-                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                    <label className="form-label fw-semibold text-green-dark">
                                                         {formData.work_type === "Company Event" ? "Event Name *" : "Holiday Name *"}
                                                     </label>
                                                     <input
@@ -1845,22 +2033,22 @@ const NewData = () => {
 
                                                     <div>
                                                         {isEditMode && editingUserName && (
-                                                            <div className="badge bg-light text-success border border-success-subtle px-2 py-1 mb-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                            <div className="badge bg-light text-success border border-success-subtle px-2 py-1 mb-1 rounded-pill fs-072">
                                                                 <i className="bi bi-person-fill me-1"></i>Employee: {editingUserName}
                                                             </div>
                                                         )}
                                                         <div className="d-flex align-items-center gap-2 flex-wrap">
                                                             <h5 className="mb-0 fw-bold" style={{ color: dailyTotals.minutes > 600 ? '#dc2626' : '#065d48' }}>
-                                                                {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours} hr${dailyTotals.totalHours > 1 ? 's' : ''} ` : ''}
+                                                                Suggested Time Spent: {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours} hr${dailyTotals.totalHours > 1 ? 's' : ''} ` : ''}
                                                                 {dailyTotals.remainingMins} min{dailyTotals.remainingMins !== 1 ? 's' : ''}
                                                             </h5>
                                                             {dailyTotals.minutes >= 450 && dailyTotals.minutes <= 510 && (
-                                                                <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                                <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill fs-072">
                                                                     <i className="bi bi-check-circle-fill me-1"></i>Full Day (7.5h)
                                                                 </span>
                                                             )}
                                                             {dailyTotals.minutes > 600 && (
-                                                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                                                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill fs-072">
                                                                     <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 7.5h (Check Time per Task)
                                                                 </span>
                                                             )}
@@ -1874,13 +2062,31 @@ const NewData = () => {
                                                                 `Total Work Hours for ${formData.date} • Target: 7.5 hrs (450 mins)`
                                                             )}
                                                         </small>
+                                                        <div className="d-flex align-items-center gap-2 flex-wrap mt-1">
+                                                            <h6 className="mb-0 fw-bold text-green-dark">
+                                                                Actual Time Spent:{' '}
+                                                                {dailyTotals.actualMinutes > 0 ? (
+                                                                    <>
+                                                                        {dailyTotals.totalActualHours > 0 ? `${dailyTotals.totalActualHours} hr${dailyTotals.totalActualHours > 1 ? 's' : ''} ` : ''}
+                                                                        {dailyTotals.remainingActualMins} min{dailyTotals.remainingActualMins !== 1 ? 's' : ''}
+                                                                    </>
+                                                                ) : (
+                                                                    'Not recorded'
+                                                                )}
+                                                            </h6>
+                                                            {dailyTotals.actualMinutes > 0 && (
+                                                                <span className="badge bg-light text-dark border px-2 py-1 rounded-pill fs-072">
+                                                                    {dailyTotals.actualPercent}% of target
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Right: Tasks Count */}
                                                 <div className="d-flex align-items-center gap-3">
                                                     <div className="text-end">
-                                                        <div className="fw-bold fs-5" style={{ color: '#065d48' }}>
+                                                        <div className="fw-bold fs-5 text-green-dark">
                                                             {dailyTotals.tasksCount}
                                                         </div>
                                                         <small className="text-muted d-block" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -1907,13 +2113,13 @@ const NewData = () => {
                                                         </div>
                                                         <div className="d-flex align-items-center gap-3 flex-wrap">
                                                             <div className="px-3 py-1 bg-white rounded-3 border text-center">
-                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Suggested Total</small>
-                                                                <span className="fw-bold" style={{ color: '#065d48' }}>
+                                                                <small className="text-muted d-block label-caps">Suggested Total</small>
+                                                                <span className="fw-bold text-green-dark">
                                                                     {categories.reduce((sum, c) => sum + (c.category === 'Meeting' ? (Number(c.meetingCount) || 1) * (Number(c.timeSpent) || 0) : (c.tasks?.length || 0) * (Number(c.timeSpent) || 0)), 0)} mins
                                                                 </span>
                                                             </div>
                                                             <div className="px-3 py-1 bg-white rounded-3 border text-center">
-                                                                <small className="text-muted d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Actual Time</small>
+                                                                <small className="text-muted d-block label-caps">Actual Time</small>
                                                                 <span className="fw-bold text-dark">
                                                                     {categories[0].actualTime !== '' && categories[0].actualTime !== null && categories[0].actualTime !== undefined
                                                                         ? `${categories[0].actualTime} mins`
@@ -1930,7 +2136,7 @@ const NewData = () => {
                                                                     const pct = Math.round((Math.abs(diff) / est) * 100);
                                                                     return (
                                                                         <div className={`px-3 py-1 rounded-3 border text-center ${isFaster ? 'bg-success-subtle text-success border-success-subtle' : 'bg-danger-subtle text-danger border-danger-subtle'}`}>
-                                                                            <small className="d-block" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Variance</small>
+                                                                            <small className="d-block label-caps">Variance</small>
                                                                             <span className="fw-bold">
                                                                                 {isFaster ? `${diff.toFixed(1)}m faster (${pct}%)` : `${Math.abs(diff).toFixed(1)}m over (${pct}%)`}
                                                                             </span>
@@ -1958,16 +2164,16 @@ const NewData = () => {
                                                     <div className="card-body">
                                                         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                                             <div className="d-flex align-items-center gap-2 flex-wrap">
-                                                                <h5 className="card-title mb-0" style={{ color: '#065d48' }}>
+                                                                <h5 className="card-title mb-0 text-green-dark">
                                                                     Category {index + 1}
                                                                 </h5>
                                                                 {cat.category && cat.category !== 'Meeting' && (
-                                                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                    <span className="badge rounded-pill badge-soft-green-sm">
                                                                         <i className="bi bi-clock me-1"></i>Suggested Target: {totalCatEstMinutes} mins {taskCount > 0 && `(${timePerTask}m × ${taskCount} task${taskCount > 1 ? 's' : ''})`}
                                                                     </span>
                                                                 )}
                                                                 {cat.category === 'Meeting' && (
-                                                                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                                    <span className="badge rounded-pill badge-soft-green-sm">
                                                                         <i className="bi bi-clock me-1"></i>Meeting Suggested: {totalCatEstMinutes} mins
                                                                     </span>
                                                                 )}
@@ -1990,7 +2196,7 @@ const NewData = () => {
                                                         <div className="row">
                                                             <div className="mb-3 col-lg-6">
                                                                 <div className="d-flex justify-content-between align-items-center mb-1">
-                                                                    <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
+                                                                    <label className="form-label fw-semibold mb-0 text-green-dark">
                                                                         Task Category *
                                                                     </label>
                                                                     {cat.category === 'Others' && cat.sub_category && (
@@ -2015,8 +2221,8 @@ const NewData = () => {
                                                                 <div className="mb-3 col-lg-6">
                                                                     <div className="d-flex justify-content-between align-items-center mb-1">
                                                                         <div className="d-flex align-items-center">
-                                                                            <label className="form-label fw-semibold mb-0" style={{ color: '#065d48' }}>
-                                                                                Time per Task (Minutes) *
+                                                                            <label className="form-label fw-semibold mb-0 text-green-dark">
+                                                                                Suggested Time per Task (Minutes) *
                                                                             </label>
                                                                             {(() => {
                                                                                 const matched = taskCategories.find(c => c.name === cat.category);
@@ -2066,8 +2272,7 @@ const NewData = () => {
                                                                                     handleTimeSpentChange(cat.id, val);
                                                                                 }
                                                                             }}
-                                                                            className="form-select"
-                                                                            style={{ minWidth: '150px' }}
+                                                                            className="form-select min-w-150"
                                                                             disabled={cat.category === 'Others' && cat.hasTimeSpent}
                                                                             required={!(cat.category === 'Others' && cat.hasTimeSpent)}
                                                                         >
@@ -2097,35 +2302,10 @@ const NewData = () => {
                                                                     </div>
                                                                 </div>
                                                             )}
-                                                            {isEditMode && (
-                                                                <div className="mb-3 col-lg-6">
-                                                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
-                                                                        Actual Time Spent (Minutes)
-                                                                    </label>
-                                                                    <div className="input-group">
-                                                                        <input
-                                                                            type="number"
-                                                                            step="0.01"
-                                                                            min="0"
-                                                                            className="form-control"
-                                                                            value={cat.actualTime ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const val = e.target.value;
-                                                                                setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, actualTime: val } : c));
-                                                                            }}
-                                                                            placeholder="e.g. 25"
-                                                                        />
-                                                                        <span className="input-group-text bg-light text-muted">mins</span>
-                                                                    </div>
-                                                                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                                                        Recorded timer time. You can edit this if the timer was stopped late.
-                                                                    </small>
-                                                                </div>
-                                                            )}
                                                             {cat.category === 'Meeting' && (
                                                                 <>
                                                                     <div className="mb-3 col-lg-6">
-                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        <label className="form-label fw-semibold text-green-dark">
                                                                             Meeting Duration (Minutes) *
                                                                         </label>
                                                                         <div className="d-flex gap-2 align-items-center">
@@ -2145,8 +2325,7 @@ const NewData = () => {
                                                                                         handleTimeSpentChange(cat.id, val);
                                                                                     }
                                                                                 }}
-                                                                                className="form-select"
-                                                                                style={{ minWidth: '150px' }}
+                                                                                className="form-select min-w-150"
                                                                                 required
                                                                             >
                                                                                 <option value="">Select Time</option>
@@ -2174,7 +2353,7 @@ const NewData = () => {
                                                                         </div>
                                                                     </div>
                                                                     <div className="mb-3 col-lg-12">
-                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        <label className="form-label fw-semibold text-green-dark">
                                                                             Meeting Title
                                                                         </label>
                                                                         <input
@@ -2191,7 +2370,7 @@ const NewData = () => {
                                                             {cat.category !== 'Meeting' && (
                                                                 <>
                                                                     <div className="mb-3 col-lg-9">
-                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        <label className="form-label fw-semibold text-green-dark">
                                                                             Task List *
                                                                         </label>
                                                                         <div className="input-group">
@@ -2238,7 +2417,7 @@ const NewData = () => {
                                                                     </div>
 
                                                                     <div className="mb-3 col-lg-3">
-                                                                        <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                                                        <label className="form-label fw-semibold text-green-dark">
                                                                             Number of Tasks
                                                                         </label>
                                                                         <input
@@ -2316,7 +2495,7 @@ const NewData = () => {
                             <div className="modal-body">
                                 {/* Date picker row */}
                                 <div className="mb-3">
-                                    <label className="form-label fw-semibold" style={{ color: '#065d48' }}>
+                                    <label className="form-label fw-semibold text-green-dark">
                                         Select a date to copy from:
                                     </label>
                                     <select
@@ -2375,7 +2554,7 @@ const NewData = () => {
                                                                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                                                             />
                                                             <div>
-                                                                <span className="fw-semibold" style={{ color: '#065d48' }}>{displayCat}</span>
+                                                                <span className="fw-semibold text-green-dark">{displayCat}</span>
                                                                 {taskList.length > 0 && (
                                                                     <div className="mt-1 ps-1 pe-2" style={{ maxHeight: '130px', overflowY: 'auto' }}>
                                                                         <ul className="mb-0 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
@@ -2412,10 +2591,9 @@ const NewData = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    className="btn btn-success fw-semibold"
+                                    className="btn btn-success fw-semibold btn-brand-solid"
                                     onClick={handleCopySelected}
                                     disabled={selectedCopyIds.size === 0}
-                                    style={{ backgroundColor: '#065d48', borderColor: '#065d48' }}
                                 >
                                     Copy Selected ({selectedCopyIds.size})
                                 </button>

@@ -153,7 +153,7 @@ export default function Attendance() {
                     {chartData.labels.length === 0 ? (
                         <p className="text-muted mb-0">No attendance data yet to chart.</p>
                     ) : (
-                        <div style={{ height: '280px' }}>
+                        <div className="h-280">
                             <Bar
                                 data={chartData}
                                 options={{

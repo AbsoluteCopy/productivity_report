@@ -798,7 +798,7 @@ const ManageAccounts = () => {
                                     name="prevent_autofill_username_honeypot"
                                     tabIndex={-1}
                                     autoComplete="off"
-                                    style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, height: 0, width: 0, pointerEvents: "none" }}
+                                    className="hidden-file-input"
                                     readOnly
                                 />
                                 <input
@@ -806,7 +806,7 @@ const ManageAccounts = () => {
                                     name="prevent_autofill_password_honeypot"
                                     tabIndex={-1}
                                     autoComplete="new-password"
-                                    style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, height: 0, width: 0, pointerEvents: "none" }}
+                                    className="hidden-file-input"
                                     readOnly
                                 />
 
