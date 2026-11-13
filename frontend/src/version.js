@@ -2,4 +2,4 @@
 // versioning (major.minor.patch) - there's no build/release pipeline tying
 // this to anything automatically, it's just a visible marker of what's
 // currently deployed.
-export const APP_VERSION = 'v1.0.0';
+export const APP_VERSION = 'v1.0.1';
