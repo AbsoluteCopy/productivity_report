@@ -838,12 +838,11 @@ const Home = () => {
                     </li>
                 </ul>
 
-                <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '380px', overflowY: 'auto', minHeight: '380px' }}>
                     {teamTab === 'active' && (
                         <div className="mb-3 p-2 rounded-3 border" style={{ backgroundColor: '#f9fafb' }}>
                             <div className="d-flex flex-wrap align-items-center gap-2">
-                                <button
-                                    type="button"
+                                <button type="button"
                                     className={`btn btn-sm rounded-pill fw-semibold ${selectedCompanies.length === 0 ? 'btn-success' : 'btn-outline-secondary'}`}
                                     style={selectedCompanies.length === 0 ? { backgroundColor: '#055d47', borderColor: '#055d47', fontSize: '0.75rem' } : { fontSize: '0.75rem' }}
                                     onClick={() => setSelectedCompanies([])}
@@ -1012,8 +1011,7 @@ const Home = () => {
                                 {time}
                             </div>
                             <p className="text-muted fw-medium mb-3">{date}</p>
-
-                            {!attendanceLoading && !['admin', 'viewer'].includes(role) && (
+                            {!attendanceLoading && !['admin', 'viewer','hr','supervisor'].includes(role) && (
                                 <div className="pt-3 border-top">
                                     <div className="row">
                                         <div className="col-12">
