@@ -1,10 +1,26 @@
-import.meta.env.VITE_DEFAULT_TIMEZONE;
-
 /**
- * Get the configured timezone from environment variables
- * Defaults to 'UTC' if not specified
+ * Fallback timezone used when the logged-in user has no timezone set.
+ * Defaults to Alaska time.
  */
 export const DEFAULT_TIMEZONE = import.meta.env.VITE_DEFAULT_TIMEZONE || 'America/Anchorage';
+
+/**
+ * Resolve the active timezone: the logged-in user's saved timezone if set
+ * and valid, otherwise DEFAULT_TIMEZONE (Alaska).
+ */
+export const getTimezone = () => {
+  try {
+    const stored = localStorage.getItem('user');
+    const tz = stored ? JSON.parse(stored).timezone : null;
+    if (tz && typeof tz === 'string') {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      return tz;
+    }
+  } catch {
+    // ignore malformed stored user or invalid timezone
+  }
+  return DEFAULT_TIMEZONE;
+};
 
 /**
  * Get current date in the configured timezone as YYYY-MM-DD
@@ -28,15 +44,15 @@ export const formatDateInTimezone = (date, format = 'locale', options = {}) => {
 
   if (format === 'YYYY-MM-DD') {
     const year = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       year: 'numeric'
     });
     const month = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       month: '2-digit'
     });
     const day = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       day: '2-digit'
     });
     return `${year}-${month}-${day}`;
@@ -44,7 +60,7 @@ export const formatDateInTimezone = (date, format = 'locale', options = {}) => {
 
   if (format === 'locale') {
     return dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       ...options
     });
   }
@@ -52,35 +68,35 @@ export const formatDateInTimezone = (date, format = 'locale', options = {}) => {
   // For 'toISOString', we need to adjust to the timezone
   if (format === 'toISOString') {
     const year = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       year: 'numeric'
     });
     const month = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       month: '2-digit'
     });
     const day = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       day: '2-digit'
     });
     const hours = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       hour: '2-digit',
       hour12: false
     });
     const minutes = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       minute: '2-digit'
     });
     const seconds = dateObj.toLocaleString('en-US', {
-      timeZone: DEFAULT_TIMEZONE,
+      timeZone: getTimezone(),
       second: '2-digit'
     });
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
   }
 
   return dateObj.toLocaleString('en-US', {
-    timeZone: DEFAULT_TIMEZONE,
+    timeZone: getTimezone(),
     ...options
   });
 };

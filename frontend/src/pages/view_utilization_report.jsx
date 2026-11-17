@@ -3,7 +3,7 @@ import axios from 'axios';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import API_BASE_URL from "../config";
-import { parseDateInTimezone, DEFAULT_TIMEZONE } from '../utils/dateUtils';
+import { parseDateInTimezone, getTimezone } from '../utils/dateUtils';
 
 
 const ViewUtilizationReport = () => {
@@ -39,7 +39,7 @@ const ViewUtilizationReport = () => {
                 value: i + 1,
                 label: new Date(0, i).toLocaleString("default", {
                     month: "long",
-                    timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                    timeZone: getTimezone()
                 }),
             })),
         []
@@ -260,10 +260,10 @@ const ViewUtilizationReport = () => {
                 : "USER";
 
         const monthName = new Date(selectedYear, selectedMonth - 1, 1)
-            .toLocaleString("default", { month: "long", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }).toUpperCase();
+            .toLocaleString("default", { month: "long", timeZone: getTimezone() }).toUpperCase();
 
         const monthNameShort = new Date(selectedYear, selectedMonth - 1, 1)
-            .toLocaleString("default", { month: "short", timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' });
+            .toLocaleString("default", { month: "short", timeZone: getTimezone() });
 
         const workbook = new ExcelJS.Workbook();
         const ws = workbook.addWorksheet("Sheet1");
@@ -645,7 +645,7 @@ const ViewUtilizationReport = () => {
                                                 <th>&nbsp;</th>
                                                 <th className='text-muted fw-semibold py-3' colSpan={2}>PERIOD</th>
                                                 <th className='fw-bold text-dark py-3' colSpan={4}>
-                                                    {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }).toUpperCase()} {selectedYear}
+                                                    {new Date(selectedYear, selectedMonth - 1, 1).toLocaleString('default', { month: 'long', timeZone: getTimezone() }).toUpperCase()} {selectedYear}
                                                 </th>
                                             </tr>
                                             <tr className='middle text-muted' style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
@@ -747,7 +747,7 @@ const ViewUtilizationReport = () => {
                                                                 {showDate &&
                                                                     `${date.getDate()}-${date.toLocaleString(
                                                                         'en-US',
-                                                                        { month: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
+                                                                        { month: 'short', timeZone: getTimezone() }
                                                                     )}-${String(date.getFullYear()).slice(-2)}`
                                                                 }
                                                             </td>
@@ -755,7 +755,7 @@ const ViewUtilizationReport = () => {
                                                                 {showDate &&
                                                                     date.toLocaleDateString(
                                                                         'en-US',
-                                                                        { weekday: 'short', timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC' }
+                                                                        { weekday: 'short', timeZone: getTimezone() }
                                                                     )
                                                                 }
                                                             </td>

@@ -707,7 +707,7 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       return res.status(403).json({ error: 'HR cannot edit administrator accounts.', detail: 'HR cannot edit administrator accounts.' });
     }
 
-    let { first_name, last_name, username, email, role, company, id_number, task_list, password } = req.body;
+    let { first_name, last_name, username, email, role, company, id_number, task_list, password, timezone } = req.body;
     let updates = [];
     let params = [];
 
@@ -756,6 +756,17 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       const hashed = await bcrypt.hash(password, 10);
       updates.push('password = ?');
       params.push(hashed);
+    }
+    if (timezone !== undefined) {
+      const tz = typeof timezone === 'string' ? timezone.trim() : '';
+      if (tz) {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: tz });
+        } catch {
+          return res.status(400).json({ error: `Invalid timezone '${tz}'.`, detail: `Invalid timezone '${tz}'.` });
+        }
+      }
+      updates.push('timezone = ?'); params.push(tz || null);
     }
     if (isAdmin) {
       if (role) {

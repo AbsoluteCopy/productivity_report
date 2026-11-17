@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { DEFAULT_TIMEZONE } from '../utils/dateUtils';
+import { getTimezone } from '../utils/dateUtils';
 import "../css/AnalogClock.css";
 
 const getClockTime = () => {
     const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: DEFAULT_TIMEZONE,
+        timeZone: getTimezone(),
         hour: 'numeric',
         minute: 'numeric',
         second: 'numeric',

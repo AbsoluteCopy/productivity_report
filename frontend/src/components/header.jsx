@@ -245,6 +245,11 @@ function Navbar() {
                                     )}
                                 </li>
                                 <li>
+                                    <Link to="/settings" className="dropdown-item py-2 rounded">
+                                        <i className="bi bi-gear me-2 text-secondary"></i> Settings
+                                    </Link>
+                                </li>
+                                <li>
                                     <Link to="/change_password" className="dropdown-item py-2 rounded">
                                         <i className="bi bi-key me-2 text-primary"></i> Change Password
                                     </Link>

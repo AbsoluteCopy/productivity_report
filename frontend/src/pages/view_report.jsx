@@ -16,7 +16,7 @@ import {
 import { Bar, Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld } from '../utils/dateUtils';
+import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, getTimezone } from '../utils/dateUtils';
 
 ChartJS.register(
     CategoryScale,
@@ -304,7 +304,7 @@ const ViewReport = () => {
             value: i + 1,
             label: date.toLocaleString('default', {
                 month: 'long',
-                timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+                timeZone: getTimezone()
             })
         };
     });
@@ -668,7 +668,7 @@ const ViewReport = () => {
 
         const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleString("en-US", {
             month: "short",
-            timeZone: import.meta.env.VITE_DEFAULT_TIMEZONE || 'UTC'
+            timeZone: getTimezone()
         });
 
         const workbook = new ExcelJS.Workbook();

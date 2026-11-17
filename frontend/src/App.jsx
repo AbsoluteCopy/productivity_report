@@ -16,6 +16,7 @@ import ManageTaskCategory from './pages/manage_task_category';
 import ManageHoliday from './pages/manage_holiday';
 import Attendance from './pages/attendance';
 import ChangePassword from './pages/change_password';
+import Settings from './pages/settings';
 import NotFound from './pages/404';
 import VersionBadge from './components/VersionBadge';
 
@@ -90,6 +91,7 @@ function AppContent() {
             <Route path="/manage_holiday" element={<ManageHoliday />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/change_password" element={<ChangePassword />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
         <Route path="/" element={<Initial />} />
