@@ -239,21 +239,42 @@ const loginLimiter = rateLimit({
 
 // App-wide reporting timezone (matches frontend's DEFAULT_TIMEZONE in dateUtils.js).
 const APP_TIMEZONE = process.env.VITE_DEFAULT_TIMEZONE || 'America/Anchorage';
-const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: APP_TIMEZONE,
+const dateTimeFormatterOptions = {
   year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', second: '2-digit',
   hour12: false,
-});
+};
+const dateTimeFormatters = new Map();
+const getDateTimeFormatter = (timeZone) => {
+  let formatter = dateTimeFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', { ...dateTimeFormatterOptions, timeZone });
+    dateTimeFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+};
+
+// Helper: Resolve the timezone a user should have wall-clock times stamped in.
+// Falls back to APP_TIMEZONE when unset or invalid.
+const userTimeZone = (user) => {
+  const tz = user && typeof user.timezone === 'string' ? user.timezone.trim() : '';
+  if (!tz) return APP_TIMEZONE;
+  try {
+    getDateTimeFormatter(tz);
+    return tz;
+  } catch {
+    return APP_TIMEZONE;
+  }
+};
 
 // Helper: Convert an ISO datetime string (or Date) to MySQL DATETIME format,
-// normalized to APP_TIMEZONE so the stored wall-clock value is correct
+// normalized to the given timezone so the stored wall-clock value is correct
 // regardless of what timezone the server/host machine itself is set to.
-const toMySQLDateTime = (value) => {
+const toMySQLDateTime = (value, timeZone = APP_TIMEZONE) => {
   if (!value) return null;
   const d = new Date(value);
   if (isNaN(d.getTime())) return null;
-  const parts = Object.fromEntries(dateTimeFormatter.formatToParts(d).map(p => [p.type, p.value]));
+  const parts = Object.fromEntries(getDateTimeFormatter(timeZone).formatToParts(d).map(p => [p.type, p.value]));
   // hour12: false can still report midnight as "24" per the Intl spec
   const hour = parts.hour === '24' ? '00' : parts.hour;
   return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute}:${parts.second}`;
@@ -1653,7 +1674,7 @@ app.post(['/api/attendance/clock-in', '/api/attendance/clock-in/'], authenticate
     if (open.length > 0) {
       return res.status(400).json({ error: 'Already clocked in.' });
     }
-    const now = toMySQLDateTime(new Date());
+    const now = toMySQLDateTime(new Date(), userTimeZone(req.user));
     const [result] = await pool.query(
       'INSERT INTO attendance (user_id, clock_in) VALUES (?, ?)',
       [req.user.id, now]
@@ -1676,7 +1697,7 @@ app.post(['/api/attendance/clock-out', '/api/attendance/clock-out/'], authentica
     if (open.length === 0) {
       return res.status(400).json({ error: 'Not currently clocked in.' });
     }
-    const now = toMySQLDateTime(new Date());
+    const now = toMySQLDateTime(new Date(), userTimeZone(req.user));
     await pool.query('UPDATE attendance SET clock_out = ? WHERE id = ?', [now, open[0].id]);
     const [updated] = await pool.query('SELECT * FROM attendance WHERE id = ?', [open[0].id]);
     return res.json(updated[0]);
