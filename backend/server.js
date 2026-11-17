@@ -327,12 +327,7 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
          AND ${reportNotDeleted()}`,
       [currentAppDate]
     ).catch(err => console.error('Stale paused report cleanup error:', err));
-
-    await pool.query(
-      'INSERT INTO logs (user_id, type) VALUES (?, ?)',
-      [user.id, 'sign in']
-    );
-
+    
     // Set 12 hours token lifetime
     const token = jwt.sign(
       { user_id: user.id, token_version: user.token_version },
@@ -358,11 +353,6 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
 app.post(['/api/logout', '/api/logout/'], authenticate, async (req, res) => {
   try {
     // Save logout activity
-    await pool.query(
-      'INSERT INTO logs (user_id, type) VALUES (?, ?)',
-      [req.user.id, 'sign out']
-    );
-
     await pool.query(
       'UPDATE users SET token_version = token_version + 1, last_logout_at = NOW() WHERE id = ?',
       [req.user.id]
