@@ -60,82 +60,87 @@ function Navbar() {
 
                 <div className="collapse navbar-collapse" id="navbarNav" ref={navbarRef}>
                     <ul className="navbar-nav ms-4">
+                        <li className="nav-item dropdown nav-hover">
+                            <a
+                                className="nav-link dropdown-toggle"
+                                href="#"
+                                role="button"
+                                data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside"
+                                aria-expanded="false"
+                            >
+                                <i className="bi bi-grid"></i> Menu
+                            </a>
+                            <ul className="dropdown-menu dropdown-menu-start shadow border-0 p-2" style={{ minWidth: '220px', borderRadius: '12px' }}>
+                                {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor' || role === 'viewer') && (
+                                    <li>
+                                        <Link
+                                            className={`dropdown-item py-2 rounded ${location.pathname === "/dashboard" ? "active" : ""}`}
+                                            to="/dashboard"
+                                        >
+                                            <i className="bi bi-house me-2"></i> Home
+                                        </Link>
+                                    </li>
+                                )}
 
-                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor' || role === 'viewer') && (
-                            <>
-                                <li className="nav-item">
-                                    <Link
-                                        className={`nav-link ${location.pathname === "/dashboard" ? "active" : ""}`}
-                                        to="/dashboard"
-                                    >
-                                        <i className="bi bi-house"></i> Home
-                                    </Link>
-                                </li>
-                            </>
-                        )}
+                                {role === 'viewer' && (
+                                    <li>
+                                        <Link
+                                            className={`dropdown-item py-2 rounded ${location.pathname === "/view_report" ? "active" : ""}`}
+                                            to="/view_report"
+                                        >
+                                            <i className="bi bi-pie-chart me-2"></i> Daily Report
+                                        </Link>
+                                    </li>
+                                )}
+                                {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor') && (
+                                    <li>
+                                        <Link
+                                            className={`dropdown-item py-2 rounded ${location.pathname === "/daily_report" ? "active" : ""}`}
+                                            to="/daily_report"
+                                        >
+                                            <i className="bi bi-pie-chart me-2"></i> Daily Report
+                                        </Link>
+                                    </li>
+                                )}
 
-                        {role === 'viewer' && (
-                            <>
-                                <li className="nav-item">
-                                    <Link
-                                        className={`nav-link ${location.pathname === "/view_report" ? "active" : ""}`}
-                                        to="/view_report"
-                                    >
-                                        <i className="bi bi-pie-chart"></i> Daily Report
-                                    </Link>
-                                </li>
-                            </>
-                        )}
-                        {(role === 'admin' || role === 'employee' || role === 'hr' || role === 'supervisor') && (
-                            <>
-                                <li className="nav-item">
-                                    <Link
-                                        className={`nav-link ${location.pathname === "/daily_report" ? "active" : ""}`}
-                                        to="/daily_report"
-                                    >
-                                        <i className="bi bi-pie-chart"></i> Daily Report
-                                    </Link>
-                                </li>
-                            </>
-                        )}
-
-                        {(role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') && (
-                            <>
-                                <li className="nav-item">
-                                    <Link className={`nav-link ${location.pathname === '/view_utilization_report' ? 'active' : ''}`} to="/view_utilization_report">
-                                        <i className="bi bi-clipboard-data"></i> Utilization Report
-                                    </Link>
-                                </li>
-                            </>
-                        )}
-                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
-                            <li className="nav-item">
-                                <Link className={`nav-link ${location.pathname === '/manage_accounts' ? 'active' : ''}`} to="/manage_accounts">
-                                    <i className="bi bi-person-gear"></i> Accounts
-                                </Link>
-                            </li>
-                        )}
-                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
-                            <li className="nav-item">
-                                <Link className={`nav-link ${location.pathname === '/attendance' ? 'active' : ''}`} to="/attendance">
-                                    <i className="bi bi-clock-history"></i> Attendance
-                                </Link>
-                            </li>
-                        )}
-                        {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
-                            <li className="nav-item">
-                                <Link className={`nav-link ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
-                                    <i className="bi bi-tags"></i> Task Category
-                                </Link>
-                            </li>
-                        )}
-                        {(role === 'admin' || role === 'hr') && (
-                            <li className="nav-item">
-                                <Link className={`nav-link ${location.pathname === '/manage_holiday' ? 'active' : ''}`} to="/manage_holiday">
-                                    <i className="bi bi-calendar-event"></i> Holiday
-                                </Link>
-                            </li>
-                        )}
+                                {(role === 'admin' || role === 'viewer' || role === 'hr' || role === 'supervisor') && (
+                                    <li>
+                                        <Link className={`dropdown-item py-2 rounded ${location.pathname === '/view_utilization_report' ? 'active' : ''}`} to="/view_utilization_report">
+                                            <i className="bi bi-clipboard-data me-2"></i> Utilization Report
+                                        </Link>
+                                    </li>
+                                )}
+                                {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                                    <li>
+                                        <Link className={`dropdown-item py-2 rounded ${location.pathname === '/manage_accounts' ? 'active' : ''}`} to="/manage_accounts">
+                                            <i className="bi bi-person-gear me-2"></i> Accounts
+                                        </Link>
+                                    </li>
+                                )}
+                                {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                                    <li>
+                                        <Link className={`dropdown-item py-2 rounded ${location.pathname === '/attendance' ? 'active' : ''}`} to="/attendance">
+                                            <i className="bi bi-clock-history me-2"></i> Attendance
+                                        </Link>
+                                    </li>
+                                )}
+                                {(role === 'admin' || role === 'hr' || role === 'supervisor') && (
+                                    <li>
+                                        <Link className={`dropdown-item py-2 rounded ${location.pathname === '/manage_task_category' ? 'active' : ''}`} to="/manage_task_category">
+                                            <i className="bi bi-tags me-2"></i> Task Category
+                                        </Link>
+                                    </li>
+                                )}
+                                {(role === 'admin' || role === 'hr') && (
+                                    <li>
+                                        <Link className={`dropdown-item py-2 rounded ${location.pathname === '/manage_holiday' ? 'active' : ''}`} to="/manage_holiday">
+                                            <i className="bi bi-calendar-event me-2"></i> Holiday
+                                        </Link>
+                                    </li>
+                                )}
+                            </ul>
+                        </li>
                     </ul>
                     <ul className="navbar-nav ms-auto align-items-lg-center">
                         <li className="nav-item dropdown">

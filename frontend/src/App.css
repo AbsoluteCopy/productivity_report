@@ -22,6 +22,18 @@
   background-color:#055d47!important;
 }
 
+.nav-hover .dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  margin-top: 0;
+}
+.nav-hover:hover .dropdown-menu,
+.nav-hover:focus-within .dropdown-menu,
+.nav-hover .dropdown-menu.show {
+  display: block;
+}
+
 .btn-primary{
   background-color:#055D47!important;
   border-color:#055D47!important;
