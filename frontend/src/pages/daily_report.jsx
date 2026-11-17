@@ -310,7 +310,16 @@ const DailyReport = () => {
         const report = dailyReports.find((item) => item.id === id);
         if (!report) return;
 
-        if (!['admin', 'employee'].includes(currentUser?.role) && isMoreThanOneMonthOld(report.date)) {
+        if (isEmployee && isMoreThan24HoursOld(report)) {
+            Swal.fire({
+                icon: "warning",
+                title: "Edit Window Expired",
+                text: "Employees can only edit their tasks within a 24-hour window.",
+            });
+            return;
+        }
+
+        if (currentUser?.role !== 'admin' && isMoreThanOneMonthOld(report.date)) {
             Swal.fire({
                 icon: "warning",
                 title: "Cannot Edit",
@@ -320,7 +329,7 @@ const DailyReport = () => {
         }
 
         navigate(`/new_data?edit=${id}`);
-    }, [dailyReports, currentUser, isMoreThanOneMonthOld, navigate]);
+    }, [dailyReports, isEmployee, isMoreThan24HoursOld, currentUser, isMoreThanOneMonthOld, navigate]);
 
     const handleDeleteReport = useCallback(async (id) => {
         const report = dailyReports.find((item) => item.id === id);
@@ -458,9 +467,10 @@ const DailyReport = () => {
             {
                 name: "Options",
                 cell: (row) => {
-                    const isOldRecord = isEmployee && isMoreThan24HoursOld(row);
+                    const is24hOld = isEmployee && isMoreThan24HoursOld(row);
+                    const isOldRecord = isEmployee && is24hOld;
                     const canEdit = isEmployee || isAdminOrHR;
-                    const editTitle = "Edit Report";
+                    const editTitle = isOldRecord ? "Employees can only edit tasks within 24 hours" : "Edit Report";
                     const deleteTitle = isOldRecord ? "Employees can only delete tasks within 24 hours" : "Delete Report";
 
                     return (
@@ -483,6 +493,11 @@ const DailyReport = () => {
                                     title={editTitle}
                                     aria-label="Edit Report"
                                     onClick={() => handleEdit(row.id)}
+                                    disabled={isOldRecord}
+                                    style={{
+                                        opacity: isOldRecord ? 0.5 : 1,
+                                        cursor: isOldRecord ? "not-allowed" : "pointer",
+                                    }}
                                 >
                                     <PencilIcon />
                                 </button>
