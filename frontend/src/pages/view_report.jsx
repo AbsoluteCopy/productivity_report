@@ -16,7 +16,7 @@ import {
 import { Bar, Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, getTimezone } from '../utils/dateUtils';
+import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, getTimezone, parseNaiveDateTime } from '../utils/dateUtils';
 
 ChartJS.register(
     CategoryScale,
@@ -252,22 +252,29 @@ const ViewReport = () => {
 
         reports.forEach(report => {
             if (!report.time_added || !report.time_finished) return;
+            if (report.status === 'Deleted') return;
 
             const displayCategory = getReportCategory(report);
 
-            // Parse time_added and time_finished - handle both UTC format and HH:mm format
-            let startDate, endDate;
-            if (report.time_added.includes('T') || report.time_added.includes('Z')) {
-                startDate = new Date(report.time_added);
-            } else {
-                startDate = new Date(`${report.date}T${report.time_added}`);
-            }
+            // Parse time_added/time_finished. Values may be ISO datetimes,
+            // MySQL "YYYY-MM-DD HH:MM:SS" wall-clock strings, or legacy "HH:mm".
+            const parseActivityTime = (value) => {
+                if (!value) return null;
+                if (value.includes('T') || value.includes('Z')) {
+                    const d = new Date(value);
+                    return isNaN(d.getTime()) ? null : d;
+                }
+                const naive = parseNaiveDateTime(value);
+                if (naive) {
+                    return new Date(naive.year, naive.month - 1, naive.day, naive.hour, naive.minute, naive.second);
+                }
+                const d = new Date(`${report.date}T${value}`);
+                return isNaN(d.getTime()) ? null : d;
+            };
 
-            if (report.time_finished.includes('T') || report.time_finished.includes('Z')) {
-                endDate = new Date(report.time_finished);
-            } else {
-                endDate = new Date(`${report.date}T${report.time_finished}`);
-            }
+            const startDate = parseActivityTime(report.time_added);
+            const endDate = parseActivityTime(report.time_finished);
+            if (!startDate || !endDate) return;
 
             // Format times for display
             const formatTime = (date) => {

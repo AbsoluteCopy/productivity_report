@@ -231,42 +231,42 @@ const DailyReport = () => {
                     const diff = parseDate(b.date) - parseDate(a.date);
                     return diff !== 0 ? diff : (Number(b.id || 0) - Number(a.id || 0));
                 });
-                setDailyReports(sortedReports); 
-            } catch (error) { 
-                console.error("Error fetching reports:", error); 
-                setDailyReports([]); 
-                Swal.fire({ 
-                    icon: "error", 
-                    title: "Unable to Load Reports", 
-                    text: "There was a problem loading the daily reports.", 
-                }); 
-            } finally { 
-                setLoading(false); 
+                setDailyReports(sortedReports);
+            } catch (error) {
+                console.error("Error fetching reports:", error);
+                setDailyReports([]);
+                Swal.fire({
+                    icon: "error",
+                    title: "Unable to Load Reports",
+                    text: "There was a problem loading the daily reports.",
+                });
+            } finally {
+                setLoading(false);
             }
-        }, []); 
-        useEffect(() => { 
-            const loadUserAndReports = async () => { 
-                try { 
-                    const userData = localStorage.getItem("user"); 
-                    if (!userData) { 
-                        setLoading(false); 
-                        return; 
-                    } 
-                    const user = JSON.parse(userData); 
-                    setCurrentUser(user); 
-                    await fetchReports(user); 
-                } catch (error) { 
-                    console.error("Error loading user:", error); 
-                    setLoading(false); 
-                    Swal.fire({ 
-                        icon: "error", 
-                        title: "Session Error", 
-                        text: "Unable to load your user information.", 
-                    }); 
-                } 
-            }; 
-            loadUserAndReports(); 
-        }, [fetchReports]);
+        }, []);
+    useEffect(() => {
+        const loadUserAndReports = async () => {
+            try {
+                const userData = localStorage.getItem("user");
+                if (!userData) {
+                    setLoading(false);
+                    return;
+                }
+                const user = JSON.parse(userData);
+                setCurrentUser(user);
+                await fetchReports(user);
+            } catch (error) {
+                console.error("Error loading user:", error);
+                setLoading(false);
+                Swal.fire({
+                    icon: "error",
+                    title: "Session Error",
+                    text: "Unable to load your user information.",
+                });
+            }
+        };
+        loadUserAndReports();
+    }, [fetchReports]);
 
     const filteredReports = useMemo(() => {
         const searchText = search.trim().toLowerCase();
@@ -814,117 +814,119 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
     const showStatistics = !isRestrictedCategory(report.task_category) && (Number(report.number_of_tasks) > 0 || Number(report.time_spent) > 0 || Number(report.meeting_count) > 0);
     const hasTasks = !isRestrictedCategory(report.task_category) && Array.isArray(report.task_list) && report.task_list.length > 0;
     return (
-        <div className="modal fade show" role="dialog" aria-modal="true" aria-labelledby="report-details-title" style={{ display: "block", backgroundColor: "rgba(0,0,0,.6)", }} tabIndex="-1" onMouseDown={(event) => { if (event.target === event.currentTarget) { onClose(); } }} > <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"> <div className="modal-content border-0 shadow-lg"> {/* Header */} <div className="modal-header main-background text-white"> <h5 id="report-details-title" className="modal-title fw-bold" > Report Details </h5> <button type="button" className="btn-close btn-close-white" onClick={onClose} aria-label="Close" /> </div> {/* Body */} <div className="modal-body bg-light"> {/* Basic Information */}
-            <div className="card border-0 shadow-sm mb-3">
-                <div className="card-body">
-                    <div className="row g-3">
-                        <div className="col-md-6">
-                            <small className="text-muted d-block"> Date </small>
-                            <div className="fw-semibold"> {report.date || "—"} </div>
-                        </div>
-                        <div className="col-md-6">
-                            <small className="text-muted d-block"> Category </small>
-                            <span className="badge bg-primary fs-6"> {getDisplayCategory(report) || "—"} </span>
-                        </div>
-                        <div className="col-md-6">
-                            <small className="text-muted d-block"> Work Type </small>
-                            <span className="badge bg-success fs-6"> {report.work_type || "—"} </span>
-                        </div>
-                        {report.user_name && (
-                            <div className="col-md-6">
-                                <small className="text-muted d-block"> Employee </small>
-                                <div className="fw-semibold"> {report.user_name} </div>
-                            </div>
-                        )}
-                        {Number(report.is_paused) === 1 && (
-                            <div className="col-md-6">
-                                <small className="text-muted d-block"> Status </small>
-                                <span className="badge bg-warning text-dark fs-6"> Paused </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div> {/* Statistics */}
-            {showStatistics && (
-                <div className="row g-3 mb-3">
-                    {Number(report.number_of_tasks) > 0 && (
-                        <div className="col-md-4">
-                            <div className="card text-center border-primary shadow-sm h-100">
-                                <div className="card-body">
-                                    <h3 className="text-primary mb-1"> {report.number_of_tasks} </h3>
-                                    <small className="text-muted"> Tasks Completed </small>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {Number(report.time_spent) > 0 && (
-                        <div className="col-md-4">
-                            <div className="card text-center border-success shadow-sm h-100">
-                                <div className="card-body">
-                                    <h3 className="text-success mb-1"> {report.time_spent} </h3>
-                                    <small className="text-muted"> Minutes Spent </small>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {Number(report.actual_time) > 0 && (
-                        <div className="col-md-4">
-                            <div className="card text-center border-success shadow-sm h-100">
-                                <div className="card-body">
-                                    <h3 className="text-success mb-1"> {Number((Number(report.actual_time) / 60).toFixed(2))} mins </h3>
-                                    <small className="text-muted"> Actual Time Spent </small>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {Number(report.meeting_count) > 0 && (
-                        <div className="col-md-4">
-                            <div className="card text-center border-warning shadow-sm h-100">
-                                <div className="card-body">
-                                    <h3 className="text-warning mb-1"> {report.meeting_count/60} </h3>
-                                    <small className="text-muted"> Meetings </small>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-            {/* Task List */}
-            {hasTasks && (
-                <div className="card shadow-sm border-0">
-                    <div className="card-header bg-white">
-                        <h6 className="mb-0 fw-bold"> Task List </h6>
-                    </div>
-                    <div className="card-body p-0">
-                        <ul className="list-group list-group-flush">
-                            {report.task_list.map((task, index) => (
-                                <li key={`${report.id}-task-${index}`} className="list-group-item d-flex align-items-start">
-                                    <span className="badge bg-secondary me-3 mt-1"> {index + 1} </span>
-                                    <span> {task} </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            )}
-            {/* Description */}
-            {report.description && (
-                <div className="card shadow-sm border-0 mt-3">
-                    <div className="card-header bg-white">
-                        <h6 className="mb-0 fw-bold"> Description </h6>
-                    </div>
+        <div className="modal fade show" role="dialog" aria-modal="true" aria-labelledby="report-details-title" style={{ display: "block", backgroundColor: "rgba(0,0,0,.6)", }} tabIndex="-1" onMouseDown={(event) => { if (event.target === event.currentTarget) { onClose(); } }} > <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"> <div className="modal-content border-0 shadow-lg"> {/* Header */} <div className="modal-header main-background text-white">
+            <h5 id="report-details-title" className="modal-title fw-bold" > Report Details </h5>
+            <button type="button" className="btn-close btn-close-white" onClick={onClose} aria-label="Close" /> </div> {/* Body */} <div className="modal-body bg-light"> {/* Basic Information */}
+                <div className="card border-0 shadow-sm mb-3">
                     <div className="card-body">
-                        <p className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{report.description}</p>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                <small className="text-muted d-block"> Date </small>
+                                <div className="fw-semibold"> {report.date || "—"} </div>
+                            </div>
+                            <div className="col-md-6">
+                                <small className="text-muted d-block"> Category </small>
+                                <span className="badge bg-primary fs-6"> {getDisplayCategory(report) || "—"} </span>
+                            </div>
+                            <div className="col-md-6">
+                                <small className="text-muted d-block"> Work Type </small>
+                                <span className="badge bg-success fs-6"> {report.work_type || "—"} </span>
+                            </div>
+                            {report.user_name && (
+                                <div className="col-md-6">
+                                    <small className="text-muted d-block"> Employee </small>
+                                    <div className="fw-semibold"> {report.user_name} </div>
+                                </div>
+                            )}
+                            {Number(report.is_paused) === 1 && (
+                                <div className="col-md-6">
+                                    <small className="text-muted d-block"> Status </small>
+                                    <span className="badge bg-warning text-dark fs-6"> Paused </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
-            {/* No task details */}
-            {!showStatistics && !hasTasks && (
-                <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center text-muted py-4"> No additional task details available. </div>
-                </div>
-            )}
-        </div>
+                </div> {/* Statistics */}
+                {showStatistics && (
+                    <div className="row g-3 mb-3">
+                        {Number(report.number_of_tasks) > 0 && (
+                            <div className="col-md-4">
+                                <div className="card text-center border-primary shadow-sm h-100">
+                                    <div className="card-body">
+                                        <h3 className="text-primary mb-1"> {report.number_of_tasks} </h3>
+                                        <small className="text-muted"> Tasks Completed </small>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {Number(report.time_spent) > 0 && (
+                            <div className="col-md-4">
+                                <div className="card text-center border-success shadow-sm h-100">
+                                    <div className="card-body">
+                                        <h3 className="text-success mb-1"> {report.time_spent} </h3>
+                                        <small className="text-muted"> Suggested Time </small>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {Number(report.actual_time) > 0 && (
+                            <div className="col-md-4">
+                                <div className="card text-center border-success shadow-sm h-100">
+                                    <div className="card-body">
+                                        <h3 className="text-success mb-1"> {Number((Number(report.actual_time) / 60).toFixed(2))} mins </h3>
+                                        <small className="text-muted"> Actual Time Spent </small>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {Number(report.meeting_count) > 0 && (
+                            <div className="col-md-4">
+                                <div className="card text-center border-warning shadow-sm h-100">
+                                    <div className="card-body">
+                                        <h3 className="text-warning mb-1"> {report.meeting_count / 60} </h3>
+                                        <small className="text-muted"> Meetings </small>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {/* Task List */}
+                {hasTasks && (
+                    <div className="card shadow-sm border-0">
+                        <div className="card-header bg-white">
+                            <h6 className="mb-0 fw-bold"> Task List </h6>
+                        </div>
+                        <div className="card-body p-0">
+                            <ul className="list-group list-group-flush">
+                                {report.task_list.map((task, index) => (
+                                    <li key={`${report.id}-task-${index}`} className="list-group-item d-flex align-items-start">
+                                        <span className="badge bg-secondary me-3 mt-1"> {index + 1} </span>
+                                        <span> {task} </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+                {/* Description */}
+                {report.description && (
+                    <div className="card shadow-sm border-0 mt-3">
+                        <div className="card-header bg-white">
+                            <h6 className="mb-0 fw-bold"> Description </h6>
+                        </div>
+                        <div className="card-body">
+                            <p className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{report.description}</p>
+                        </div>
+                    </div>
+                )}
+                {/* No task details */}
+                {!showStatistics && !hasTasks && (
+                    <div className="card border-0 shadow-sm">
+                        <div className="card-body text-center text-muted py-4"> No additional task details available. </div>
+                    </div>
+                )}
+            </div>
             {/* Footer */}
             <div className="modal-footer">
                 <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
