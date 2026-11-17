@@ -40,8 +40,12 @@ const Home = () => {
     const [allReports, setAllReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState('');
-    const [monthlyData, setMonthlyData] = useState([]);
+    const [monthlyData, setMonthlyData] = useState(null);
     const [chartData, setChartData] = useState(null);
+    const [chartMonth, setChartMonth] = useState(() => {
+        const d = new Date();
+        return { year: d.getFullYear(), month: d.getMonth() };
+    });
 
     // Online users tracking (Admin & HR)
     const [onlineUsers, setOnlineUsers] = useState([]);
@@ -287,30 +291,25 @@ const Home = () => {
             if (response.ok) {
                 const data = await response.json();
                 setMonthlyData(data);
-                prepareChartData(data);
             }
         } catch (error) {
             console.error('Error fetching monthly data:', error);
         }
     };
 
-    const prepareChartData = (reports) => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        // Get all days in current month
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const prepareChartData = (reports, year, month) => {
+        // Get all days in selected month
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
         const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
         // Initialize data array with zeros
         const timeSpentData = new Array(daysInMonth).fill(0);
 
         // Fill in actual data from reports
-        reports.forEach(report => {
+        (reports || []).forEach(report => {
             // Parse date properly to avoid timezone issues
             const reportDate = parseDateInTimezone(report.date);
-            if (reportDate.getMonth() === currentMonth && reportDate.getFullYear() === currentYear) {
+            if (reportDate.getMonth() === month && reportDate.getFullYear() === year) {
                 timeSpentData[reportDate.getDate() - 1] = report.time_spent;
             }
         });
@@ -335,6 +334,26 @@ const Home = () => {
             ]
         });
     };
+
+    useEffect(() => {
+        if (role === 'employee' && monthlyData) {
+            prepareChartData(monthlyData, chartMonth.year, chartMonth.month);
+        }
+    }, [monthlyData, chartMonth, role]);
+
+    const changeChartMonth = (delta) => {
+        setChartMonth(prev => {
+            const d = new Date(prev.year, prev.month + delta, 1);
+            return { year: d.getFullYear(), month: d.getMonth() };
+        });
+    };
+
+    const chartMonthLabel = new Date(chartMonth.year, chartMonth.month, 1)
+        .toLocaleDateString('default', { month: 'long', year: 'numeric' });
+    const isCurrentChartMonth = (() => {
+        const now = new Date();
+        return chartMonth.year === now.getFullYear() && chartMonth.month === now.getMonth();
+    })();
 
 
 
@@ -981,50 +1000,6 @@ const Home = () => {
                     </div>
                 </div>
             </div>
-            {/* <div className="row mb-4">
-                <div className="col-12">
-                    <div
-                        className="d-flex flex-wrap justify-content-between align-items-center p-3 rounded-3 shadow-sm"
-                        style={{
-                            backgroundColor: '#f0f8f5',
-                            border: '1px solid rgba(5, 93, 71, 0.15)'
-                        }}
-                    >
-                        <div className="d-flex align-items-center gap-3">
-                            <div
-                                className="rounded-circle d-flex align-items-center justify-content-center"
-                                style={{
-                                    width: '45px',
-                                    height: '45px',
-                                    backgroundColor: 'rgba(5, 93, 71, 0.12)',
-                                    color: '#055d47'
-                                }}
-                            >
-                                <i className="bi bi-megaphone-fill fs-5"></i>
-                            </div>
-
-                            <div>
-                                <h6 className="fw-bold mb-1 text-green">
-                                    What's New?
-                                </h6>
-                                <small className="text-muted">
-                                    Check out the latest application updates and announcements.
-                                </small>
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            className="btn btn-success rounded-pill px-4 mt-2 mt-md-0"
-                            style={{ backgroundColor: '#055d47', borderColor: '#055d47' }}
-                            onClick={() => setShowAnnouncements(true)}
-                        >
-                            <i className="bi bi-eye me-2"></i>
-                            View Updates
-                        </button>
-                    </div>
-                </div>
-            </div> */}
 
             <div className="row g-4">
                 <div className="col-md-5 col-lg-4">
@@ -1103,10 +1078,32 @@ const Home = () => {
                 {role === 'employee' && chartData && (
                     <div className="col-12 mt-4">
                         <div className="card shadow-sm border-0 rounded-4">
-                            <div className="card-header bg-white border-0 pt-4 pb-0 px-4">
+                            <div className="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
                                 <h5 className="fw-bold mb-0 text-green">
                                     <i className="bi bi-graph-up me-2"></i>Monthly Overview
                                 </h5>
+                                <div className="d-flex align-items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() => changeChartMonth(-1)}
+                                        title="Previous month"
+                                    >
+                                        <i className="bi bi-chevron-left"></i>
+                                    </button>
+                                    <span className="fw-semibold text-dark" style={{ minWidth: '120px', textAlign: 'center' }}>
+                                        {chartMonthLabel}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() => changeChartMonth(1)}
+                                        disabled={isCurrentChartMonth}
+                                        title="Next month"
+                                    >
+                                        <i className="bi bi-chevron-right"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div className="card-body p-4">
                                 <div style={{ height: '300px' }}>
