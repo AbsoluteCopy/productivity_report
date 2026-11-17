@@ -1,28 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
-
-const FALLBACK_TIMEZONES = [
-    'UTC',
-    'America/Anchorage', 'America/Los_Angeles', 'America/Denver', 'America/Chicago',
-    'America/New_York', 'America/Toronto', 'America/Vancouver', 'America/Mexico_City',
-    'America/Sao_Paulo', 'America/Argentina/Buenos_Aires',
-    'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid',
-    'Europe/Rome', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Athens', 'Europe/Istanbul',
-    'Europe/Moscow',
-    'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos',
-    'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Dhaka', 'Asia/Bangkok',
-    'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul',
-    'Australia/Sydney', 'Australia/Melbourne', 'Australia/Perth', 'Pacific/Auckland',
-];
-
-const getTimezoneOptions = () => {
-    try {
-        return Intl.supportedValuesOf('timeZone');
-    } catch {
-        return FALLBACK_TIMEZONES;
-    }
-};
+import { getTimezoneOptions } from '../utils/dateUtils';
 
 const Settings = () => {
     const [user, setUser] = useState(null);
@@ -31,12 +10,7 @@ const Settings = () => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
 
-    const timezoneOptions = useMemo(() => {
-        const list = getTimezoneOptions();
-        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const options = detected && !list.includes(detected) ? [detected, ...list] : list;
-        return [...options].sort((a, b) => a.localeCompare(b));
-    }, []);
+    const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
 
     useEffect(() => {
         const load = async () => {

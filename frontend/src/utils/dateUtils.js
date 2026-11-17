@@ -22,6 +22,35 @@ export const getTimezone = () => {
   return DEFAULT_TIMEZONE;
 };
 
+const FALLBACK_TIMEZONES = [
+  'UTC',
+  'America/Anchorage', 'America/Los_Angeles', 'America/Denver', 'America/Chicago',
+  'America/New_York', 'America/Toronto', 'America/Vancouver', 'America/Mexico_City',
+  'America/Sao_Paulo', 'America/Argentina/Buenos_Aires',
+  'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid',
+  'Europe/Rome', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Athens', 'Europe/Istanbul',
+  'Europe/Moscow',
+  'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos',
+  'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Dhaka', 'Asia/Bangkok',
+  'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul',
+  'Australia/Sydney', 'Australia/Melbourne', 'Australia/Perth', 'Pacific/Auckland',
+];
+
+/**
+ * Sorted list of IANA timezone names for dropdowns.
+ */
+export const getTimezoneOptions = () => {
+  let list;
+  try {
+    list = Intl.supportedValuesOf('timeZone');
+  } catch {
+    list = FALLBACK_TIMEZONES;
+  }
+  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const options = detected && !list.includes(detected) ? [detected, ...list] : list;
+  return [...options].sort((a, b) => a.localeCompare(b));
+};
+
 /**
  * Get current date in the configured timezone as YYYY-MM-DD
  */

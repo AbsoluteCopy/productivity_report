@@ -444,7 +444,7 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to create users.', detail: 'You do not have permission to create users.' });
     }
 
-    let { id_number, first_name, last_name, username, email, password, role, company, task_list } = req.body;
+    let { id_number, first_name, last_name, username, email, password, role, company, task_list, timezone } = req.body;
 
     // Explicit field validations
     if (!id_number || typeof id_number !== 'string' || !id_number.trim()) {
@@ -517,9 +517,22 @@ app.post(['/api/users', '/api/users/'], authenticate, async (req, res) => {
     });
     const taskListJson = JSON.stringify(cleanTaskList);
 
+    let cleanTimezone = null;
+    if (timezone !== undefined && timezone !== null) {
+      const tz = String(timezone).trim();
+      if (tz) {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: tz });
+          cleanTimezone = tz;
+        } catch {
+          return res.status(400).json({ error: `Invalid timezone '${tz}'.`, detail: `Invalid timezone '${tz}'.` });
+        }
+      }
+    }
+
     const [result] = await pool.query(
-      'INSERT INTO users (id_number, first_name, last_name, username, email, password, role, company, task_list, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
-      [id_number.trim(), first_name.trim(), last_name.trim(), username || null, email || null, hashedPassword, chosenRole, company ? company.trim() : null, taskListJson]
+      'INSERT INTO users (id_number, first_name, last_name, username, email, password, role, company, task_list, timezone, token_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
+      [id_number.trim(), first_name.trim(), last_name.trim(), username || null, email || null, hashedPassword, chosenRole, company ? company.trim() : null, taskListJson, cleanTimezone]
     );
 
     const [created] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);

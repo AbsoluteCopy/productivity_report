@@ -7,7 +7,7 @@ const API = API_BASE_URL;
 const API_URL = API_BASE_URL;
 import Swal from "sweetalert2";
 import DataTable from "react-data-table-component";
-import { getTimestampInTimezone, parseDateInTimezone } from '../utils/dateUtils';
+import { getTimestampInTimezone, parseDateInTimezone, getTimezoneOptions } from '../utils/dateUtils';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -42,6 +42,7 @@ const ManageAccounts = () => {
         password: "",
         role: "employee",
         company: "",
+        timezone: "",
     };
 
     const [users, setUsers] = useState([]);
@@ -55,6 +56,7 @@ const ManageAccounts = () => {
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [categorySearch, setCategorySearch] = useState("");
+    const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
     const requiredFields = [
         "id_number",
         "first_name",
@@ -428,6 +430,7 @@ const ManageAccounts = () => {
                 email: email || null,
                 role: formData.role || 'employee',
                 company: formData.company ? formData.company.trim() : "",
+                timezone: formData.timezone || null,
             };
 
             if (formData.password && formData.password.trim()) {
@@ -499,6 +502,7 @@ const ManageAccounts = () => {
             password: "",
             role: user.role,
             company: user.company || "",
+            timezone: user.timezone || "",
         });
     };
 
@@ -625,6 +629,14 @@ const ManageAccounts = () => {
             selector: row => row.company || '-',
             sortable: true,
         }] : []),
+        {
+            name: "Timezone",
+            selector: row => row.timezone || 'Default',
+            sortable: true,
+            cell: row => row.timezone
+                ? <span className="badge bg-light text-dark border">{row.timezone}</span>
+                : <span className="text-muted">Default</span>,
+        },
         {
             name: "Actions",
             cell: row => {
@@ -901,6 +913,16 @@ const ManageAccounts = () => {
                                         </datalist>
                                     </>
                                 )}
+
+                                <select className="form-select mb-2" name="timezone" value={formData.timezone} onChange={handleChange}>
+                                    <option value="">Server default (no timezone set)</option>
+                                    {formData.timezone && !timezoneOptions.includes(formData.timezone) && (
+                                        <option value={formData.timezone}>{formData.timezone}</option>
+                                    )}
+                                    {timezoneOptions.map((tz) => (
+                                        <option key={tz} value={tz}>{tz}</option>
+                                    ))}
+                                </select>
 
                             </div>
 
