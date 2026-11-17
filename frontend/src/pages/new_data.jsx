@@ -1765,7 +1765,7 @@ const NewData = () => {
                                                 onChange={e => setDescription(e.target.value)}
                                                 placeholder="What did you do for this task?" />
                                         </div>
-                                        <div className="mb-3">
+                                        <div className="mb-3" hidden>
                                             <label className="form-label fw-semibold text-green-dark">Attachment (optional, max 10 MB)</label>
                                             <input type="file" className="form-control"
                                                 onChange={e => setAttachment(e.target.files[0] || null)} />
@@ -1790,78 +1790,81 @@ const NewData = () => {
 
                     {/* Right Side Card */}
                     <div className="col-lg-4">
-                        <div className="card shadow-sm h-100">
-                            <div className="card-body">
+                        <div className="card shadow-sm h-100 border-0">
+                            <div className="card-body p-4">
 
-                                <h5 className="fw-bold mb-3">
-                                    <i className="bi bi-bar-chart me-2"></i>
-                                    Task Details
-                                </h5>
-
-                                <div className="mb-3">
-                                    <small className="text-muted d-block">
-                                        Date
-                                    </small>
-                                    <div className="fw-semibold">
-                                        {p.date}
-                                    </div>
-                                </div>
-                                <div className="mb-3">
-                                    <small className="text-muted d-block">
-                                        Current Time
-                                    </small>
-                                    <div className="fw-semibold">
-                                        {new Date().toLocaleTimeString()}
-                                    </div>
-                                </div>
-                                
-                                <div className="mb-3">
-                                    <small className="text-muted d-block">
-                                        Time Started
-                                    </small>
-                                    <div className="fw-semibold">
-                                        {new Date(run.startedAt).toLocaleTimeString()}
-                                    </div>
+                                <div className="d-flex align-items-center gap-2 mb-4 pb-3 border-bottom">
+                                    <span className="d-inline-flex align-items-center justify-content-center rounded-3 bg-success-subtle text-success" style={{ width: 36, height: 36 }}>
+                                        <i className="bi bi-bar-chart"></i>
+                                    </span>
+                                    <h5 className="fw-bold mb-0">Task Details</h5>
                                 </div>
 
-                                <div className="mb-3">
-                                    <small className="text-muted d-block">
-                                        Elapsed Time
-                                    </small>
-                                    <div className="fw-semibold">
-                                        {fmtClock(elapsedSec)}
-                                    </div>
-                                </div>
+                                <ul className="list-group list-group-flush mb-3">
+                                    <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                        <span className="text-muted d-flex align-items-center gap-2">
+                                            <i className="bi bi-calendar3"></i>Date
+                                        </span>
+                                        <span className="fw-semibold">{p.date}</span>
+                                    </li>
+                                    <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                        <span className="text-muted d-flex align-items-center gap-2">
+                                            <i className="bi bi-clock"></i>Current Time
+                                        </span>
+                                        <span className="fw-semibold">{new Date().toLocaleTimeString()}</span>
+                                    </li>
+                                    <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                        <span className="text-muted d-flex align-items-center gap-2">
+                                            <i className="bi bi-play-circle"></i>Time Started
+                                        </span>
+                                        <span className="fw-semibold">{new Date(run.startedAt).toLocaleTimeString()}</span>
+                                    </li>
+                                    <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                        <span className="text-muted d-flex align-items-center gap-2">
+                                            <i className="bi bi-stopwatch"></i>Elapsed Time
+                                        </span>
+                                        <span className="fw-semibold fs-5">{fmtClock(elapsedSec)}</span>
+                                    </li>
+                                    <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                        <span className="text-muted d-flex align-items-center gap-2">
+                                            <i className="bi bi-bullseye"></i>Target Time
+                                        </span>
+                                        <span className="fw-semibold">{cur.expectedSeconds ? fmtClock(cur.expectedSeconds) : "N/A"}</span>
+                                    </li>
+                                    {!overtime && (
+                                        <li className="list-group-item d-flex justify-content-between align-items-center px-0 border-0 py-2">
+                                            <span className="text-muted d-flex align-items-center gap-2">
+                                                <i className="bi bi-hourglass-split"></i>Time Remaining
+                                            </span>
+                                            <span className="fw-semibold">{`${fmtClock(cur.expectedSeconds - elapsedSec)}`}</span>
+                                        </li>
+                                    )}
+                                </ul>
 
-                                <div className="mb-3">
-                                    <small className="text-muted d-block">
-                                        Target Time
-                                    </small>
-                                    <div className="fw-semibold">
-                                        {cur.expectedSeconds
-                                            ? fmtClock(cur.expectedSeconds)
-                                            : "N/A"}
-                                    </div>
-                                </div>
-                                {!overtime && (
+                                {cur.expectedSeconds > 0 && (
                                     <div className="mb-3">
-                                        <small className="text-muted d-block">
-                                            Time Remaining
-                                        </small>
-                                        <div className="fw-semibold">
-                                            {`${fmtClock(cur.expectedSeconds - elapsedSec)}`}
+                                        <div className="d-flex justify-content-between small mb-1">
+                                            <span className="text-muted">Progress</span>
+                                            <span className="fw-semibold">{Math.round(pct)}%</span>
+                                        </div>
+                                        <div className="progress" style={{ height: 8 }}>
+                                            <div
+                                                className={`progress-bar ${overtime ? "bg-danger" : "bg-success"}`}
+                                                role="progressbar"
+                                                style={{ width: `${pct}%` }}
+                                            ></div>
                                         </div>
                                     </div>
-
                                 )}
-                                <div>
-                                    <small className="text-muted d-block">
-                                        Status
-                                    </small>
+
+                                <div className="d-flex align-items-center justify-content-between rounded-3 px-3 py-2 bg-light border">
+                                    <span className="text-muted d-flex align-items-center gap-2">
+                                        <i className="bi bi-activity"></i>Status
+                                    </span>
                                     <span
-                                        className={`badge ${overtime
-                                            ? "bg-danger"
-                                            : "bg-success"
+                                        className={`badge rounded-pill px-3 py-2 ${overtime
+                                            ? "bg-danger-subtle text-danger border border-danger-subtle"
+                                            : "bg-success-subtle text-success border border-success-subtle"
                                             }`}
                                     >
                                         {overtime ? "Beyond suggested time" : "On Track"}
