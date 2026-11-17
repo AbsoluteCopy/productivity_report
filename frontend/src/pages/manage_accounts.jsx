@@ -783,16 +783,34 @@ const ManageAccounts = () => {
             {/* Modal */}
 
             <div className="modal fade" id="userModal" tabIndex="-1">
-                <div className="modal-dialog">
+                <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
 
-                    <div className="modal-content">
+                    <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-                        <div className="modal-header main-background text-white">
-                            <h5 className="modal-title">
-                                {editingId ? "Edit Account" : "Add Account"}
-                            </h5>
+                        <div className="modal-header main-background text-white border-0 px-4 py-3">
+                            <div className="d-flex align-items-center gap-3">
+                                <div
+                                    className="rounded-circle bg-white bg-opacity-25 d-flex align-items-center justify-content-center flex-shrink-0"
+                                    style={{ width: 44, height: 44 }}
+                                >
+                                    <i className={`bi ${editingId ? "bi-pencil-square" : "bi-person-plus-fill"} fs-5`}></i>
+                                </div>
+                                <div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <h5 className="modal-title fw-bold mb-0">
+                                            {editingId ? "Edit Account" : "Add Account"}
+                                        </h5>
+                                        {formData.role && (
+                                            <span className="badge rounded-pill bg-white text-success-emphasis fw-semibold text-capitalize px-3 py-1" style={{ fontSize: "0.7rem" }}>
+                                                <i className="bi bi-person-badge me-1"></i>
+                                                {formData.role}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
-                            <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" className="btn-close btn-close-white flex-shrink-0" data-bs-dismiss="modal" aria-label="Close"></button>
 
                         </div>
 
@@ -803,7 +821,7 @@ const ManageAccounts = () => {
                                 handleSubmit();
                             }}
                         >
-                            <div className="modal-body">
+                            <div className="modal-body bg-light px-4 py-4">
                                 {/* Honeypots to absorb aggressive browser autofill prompts */}
                                 <input
                                     type="text"
@@ -822,122 +840,206 @@ const ManageAccounts = () => {
                                     readOnly
                                 />
 
-                                <input className="form-control mb-2"
-                                    name="first_name"
-                                    placeholder="First Name"
-                                    value={formData.first_name}
-                                    onChange={handleChange}
-                                    autoComplete="off"
-                                />
+                                {/* Personal Information */}
+                                <h6 className="text-uppercase text-muted fw-bold mb-3" style={{ fontSize: "0.75rem", letterSpacing: "0.08em" }}>
+                                    <i className="bi bi-person-vcard me-2"></i>Personal Information
+                                </h6>
 
-                                <input className="form-control mb-2"
-                                    name="last_name"
-                                    placeholder="Last Name"
-                                    value={formData.last_name}
-                                    onChange={handleChange}
-                                    autoComplete="off"
-                                />
-
-                                <input className="form-control mb-2"
-                                    name="id_number"
-                                    placeholder="ID Number"
-                                    value={formData.id_number}
-                                    onChange={handleChange}
-                                    autoComplete="off"
-                                />
-
-                                <input className="form-control mb-2"
-                                    name="username"
-                                    placeholder="Username (optional)"
-                                    value={formData.username}
-                                    onChange={handleChange}
-                                    autoComplete="off"
-                                />
-
-                                <input className="form-control mb-2"
-                                    name="email"
-                                    type="email"
-                                    placeholder="Email (optional)"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    autoComplete="off"
-                                />
-
-                                <input className="form-control mb-2"
-                                    name="password"
-                                    type="password"
-                                    placeholder={
-                                        editingId
-                                            ? "Leave blank to keep current password"
-                                            : "Password"
-                                    }
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    autoComplete="new-password"
-                                />
-
-                                {currentUser?.role === 'admin' ? (
-                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
-                                        <option value="admin">Admin</option>
-                                        <option value="hr">HR</option>
-                                        <option value="supervisor">Supervisor</option>
-                                        <option value="viewer">Viewer</option>
-                                        <option value="employee">Employee</option>
-                                    </select>
-                                ) : currentUser?.role === 'hr' ? (
-                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange}>
-                                        <option value="employee">Employee</option>
-                                        <option value="supervisor">Supervisor</option>
-                                        <option value="viewer">Viewer</option>
-                                    </select>
-                                ) : (
-                                    <select className="form-select mb-2" name="role" value={formData.role} onChange={handleChange} disabled>
-                                        <option value="employee">Employee</option>
-                                    </select>
-                                )}
-
-                                {currentUser?.role === 'admin' && (
-                                    <>
-                                        <input className="form-control mb-2"
-                                            name="company"
-                                            placeholder="Company (optional)"
-                                            value={formData.company}
+                                <div className="row g-3 mb-4">
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userFirstName">
+                                            First Name <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            id="userFirstName"
+                                            className="form-control"
+                                            name="first_name"
+                                            placeholder="e.g. Juan"
+                                            value={formData.first_name}
                                             onChange={handleChange}
-                                            list="company-suggestions"
                                             autoComplete="off"
                                         />
-                                        <datalist id="company-suggestions">
-                                            {[...new Set(users.map(u => u.company).filter(Boolean))].sort().map(c => (
-                                                <option key={c} value={c} />
-                                            ))}
-                                        </datalist>
-                                    </>
-                                )}
-
-                                <select className="form-select mb-2" name="timezone" value={formData.timezone} onChange={handleChange}>
-                                    <option value="">Server default (no timezone set)</option>
-                                    {formData.timezone && !timezoneOptions.includes(formData.timezone) && (
-                                        <option value={formData.timezone}>{formData.timezone}</option>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userLastName">
+                                            Last Name <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            id="userLastName"
+                                            className="form-control"
+                                            name="last_name"
+                                            placeholder="e.g. Dela Cruz"
+                                            value={formData.last_name}
+                                            onChange={handleChange}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userIdNumber">
+                                            ID Number <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            id="userIdNumber"
+                                            className="form-control"
+                                            name="id_number"
+                                            placeholder="Employee ID"
+                                            value={formData.id_number}
+                                            onChange={handleChange}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    {currentUser?.role === 'admin' && (
+                                        <div className="col-md-6">
+                                            <label className="form-label fw-semibold mb-1" htmlFor="userCompany">
+                                                Company <span className="text-muted fw-normal">(optional)</span>
+                                            </label>
+                                            <input
+                                                id="userCompany"
+                                                className="form-control"
+                                                name="company"
+                                                placeholder="Company name"
+                                                value={formData.company}
+                                                onChange={handleChange}
+                                                list="company-suggestions"
+                                                autoComplete="off"
+                                            />
+                                            <datalist id="company-suggestions">
+                                                {[...new Set(users.map(u => u.company).filter(Boolean))].sort().map(c => (
+                                                    <option key={c} value={c} />
+                                                ))}
+                                            </datalist>
+                                        </div>
                                     )}
-                                    {timezoneOptions.map((tz) => (
-                                        <option key={tz} value={tz}>{tz}</option>
-                                    ))}
-                                </select>
+                                </div>
+
+                                {/* Account & Security */}
+                                <h6 className="text-uppercase text-muted fw-bold mb-3" style={{ fontSize: "0.75rem", letterSpacing: "0.08em" }}>
+                                    <i className="bi bi-shield-lock me-2"></i>Account &amp; Security
+                                </h6>
+
+                                <div className="row g-3 mb-4">
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userUsername">
+                                            Username <span className="text-muted fw-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            id="userUsername"
+                                            className="form-control"
+                                            name="username"
+                                            placeholder="Login username"
+                                            value={formData.username}
+                                            onChange={handleChange}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userEmail">
+                                            Email <span className="text-muted fw-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            id="userEmail"
+                                            className="form-control"
+                                            name="email"
+                                            type="email"
+                                            placeholder="name@company.com"
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userPassword">
+                                            Password {editingId && <span className="text-muted fw-normal">(leave blank to keep current)</span>}
+                                        </label>
+                                        <input
+                                            id="userPassword"
+                                            className="form-control"
+                                            name="password"
+                                            type="password"
+                                            placeholder={editingId ? "••••••••" : "Set a password"}
+                                            value={formData.password}
+                                            onChange={handleChange}
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userRole">
+                                            Role <span className="text-danger">*</span>
+                                        </label>
+                                        {currentUser?.role === 'admin' ? (
+                                            <select id="userRole" className="form-select" name="role" value={formData.role} onChange={handleChange}>
+                                                <option value="admin">Admin</option>
+                                                <option value="hr">HR</option>
+                                                <option value="supervisor">Supervisor</option>
+                                                <option value="viewer">Viewer</option>
+                                                <option value="employee">Employee</option>
+                                            </select>
+                                        ) : currentUser?.role === 'hr' ? (
+                                            <select id="userRole" className="form-select" name="role" value={formData.role} onChange={handleChange}>
+                                                <option value="employee">Employee</option>
+                                                <option value="supervisor">Supervisor</option>
+                                                <option value="viewer">Viewer</option>
+                                            </select>
+                                        ) : (
+                                            <select id="userRole" className="form-select" name="role" value={formData.role} onChange={handleChange} disabled>
+                                                <option value="employee">Employee</option>
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Preferences */}
+                                <h6 className="text-uppercase text-muted fw-bold mb-3" style={{ fontSize: "0.75rem", letterSpacing: "0.08em" }}>
+                                    <i className="bi bi-gear me-2"></i>Preferences
+                                </h6>
+
+                                <div className="row g-3">
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold mb-1" htmlFor="userTimezone">
+                                            Timezone
+                                        </label>
+                                        <select id="userTimezone" className="form-select" name="timezone" value={formData.timezone} onChange={handleChange}>
+                                            <option value="">Server default (no timezone set)</option>
+                                            {formData.timezone && !timezoneOptions.includes(formData.timezone) && (
+                                                <option value={formData.timezone}>{formData.timezone}</option>
+                                            )}
+                                            {timezoneOptions.map((tz) => (
+                                                <option key={tz} value={tz}>{tz}</option>
+                                            ))}
+                                        </select>
+                                        <div className="form-text">
+                                            Used to display dates and timestamps correctly for this user.
+                                        </div>
+                                    </div>
+                                </div>
 
                             </div>
 
-                            <div className="modal-footer">
+                            <div className="modal-footer border-0 bg-white px-4 py-3">
 
-                                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal" id="closeModal">
+                                <button type="button" className="btn btn-outline-secondary" data-bs-dismiss="modal" id="closeModal">
                                     Cancel
                                 </button>
 
-                                <button type="submit" className="btn btn-primary" disabled={loading}>
-                                    {loading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update"
-                                            : "Create"}
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary px-4"
+                                    disabled={loading || !isValid}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Saving...
+                                        </>
+                                    ) : editingId ? (
+                                        <>
+                                            <i className="bi bi-check2-circle me-1"></i> Update Account
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-plus-circle me-1"></i> Create Account
+                                        </>
+                                    )}
                                 </button>
 
                             </div>
