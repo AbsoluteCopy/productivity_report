@@ -11,6 +11,7 @@ const Settings = () => {
     const [fetching, setFetching] = useState(true);
 
     const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
+    const canEditTimezone = user ? ['admin', 'hr'].includes(user.role) : false;
 
     useEffect(() => {
         const load = async () => {
@@ -129,6 +130,7 @@ const Settings = () => {
                                                 className="form-select"
                                                 value={timezone}
                                                 onChange={(e) => setTimezone(e.target.value)}
+                                                disabled={!canEditTimezone}
                                             >
                                                 <option value="">Server default (no timezone set)</option>
                                                 {timezone && !timezoneOptions.includes(timezone) && (
@@ -143,19 +145,22 @@ const Settings = () => {
                                                 className="btn btn-outline-secondary"
                                                 onClick={handleUseBrowserTimezone}
                                                 title="Use my browser's timezone"
+                                                disabled={!canEditTimezone}
                                             >
                                                 <i className="bi bi-globe"></i> Auto
                                             </button>
                                         </div>
                                         <div className="form-text">
-                                            Used for displaying dates and times in your reports.
+                                            {canEditTimezone
+                                                ? 'Used for displaying dates and times in your reports.'
+                                                : 'Only administrators and HR can change the timezone.'}
                                         </div>
                                     </div>
 
                                     <button
                                         type="submit"
                                         className="btn btn-primary w-100"
-                                        disabled={loading}
+                                        disabled={loading || !canEditTimezone}
                                     >
                                         {loading ? 'Saving...' : 'Save Settings'}
                                     </button>

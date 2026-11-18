@@ -822,7 +822,13 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       updates.push('password = ?');
       params.push(hashed);
     }
+    // Timezone determines the wall-clock time stamped on clock-in/clock-out,
+    // so only admin/HR may change it — otherwise a user could temporarily set
+    // a timezone where it's still early, clock in, then switch back.
     if (timezone !== undefined) {
+      if (!isAdmin && !isHR) {
+        return res.status(403).json({ error: 'Only administrators and HR can change the timezone.', detail: 'Only administrators and HR can change the timezone.' });
+      }
       const tz = typeof timezone === 'string' ? timezone.trim() : '';
       if (tz) {
         try {
