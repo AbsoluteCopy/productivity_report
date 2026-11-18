@@ -143,6 +143,12 @@ const NewData = () => {
         if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); clearCurrentTask(); }
     };
 
+    const clearCategoryInputs = () => {
+        setCategories([
+            { id: 1, category: '', tasks: [], currentTask: '', timeSpent: '', meetingCount: 0, work_type: '', sub_category: '', meetingTitle: '', hasTimeSpent: false }
+        ]);
+    };
+
     const saveRunTask = async (paused) => {
         const cur = run.queue[run.index];
         const backDated = isBackDatedItem(cur);
@@ -182,6 +188,10 @@ const NewData = () => {
                 setDescription('');
                 setAttachment(null);
                 clearCurrentTask();
+                if (paused) {
+                    clearCategoryInputs();
+                    fetchExistingDayReports(formData.date, formData.user_id || cur.payload.user);
+                }
 
                 Swal.fire({
                     title: 'Saved!',
@@ -257,6 +267,10 @@ const NewData = () => {
             setDescription('');
             setAttachment(null);
             clearCurrentTask();
+            if (paused) {
+                clearCategoryInputs();
+                fetchExistingDayReports(formData.date, formData.user_id || cur.payload.user);
+            }
 
             setRun(
                 paused
@@ -337,6 +351,7 @@ const NewData = () => {
             confirmButtonText: 'Yes, Pause it',
             cancelButtonText: 'Continue Working',
             reverseButtons: true,
+            confirmButtonColor: '#055d47',
         });
         if (r.isConfirmed) {
             await saveRunTask(true);
@@ -725,6 +740,101 @@ const NewData = () => {
         return (c.category || '').trim();
     };
 
+    const DUPLICATE_SKIP_CATEGORIES = ['Meeting', 'PTO', 'Holiday', 'Company Event'];
+
+    // Suffix formats offered when continuing past a duplicate task.
+    // `prefix` is the text before the number; `match` is the regex fragment used
+    // to detect already-used numbers for this format.
+    const DUPLICATE_SUFFIX_FORMATS = {
+        endorsement: { label: 'Endorsement', prefix: 'Endorsement #', match: 'Endorsement\\s*#?' },
+        intakes_update: { label: 'Intakes Update', prefix: 'Intakes Update #', match: 'Intakes\\s+Update\\s*#?' },
+        number: { label: 'Number', prefix: '#', match: '#' },
+        payment: { label: 'Payment', prefix: 'Payment #', match: 'Payment\\s*#?' },
+        revision: { label: 'Revision', prefix: 'Rev.', match: 'Rev\\.?' },
+        update: { label: 'Update', prefix: 'Update #', match: 'Update\\s*#?' },
+    };
+
+    const getDuplicateTaskPool = (extraTasks = []) => [
+        ...categories.flatMap(c => c.tasks || []),
+        ...extraTasks
+    ];
+
+    const buildSuffixedTaskName = (taskName, kind, num) =>
+        `${taskName} (${DUPLICATE_SUFFIX_FORMATS[kind].prefix} ${num})`;
+
+    const getNextTaskSuffixNumber = async (taskName, kind, pool, existsRemote = null) => {
+        const format = DUPLICATE_SUFFIX_FORMATS[kind];
+        const escaped = taskName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`^${escaped}\\s*\\(\\s*${format.match}\\s*(\\d+)\\s*\\)$`, 'i');
+        let max = 0;
+        for (const t of pool) {
+            const match = (t || '').trim().match(pattern);
+            if (match) max = Math.max(max, parseInt(match[1], 10) || 0);
+        }
+        let next = max + 1;
+        // Skip numbers already used by suffixed variants in the database
+        if (existsRemote) {
+            while (await existsRemote(buildSuffixedTaskName(taskName, kind, next))) {
+                next++;
+            }
+        }
+        return next;
+    };
+
+    const checkRemoteTaskDuplicate = async (taskName, cat) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
+                params: {
+                    task: taskName,
+                    category: cat.category,
+                    sub_category: cat.sub_category || undefined,
+                    exclude_id: editId || undefined
+                },
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            return res.data && res.data.duplicate ? res.data : null;
+        } catch (err) {
+            console.error('Error checking duplicate task with server:', err);
+            return null;
+        }
+    };
+
+    // Returns the renamed task ("Task (Rev. N)" / "Task (# N)"), or null if cancelled.
+    const promptDuplicateTaskFormat = async (taskName, title, message, extraPool = [], existsRemote = null) => {
+        const first = await Swal.fire({
+            icon: 'warning',
+            title,
+            text: message,
+            showCancelButton: true,
+            confirmButtonColor: '#065d48',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Continue Anyway',
+            cancelButtonText: 'Cancel'
+        });
+        if (!first.isConfirmed) return null;
+
+        const second = await Swal.fire({
+            title: 'Rename Duplicate Task',
+            input: 'select',
+            inputLabel: `Choose a format for "${taskName}"`,
+            inputOptions: Object.fromEntries(
+                Object.entries(DUPLICATE_SUFFIX_FORMATS).map(([key, fmt]) => [key, fmt.label])
+            ),
+            inputPlaceholder: 'Select format',
+            showCancelButton: true,
+            confirmButtonText: 'Apply',
+            cancelButtonText: 'Back',
+            inputValidator: (value) => !value && 'Please select a format',
+            confirmButtonColor: '#065d48',
+            cancelButtonColor: '#6c757d'
+        });
+        if (!second.isConfirmed || !second.value) return null;
+
+        const nextNum = await getNextTaskSuffixNumber(taskName, second.value, getDuplicateTaskPool(extraPool), existsRemote);
+        return buildSuffixedTaskName(taskName, second.value, nextNum);
+    };
+
     const addTask = async (id, taskValue) => {
         if (!taskValue || !taskValue.trim()) return;
         const newTask = taskValue.trim();
@@ -750,49 +860,47 @@ const NewData = () => {
             c.id === id || (targetCatName && getEffectiveCatName(c).toLowerCase() === targetCatName.toLowerCase())
         );
         const allTasksInCat = sameCatRows.flatMap(c => c.tasks);
+        const checkServerDuplicate = targetCat.category && !DUPLICATE_SKIP_CATEGORIES.includes(targetCat.category);
+        const existsRemote = checkServerDuplicate
+            ? async (name) => !!(await checkRemoteTaskDuplicate(name, targetCat))
+            : null;
 
-        const isLocalDuplicate = allTasksInCat.some(
-            t => t.trim().toLowerCase() === newTask.toLowerCase()
-        );
+        let finalTask = newTask;
+        while (true) {
+            const isLocalDuplicate = allTasksInCat.some(
+                t => t.trim().toLowerCase() === finalTask.toLowerCase()
+            );
 
-        if (isLocalDuplicate) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Duplicate Task',
-                text: `"${newTask}" has already been added for "${targetCatName}" in this form.`,
-                confirmButtonColor: '#065d48',
-                confirmButtonText: 'OK'
-            });
-            return;
-        }
-
-        // 2. Check system-wide database duplicate across all users and dates
-        if (targetCat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCat.category)) {
-            try {
-                const token = localStorage.getItem('token');
-                const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
-                    params: {
-                        task: newTask,
-                        category: targetCat.category,
-                        sub_category: targetCat.sub_category || undefined,
-                        exclude_id: editId || undefined
-                    },
-                    headers: token ? { Authorization: `Bearer ${token}` } : {}
-                });
-
-                if (checkRes.data && checkRes.data.duplicate) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Duplicate Task (System-Wide)',
-                        text: `"${newTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
-                        confirmButtonColor: '#065d48',
-                        confirmButtonText: 'OK'
-                    });
-                    return;
-                }
-            } catch (err) {
-                console.error('Error checking duplicate task with server:', err);
+            if (isLocalDuplicate) {
+                const formatted = await promptDuplicateTaskFormat(
+                    finalTask,
+                    'Duplicate Task',
+                    `"${finalTask}" has already been added for "${targetCatName}" in this form.`,
+                    [],
+                    existsRemote
+                );
+                if (formatted === null) return;
+                finalTask = formatted;
+                continue;
             }
+
+            // 2. Check system-wide database duplicate across all users and dates
+            if (checkServerDuplicate) {
+                const dup = await checkRemoteTaskDuplicate(finalTask, targetCat);
+                if (dup) {
+                    const formatted = await promptDuplicateTaskFormat(
+                        finalTask,
+                        'Duplicate Task (System-Wide)',
+                        `"${finalTask}" was already submitted for category "${dup.category}" by ${dup.submitted_by} on ${dup.date}. Duplicates are not allowed across the system.`,
+                        [],
+                        existsRemote
+                    );
+                    if (formatted === null) return;
+                    finalTask = formatted;
+                    continue;
+                }
+            }
+            break;
         }
 
         // Add task to category and clear currentTask
@@ -800,7 +908,7 @@ const NewData = () => {
             if (cat.id === id) {
                 return {
                     ...cat,
-                    tasks: [...cat.tasks, newTask],
+                    tasks: [...cat.tasks, finalTask],
                     currentTask: ''
                 };
             }
@@ -1019,45 +1127,40 @@ const NewData = () => {
         for (let cat of categories) {
             let catTasks = [...cat.tasks];
             if (cat.currentTask && cat.currentTask.trim()) {
-                const pendingTask = cat.currentTask.trim();
-                if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
-                    // Check duplicate in local form
-                    const isLocalDup = catTasks.some(t => t.trim().toLowerCase() === pendingTask.toLowerCase());
-                    if (isLocalDup) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Duplicate Task Detected',
-                            text: `"${pendingTask}" in category "${getEffectiveCatName(cat)}" is already added. Please remove it before submitting.`,
-                            confirmButtonColor: '#065d48',
-                            confirmButtonText: 'OK'
-                        });
-                        return;
-                    }
-
-                    // Check system-wide duplicate
-                    try {
-                        const token = localStorage.getItem('token');
-                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
-                            params: {
-                                task: pendingTask,
-                                category: cat.category,
-                                sub_category: cat.sub_category || undefined,
-                                exclude_id: editId || undefined
-                            },
-                            headers: token ? { Authorization: `Bearer ${token}` } : {}
-                        });
-                        if (checkRes.data && checkRes.data.duplicate) {
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Duplicate Task Detected (System-Wide)',
-                                text: `Cannot submit: "${pendingTask}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
-                                confirmButtonColor: '#065d48',
-                                confirmButtonText: 'OK'
-                            });
-                            return;
+                let pendingTask = cat.currentTask.trim();
+                if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
+                    const existsRemote = async (name) => !!(await checkRemoteTaskDuplicate(name, cat));
+                    while (true) {
+                        // Check duplicate in local form
+                        const isLocalDup = catTasks.some(t => t.trim().toLowerCase() === pendingTask.toLowerCase());
+                        if (isLocalDup) {
+                            const formatted = await promptDuplicateTaskFormat(
+                                pendingTask,
+                                'Duplicate Task Detected',
+                                `"${pendingTask}" in category "${getEffectiveCatName(cat)}" is already added. Please remove it before submitting.`,
+                                catTasks,
+                                existsRemote
+                            );
+                            if (formatted === null) return;
+                            pendingTask = formatted;
+                            continue;
                         }
-                    } catch (err) {
-                        console.error('Error checking duplicate in handleSubmit:', err);
+
+                        // Check system-wide duplicate
+                        const dup = await checkRemoteTaskDuplicate(pendingTask, cat);
+                        if (dup) {
+                            const formatted = await promptDuplicateTaskFormat(
+                                pendingTask,
+                                'Duplicate Task Detected (System-Wide)',
+                                `Cannot Start: "${pendingTask}" was already submitted for category "${dup.category}" by ${dup.submitted_by} on ${dup.date}. Duplicates are not allowed across the system.`,
+                                catTasks,
+                                existsRemote
+                            );
+                            if (formatted === null) return;
+                            pendingTask = formatted;
+                            continue;
+                        }
+                        break;
                     }
 
                     catTasks.push(pendingTask);
@@ -1069,20 +1172,24 @@ const NewData = () => {
         // Check for duplicate tasks across rows of the same category
         const catTaskMap = {};
         for (let cat of processedCategories) {
-            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
+            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
                 const catKey = getEffectiveCatName(cat).toLowerCase();
                 if (!catTaskMap[catKey]) catTaskMap[catKey] = new Set();
-                for (let t of cat.tasks) {
+                for (let ti = 0; ti < cat.tasks.length; ti++) {
+                    const t = cat.tasks[ti];
                     const taskKey = t.trim().toLowerCase();
                     if (catTaskMap[catKey].has(taskKey)) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Duplicate Task Detected',
-                            text: `Duplicate task "${t}" found in category "${getEffectiveCatName(cat)}". Please remove the duplicate before submitting.`,
-                            confirmButtonColor: '#065d48',
-                            confirmButtonText: 'OK'
-                        });
-                        return;
+                        const formatted = await promptDuplicateTaskFormat(
+                            t,
+                            'Duplicate Task Detected',
+                            `Duplicate task "${t}" found in category "${getEffectiveCatName(cat)}". Please remove the duplicate before submitting.`,
+                            cat.tasks,
+                            async (name) => !!(await checkRemoteTaskDuplicate(name, cat))
+                        );
+                        if (formatted === null) return;
+                        cat.tasks[ti] = formatted;
+                        catTaskMap[catKey].add(formatted.trim().toLowerCase());
+                        continue;
                     }
                     catTaskMap[catKey].add(taskKey);
                 }
@@ -1091,31 +1198,25 @@ const NewData = () => {
 
         // System-wide duplicate check for all tasks in all categories
         for (let cat of processedCategories) {
-            if (cat.category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(cat.category)) {
-                for (let t of cat.tasks) {
-                    try {
-                        const token = localStorage.getItem('token');
-                        const checkRes = await axios.get(`${API_BASE_URL}/daily-reports/check-duplicate/`, {
-                            params: {
-                                task: t,
-                                category: cat.category,
-                                sub_category: cat.sub_category || undefined,
-                                exclude_id: editId || undefined
-                            },
-                            headers: token ? { Authorization: `Bearer ${token}` } : {}
-                        });
-                        if (checkRes.data && checkRes.data.duplicate) {
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Duplicate Task Detected (System-Wide)',
-                                text: `Cannot submit: "${t}" was already submitted for category "${checkRes.data.category}" by ${checkRes.data.submitted_by} on ${checkRes.data.date}. Duplicates are not allowed across the system.`,
-                                confirmButtonColor: '#065d48',
-                                confirmButtonText: 'OK'
-                            });
-                            return;
+            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
+                for (let ti = 0; ti < cat.tasks.length; ti++) {
+                    let t = cat.tasks[ti];
+                    while (true) {
+                        const dup = await checkRemoteTaskDuplicate(t, cat);
+                        if (dup) {
+                            const formatted = await promptDuplicateTaskFormat(
+                                t,
+                                'Duplicate Task Detected (System-Wide)',
+                                `Cannot submit: "${t}" was already submitted for category "${dup.category}" by ${dup.submitted_by} on ${dup.date}. Duplicates are not allowed across the system.`,
+                                cat.tasks,
+                                async (name) => !!(await checkRemoteTaskDuplicate(name, cat))
+                            );
+                            if (formatted === null) return;
+                            t = formatted;
+                            cat.tasks[ti] = t;
+                            continue;
                         }
-                    } catch (err) {
-                        console.error('Error checking duplicate in handleSubmit:', err);
+                        break;
                     }
                 }
             }
