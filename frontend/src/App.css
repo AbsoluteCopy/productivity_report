@@ -267,3 +267,370 @@ img {
   width: 0;
   pointer-events: none;
 }
+
+/* ===== Dark mode (enabled per-user via users.dark_mode) ===== */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0f1513;
+  color: #e4e9e7;
+}
+
+html.dark #root {
+  border-color: #1f2b28;
+}
+
+/* Surfaces */
+html.dark .card,
+html.dark .card-offwhite,
+html.dark .bg-white {
+  background-color: #1a2421 !important;
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .bg-light {
+  background-color: #223029 !important;
+  color: #e4e9e7;
+}
+
+html.dark .list-group-item {
+  background-color: #1a2421;
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .modal-content,
+html.dark .offcanvas {
+  background-color: #1a2421;
+  color: #e4e9e7;
+}
+
+html.dark .dropdown-menu {
+  background-color: #1a2421;
+  border-color: #2a3a35;
+}
+
+html.dark .dropdown-item {
+  color: #e4e9e7;
+}
+
+html.dark .dropdown-item:hover,
+html.dark .dropdown-item:focus {
+  background-color: #2a3a35;
+  color: #fff;
+}
+
+html.dark .dropdown-divider {
+  border-color: #2a3a35;
+}
+
+/* Text */
+html.dark .text-dark,
+html.dark .text-ink,
+html.dark .text-black {
+  color: #e4e9e7 !important;
+}
+
+html.dark .text-muted {
+  color: #9db3ab !important;
+}
+
+html.dark .text-green,
+html.dark .text-green-dark {
+  color: #5fc7ac !important;
+}
+
+/* Tables */
+html.dark .table {
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .table > :not(caption) > * > * {
+  background-color: transparent;
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .table-light > :not(caption) > * > * {
+  background-color: #223029 !important;
+  color: #e4e9e7;
+}
+
+html.dark .table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-accent-bg: #1f2b28;
+}
+
+html.dark .table-hover > tbody > tr:hover > * {
+  --bs-table-accent-bg: #243430;
+  color: #fff;
+}
+
+/* Colored rows (weekend/leave/daily-total) keep readable text on dark surfaces.
+   The variant classes are applied to the <tr>, so target its cells directly.
+   Bootstrap paints cell backgrounds via --bs-table-bg plus an inset box-shadow
+   using --bs-table-accent-bg, so the variables must be overridden too. */
+html.dark tr.table-warning > td,
+html.dark tr.table-warning > th {
+  --bs-table-bg: #3d3413;
+  --bs-table-accent-bg: #3d3413;
+  --bs-table-striped-bg: #3d3413;
+  --bs-table-hover-bg: #4a3f1a;
+  --bs-table-active-bg: #4a3f1a;
+  --bs-table-border-color: #4a3f1a;
+  color: #f0e2b8 !important;
+}
+
+html.dark tr.table-success > td,
+html.dark tr.table-success > th {
+  --bs-table-bg: #1e3328;
+  --bs-table-accent-bg: #1e3328;
+  --bs-table-striped-bg: #1e3328;
+  --bs-table-hover-bg: #274a37;
+  --bs-table-active-bg: #274a37;
+  --bs-table-border-color: #2a453a;
+  color: #d2ecdd !important;
+}
+
+html.dark tr.table-info > td,
+html.dark tr.table-info > th {
+  --bs-table-bg: #16303d;
+  --bs-table-accent-bg: #16303d;
+  --bs-table-striped-bg: #16303d;
+  --bs-table-hover-bg: #1f4254;
+  --bs-table-active-bg: #1f4254;
+  --bs-table-border-color: #274653;
+  color: #c9e6f2 !important;
+}
+
+html.dark .table-responsive,
+html.dark .table-responsive-sm,
+html.dark .table-responsive-md,
+html.dark .table-responsive-lg,
+html.dark .table-responsive-xl,
+html.dark .table-responsive-xxl {
+  border-color: #2a3a35;
+}
+
+/* Forms */
+html.dark .form-control,
+html.dark .form-select {
+  background-color: #141d1a;
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .form-control::placeholder {
+  color: #7d8f89;
+}
+
+html.dark .form-control:focus,
+html.dark .form-select:focus {
+  background-color: #141d1a;
+  color: #e4e9e7;
+  border-color: #2f8f83;
+  box-shadow: 0 0 0 0.2rem rgba(47, 143, 131, 0.25);
+}
+
+html.dark .form-control:disabled,
+html.dark .form-select:disabled {
+  background-color: #1a2421;
+  color: #9db3ab;
+}
+
+html.dark .form-check-input {
+  background-color: #141d1a;
+  border-color: #2a3a35;
+}
+
+html.dark .form-check-input:checked {
+  background-color: #2f8f83;
+  border-color: #2f8f83;
+}
+
+html.dark .input-group-text {
+  background-color: #223029;
+  color: #9db3ab;
+  border-color: #2a3a35;
+}
+
+/* Nav tabs */
+html.dark .nav-tabs {
+  border-color: #2a3a35;
+}
+
+html.dark .nav-tabs .nav-link {
+  color: #9db3ab;
+}
+
+html.dark .nav-tabs .nav-link:hover {
+  border-color: #2a3a35 #2a3a35 #223029;
+  color: #e4e9e7;
+}
+
+html.dark .nav-tabs .nav-link.active {
+  background-color: #1a2421;
+  border-color: #2a3a35 #2a3a35 #1a2421;
+  color: #fff;
+}
+
+html.dark .custom-report-tabs {
+  border-bottom-color: #2a3a35;
+}
+
+html.dark .custom-report-tabs .nav-link {
+  color: #9db3ab;
+}
+
+html.dark .custom-report-tabs .nav-link.active {
+  color: #5fc7ac;
+}
+
+html.dark .custom-report-tabs .nav-link::after {
+  background: #5fc7ac;
+}
+
+/* Pills / badges with light backgrounds */
+html.dark .badge.bg-light {
+  background-color: #223029 !important;
+  color: #cfe0da !important;
+  border-color: #2a3a35 !important;
+}
+
+html.dark .badge.bg-white {
+  background-color: #1a2421 !important;
+  color: #e4e9e7 !important;
+}
+
+/* Buttons */
+html.dark .btn-light {
+  --bs-btn-color: #e4e9e7;
+  --bs-btn-bg: #223029;
+  --bs-btn-border-color: #2a3a35;
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-bg: #2a3a35;
+  --bs-btn-hover-border-color: #3a4f48;
+  --bs-btn-active-color: #ffffff;
+  --bs-btn-active-bg: #2a3a35;
+  --bs-btn-active-border-color: #3a4f48;
+  --bs-btn-disabled-color: #9db3ab;
+  --bs-btn-disabled-bg: #1a2421;
+  --bs-btn-disabled-border-color: #2a3a35;
+}
+
+/* Alerts */
+html.dark .alert-light {
+  background-color: #223029;
+  color: #e4e9e7;
+  border-color: #2a3a35;
+}
+
+html.dark .alert-info {
+  background-color: #14262b;
+  color: #b8dfe7;
+  border-color: #1f3a42;
+}
+
+/* Borders */
+html.dark .border,
+html.dark .border-top,
+html.dark .border-bottom,
+html.dark .border-start,
+html.dark .border-end {
+  border-color: #2a3a35 !important;
+}
+
+/* Scrollbars */
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #141d1a;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #2a3a35;
+  border-radius: 5px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3a4f48;
+}
+
+/* Keep brand-gradient cards readable */
+html.dark .card-brand-gradient {
+  color: #fff !important;
+}
+
+/* Dashboard clock */
+.dashboard-clock-time {
+  color: #08060d;
+}
+
+html.dark .dashboard-clock-time {
+  color: #fff;
+}
+
+/* Soft-green accents need lighter variants on dark surfaces */
+html.dark .btn-soft-green {
+  background-color: rgba(95, 199, 172, 0.15) !important;
+  color: #5fc7ac !important;
+}
+
+html.dark .badge-soft-green {
+  background-color: rgba(95, 199, 172, 0.15) !important;
+  color: #5fc7ac !important;
+}
+
+html.dark .badge-soft-green-sm {
+  background-color: rgba(95, 199, 172, 0.15) !important;
+  color: #5fc7ac !important;
+}
+
+html.dark .stat-number {
+  color: #5fc7ac !important;
+}
+
+html.dark .icon-circle-green {
+  background-color: rgba(95, 199, 172, 0.15);
+  color: #5fc7ac;
+}
+
+html.dark .empty-state-icon {
+  color: #9db3ab;
+}
+
+/* react-data-table-component dark theme (CSS variable based) */
+html.dark .rdt_table {
+  --rdt-color-bg: #1a2421;
+  --rdt-color-text-primary: #e4e9e7;
+  --rdt-color-text-secondary: #9db3ab;
+  --rdt-color-header-bg: #223029;
+  --rdt-color-divider: #2a3a35;
+  --rdt-color-striped: #1f2b28;
+  --rdt-color-striped-text: #e4e9e7;
+  --rdt-color-highlight: #243430;
+  --rdt-color-highlight-text: #ffffff;
+  --rdt-color-selected: #1d3a4a;
+  --rdt-color-selected-text: #ffffff;
+  --rdt-color-btn: #9db3ab;
+  --rdt-color-btn-hover: rgba(255, 255, 255, 0.08);
+  --rdt-color-btn-disabled: #55655f;
+  --rdt-color-btn-focus: rgba(95, 199, 172, 0.4);
+  --rdt-color-primary: #2f8f83;
+  --rdt-color-scheme: dark;
+  --rdt-color-footer-bg: #1a2421;
+  --rdt-color-scrollbar-thumb: #3a4f48;
+  --rdt-color-scrollbar-thumb-hover: #4a6359;
+  --rdt-color-cell-edit-bg: #223029;
+  --rdt-color-cell-edit-hover: rgba(47, 143, 131, 0.12);
+  --rdt-color-cell-edit-hover-border: #2f8f83;
+  --rdt-color-cell-edit-error: #c24955;
+  --rdt-color-pin-border: #2a3a35;
+  --rdt-col-sep-color: #2a3a35;
+}

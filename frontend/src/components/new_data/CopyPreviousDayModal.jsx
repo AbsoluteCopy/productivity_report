@@ -1,4 +1,6 @@
 
+import { isDarkMode } from '../../utils/darkMode';
+
 const CopyPreviousDayModal = ({
     onClose,
     previousReports,
@@ -11,6 +13,7 @@ const CopyPreviousDayModal = ({
     onCopySelected,
     formatDateLabel,
 }) => {
+    const dark = isDarkMode();
     return (
         <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <div className="modal-dialog modal-lg modal-dialog-scrollable">
@@ -66,8 +69,12 @@ const CopyPreviousDayModal = ({
                                         className="card"
                                         style={{
                                             cursor: 'pointer',
-                                            border: isSelected ? '2px solid #065d48' : '2px solid #e0e0e0',
-                                            backgroundColor: isSelected ? '#f0faf6' : '#fff',
+                                            border: isSelected
+                                                ? `2px solid ${dark ? '#5fc7ac' : '#065d48'}`
+                                                : `2px solid ${dark ? '#2a3a35' : '#e0e0e0'}`,
+                                            backgroundColor: isSelected
+                                                ? (dark ? 'rgba(95,199,172,0.08)' : '#f0faf6')
+                                                : (dark ? '#1a2421' : '#fff'),
                                             transition: 'all 0.15s ease'
                                         }}
                                     >
@@ -86,7 +93,7 @@ const CopyPreviousDayModal = ({
                                                         <span className="fw-semibold text-green-dark">{displayCat}</span>
                                                         {taskList.length > 0 && (
                                                             <div className="mt-1 ps-1 pe-2" style={{ maxHeight: '130px', overflowY: 'auto' }}>
-                                                                <ul className="mb-0 ps-3" style={{ fontSize: '0.875rem', color: '#555' }}>
+                                                                <ul className="mb-0 ps-3" style={{ fontSize: '0.875rem', color: dark ? '#cfe0da' : '#555' }}>
                                                                     {taskList.map((task, i) => (
                                                                         <li key={i}>{task}</li>
                                                                     ))}
@@ -97,12 +104,12 @@ const CopyPreviousDayModal = ({
                                                 </div>
                                                 <div className="text-end ms-3 flex-shrink-0">
                                                     {report.time_spent > 0 && (
-                                                        <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(6,93,72,0.1)', color: '#065d48', fontSize: '0.8rem' }}>
+                                                        <span className="badge rounded-pill" style={{ backgroundColor: dark ? 'rgba(95,199,172,0.15)' : 'rgba(6,93,72,0.1)', color: dark ? '#5fc7ac' : '#065d48', fontSize: '0.8rem' }}>
                                                             <i className="bi bi-clock me-1"></i>{report.time_spent} min
                                                         </span>
                                                     )}
                                                     {report.task_category === 'Meeting' && report.meeting_count > 0 && (
-                                                        <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '2px' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: dark ? '#9db3ab' : '#888', marginTop: '2px' }}>
                                                             {report.meeting_count} meeting{report.meeting_count > 1 ? 's' : ''}
                                                         </div>
                                                     )}

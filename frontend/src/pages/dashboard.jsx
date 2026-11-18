@@ -9,6 +9,7 @@ import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateStrin
 import AnalogClock from '../components/AnalogClock'
 import Announcement, { getAnnouncementVersion, getUpdatesForRole } from '../components/Announcement'
 import EmployeeTimelineModal from '../components/EmployeeTimelineModal'
+import { isDarkMode } from '../utils/darkMode'
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -24,6 +25,7 @@ ChartJS.register(
 const getAnnouncementKey = (userId) => `announcement_seen_${userId || 'guest'}`;
 
 const Home = () => {
+    const dark = isDarkMode();
     const [user, setUser] = useState(null);
     const [currentTime, setCurrentTime] = useState(getCurrentDateTimeInTimezone());
     const [recentReports, setRecentReports] = useState([]);
@@ -769,7 +771,7 @@ const Home = () => {
                     <h5 className="fw-bold mb-0 text-green">
                         <i className="bi bi-people me-2"></i>Team Status
                     </h5>
-                    <span className="badge rounded-pill" style={{ backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
+                    <span className="badge rounded-pill" style={{ backgroundColor: dark ? 'rgba(95, 199, 172, 0.15)' : 'rgba(5, 93, 71, 0.1)', color: dark ? '#5fc7ac' : '#055d47', fontSize: '0.8rem', fontWeight: 600 }}>
                         {activeOrAwayUsers.length} Online {selectedCompanies.length > 0 ? `(${allOnlineCount} total across all)` : ''}
                     </span>
                 </div>
@@ -784,12 +786,12 @@ const Home = () => {
             </div>
 
             <div className="card-body px-4 pt-2 pb-4">
-                <ul className="nav nav-tabs mb-3" style={{ borderBottom: '1px solid #e9ecef' }}>
+                <ul className="nav nav-tabs mb-3" style={{ borderBottom: `1px solid ${dark ? '#2a3a35' : '#e9ecef'}` }}>
                     <li className="nav-item">
                         <button
                             type="button"
                             className={`nav-link ${teamTab === 'active' ? 'active fw-semibold' : 'text-muted'}`}
-                            style={teamTab === 'active' ? { color: '#055d47', borderColor: '#dee2e6 #dee2e6 #fff' } : {}}
+                            style={teamTab === 'active' ? { color: dark ? '#5fc7ac' : '#055d47', borderColor: dark ? '#2a3a35 #2a3a35 #1a2421' : '#dee2e6 #dee2e6 #fff' } : {}}
                             onClick={() => setTeamTab('active')}
                         >
                             Active ({activeOrAwayUsers.length})
@@ -799,7 +801,7 @@ const Home = () => {
                         <button
                             type="button"
                             className={`nav-link ${teamTab === 'inactive' ? 'active fw-semibold' : 'text-muted'}`}
-                            style={teamTab === 'inactive' ? { color: '#055d47', borderColor: '#dee2e6 #dee2e6 #fff' } : {}}
+                            style={teamTab === 'inactive' ? { color: dark ? '#5fc7ac' : '#055d47', borderColor: dark ? '#2a3a35 #2a3a35 #1a2421' : '#dee2e6 #dee2e6 #fff' } : {}}
                             onClick={() => setTeamTab('inactive')}
                         >
                             Inactive ({inactiveUsers.length})
@@ -809,7 +811,7 @@ const Home = () => {
 
                 <div style={{ maxHeight: '380px', overflowY: 'auto', minHeight: '380px' }}>
                     {teamTab === 'active' && (
-                        <div className="mb-3 p-2 rounded-3 border" style={{ backgroundColor: '#f9fafb' }}>
+                        <div className="mb-3 p-2 rounded-3 border" style={{ backgroundColor: dark ? '#1a2421' : '#f9fafb' }}>
                             <div className="d-flex flex-wrap align-items-center gap-2">
                                 <button type="button"
                                     className={`btn btn-sm rounded-pill fw-semibold ${selectedCompanies.length === 0 ? 'btn-success' : 'btn-outline-secondary'}`}
@@ -858,7 +860,7 @@ const Home = () => {
                                         title="View timeline"
                                     >
                                         <div className="position-relative flex-shrink-0">
-                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: 'rgba(5, 93, 71, 0.1)', color: '#055d47' }}>
+                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: dark ? 'rgba(95, 199, 172, 0.15)' : 'rgba(5, 93, 71, 0.1)', color: dark ? '#5fc7ac' : '#055d47' }}>
                                                 {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
                                             </div>
                                             <span
@@ -880,7 +882,7 @@ const Home = () => {
                                                 )}
                                             </div>
                                             {u.current_task_label && (
-                                                <div className="text-truncate" style={{ fontSize: '0.72rem', color: '#055d47' }}>
+                                                <div className="text-truncate" style={{ fontSize: '0.72rem', color: dark ? '#5fc7ac' : '#055d47' }}>
                                                     <i className="bi bi-lightning-charge-fill me-1"></i>
                                                     Working on: <span className="fw-semibold">{u.current_task_label}</span>
                                                 </div>
@@ -915,7 +917,7 @@ const Home = () => {
                                         title="View timeline"
                                     >
                                         <div className="position-relative flex-shrink-0">
-                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: '#f1f3f5', color: '#6c757d' }}>
+                                            <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', fontSize: '0.85rem', backgroundColor: dark ? '#223029' : '#f1f3f5', color: dark ? '#9db3ab' : '#6c757d' }}>
                                                 {`${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase()}
                                             </div>
                                             <span
@@ -976,7 +978,7 @@ const Home = () => {
                             <div className="mb-3">
                                 <AnalogClock />
                             </div>
-                            <div className="display-6 fw-bold mb-2" style={{ color: '#08060d', letterSpacing: '-1px' }}>
+                            <div className="display-6 fw-bold mb-2 dashboard-clock-time" style={{ letterSpacing: '-1px' }}>
                                 {time}
                             </div>
                             <p className="text-muted fw-medium mb-3">{date}</p>

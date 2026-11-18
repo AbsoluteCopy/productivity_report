@@ -365,6 +365,10 @@ app.post(['/api/login', '/api/login/'], loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
+    if (user.access !== null && user.access !== undefined && Number(user.access) === 0) {
+      return res.status(403).json({ error: 'This account is not available' });
+    }
+
     const currentAppDate = toMySQLDateTime(new Date()).slice(0, 10);
     await pool.query(
       `UPDATE daily_reports
@@ -772,7 +776,7 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
       return res.status(403).json({ error: 'HR cannot edit administrator accounts.', detail: 'HR cannot edit administrator accounts.' });
     }
 
-    let { first_name, last_name, username, email, role, company, id_number, task_list, password, timezone } = req.body;
+    let { first_name, last_name, username, email, role, company, id_number, task_list, password, timezone, dark_mode } = req.body;
     let updates = [];
     let params = [];
 
@@ -838,6 +842,9 @@ app.put(['/api/users/:id', '/api/users/:id/'], authenticate, async (req, res) =>
         }
       }
       updates.push('timezone = ?'); params.push(tz || null);
+    }
+    if (dark_mode !== undefined) {
+      updates.push('dark_mode = ?'); params.push(Number(dark_mode) ? 1 : 0);
     }
     if (isAdmin) {
       if (role) {

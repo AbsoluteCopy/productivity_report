@@ -1,11 +1,14 @@
 
+import { isDarkMode } from '../../utils/darkMode';
+
 const TimeComparisonCard = ({ categories }) => {
+    const dark = isDarkMode();
     return (
-        <div className="card mb-4 border-0 shadow-sm" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+        <div className="card mb-4 border-0 shadow-sm" style={{ backgroundColor: dark ? '#1a2421' : '#f8fafc', border: `1px solid ${dark ? '#2a3a35' : '#e2e8f0'}`, borderRadius: '12px' }}>
             <div className="card-body p-3">
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div className="d-flex align-items-center gap-2">
-                        <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48' }}>
+                        <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', backgroundColor: dark ? 'rgba(95,199,172,0.15)' : 'rgba(6, 93, 72, 0.1)', color: dark ? '#5fc7ac' : '#065d48' }}>
                             <i className="bi bi-clock-history fs-5"></i>
                         </div>
                         <div>

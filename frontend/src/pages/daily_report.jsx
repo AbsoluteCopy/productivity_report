@@ -7,6 +7,7 @@ import { EyeIcon, PencilIcon, TrashIcon } from "../icons/Icons";
 import API_BASE_URL from "../config";
 import { getCurrentDateInTimezone, parseDateInTimezone, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, isMoreThan24HoursOld as checkIsMoreThan24HoursOld } from '../utils/dateUtils';
 import EmployeeTimelineModal from '../components/EmployeeTimelineModal';
+import { isDarkMode } from '../utils/darkMode';
 
 const RESTRICTED_CATEGORIES = new Set(["Holiday", "PTO", "Company Event"]);
 const ADMIN_ROLES = new Set(["admin", "hr", "supervisor"]);
@@ -75,9 +76,15 @@ const TaskListCell = ({ rawTaskList }) => {
                     style={{
                         fontSize: "0.75rem",
                         fontWeight: 600,
-                        backgroundColor: expanded ? "#f8f9fa" : "#e8f5e9",
-                        color: expanded ? "#6c757d" : "#065d48",
-                        borderColor: expanded ? "#dee2e6" : "#c8e6c9",
+                        backgroundColor: isDarkMode()
+                            ? (expanded ? "#223029" : "rgba(95,199,172,0.15)")
+                            : (expanded ? "#f8f9fa" : "#e8f5e9"),
+                        color: isDarkMode()
+                            ? (expanded ? "#9db3ab" : "#5fc7ac")
+                            : (expanded ? "#6c757d" : "#065d48"),
+                        borderColor: isDarkMode()
+                            ? (expanded ? "#2a3a35" : "rgba(95,199,172,0.4)")
+                            : (expanded ? "#dee2e6" : "#c8e6c9"),
                         cursor: "pointer",
                         lineHeight: "1.5",
                     }}
@@ -555,13 +562,37 @@ const DailyReport = () => {
                 ignoreRowClick: true,
                 allowOverflow: true,
                 button: true,
-                width: "130px",
+                width: "160px",
             }
         );
         return baseColumns;
     }, [getDisplayCategory, handleDeleteReport, handleEdit, handleResume, handleView, isAdminOrHR, isEmployee, isMoreThanOneMonthOld, isMoreThan24HoursOld, isRestrictedCategory, currentUser]);
 
-    const customStyles = useMemo(() => ({ headCells: { style: { fontWeight: "700", backgroundColor: "#f8f9fa", fontSize: "14px", }, }, cells: { style: { fontSize: "14px", }, }, rows: { style: { minHeight: "55px", }, }, }), []);
+    const customStyles = useMemo(() => {
+        const dark = isDarkMode();
+        return {
+            headCells: {
+                style: {
+                    fontWeight: "700",
+                    backgroundColor: dark ? "#223029" : "#f8f9fa",
+                    color: dark ? "#e4e9e7" : undefined,
+                    fontSize: "14px",
+                },
+            },
+            cells: {
+                style: {
+                    fontSize: "14px",
+                    color: dark ? "#e4e9e7" : undefined,
+                },
+            },
+            rows: {
+                style: {
+                    minHeight: "55px",
+                    color: dark ? "#e4e9e7" : undefined,
+                },
+            },
+        };
+    }, []);
 
     const closeModal = useCallback(() => { setShowModal(false); setSelectedReport(null); }, []);
 
@@ -590,7 +621,7 @@ const DailyReport = () => {
                         </div> {/* Body */}
                         {/* Team Shift Progress Snapshot for Admin, HR & Supervisor */}
                         {isAdminOrHR && (
-                            <div className="p-3 border-bottom" style={{ backgroundColor: "#fafdfb" }}>
+                            <div className="p-3 border-bottom" style={{ backgroundColor: isDarkMode() ? "#1a2421" : "#fafdfb" }}>
                                 <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                                     <div className="d-flex align-items-center gap-2">
                                         <i className="bi bi-clock-history fs-5 text-green-dark"></i>

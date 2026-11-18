@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/login.css";
 import API_BASE_URL from "../config";
+import { applyDarkMode } from "../utils/darkMode";
 
 const Login = () => {
     const navigate = useNavigate();
@@ -17,6 +18,7 @@ const Login = () => {
         // Clear any stuck/invalid tokens from previous sessions/databases
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        applyDarkMode();
         
         // Load remembered email if exists
         const rememberedIdentifier = localStorage.getItem('rememberedEmail');
@@ -45,6 +47,7 @@ const Login = () => {
             if (response.ok) {
                 localStorage.setItem("user", JSON.stringify(data.user));
                 localStorage.setItem("token", data.token);
+                applyDarkMode(data.user);
                 
                 // Handle remember me functionality
                 if (rememberMe) {

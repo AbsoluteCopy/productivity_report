@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";import API_BASE_URL from "../config";
+import { applyDarkMode } from "../utils/darkMode";
 
 const Logout = () => {
     const navigate = useNavigate();
@@ -21,6 +22,7 @@ const Logout = () => {
             } finally {
                 localStorage.removeItem("user");
                 localStorage.removeItem("token");
+                applyDarkMode();
                 navigate("/login");
             }
         };

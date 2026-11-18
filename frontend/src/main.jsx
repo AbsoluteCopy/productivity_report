@@ -6,6 +6,9 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import axios from 'axios';
+import { applyDarkMode } from './utils/darkMode';
+
+applyDarkMode();
 
 // Global Axios Interceptor
 axios.interceptors.request.use(config => {
@@ -24,6 +27,7 @@ axios.interceptors.response.use(
             // Token expired or invalid - logout user (only if not already on /login)
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            applyDarkMode();
             if (window.location.pathname !== '/login' && !error.config?.url?.includes('/login')) {
                 window.location.href = '/login';
             }
@@ -55,6 +59,7 @@ window.fetch = async (...args) => {
         if (!urlStr.includes('/login') && window.location.pathname !== '/login') {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            applyDarkMode();
             window.location.href = '/login';
         }
     }

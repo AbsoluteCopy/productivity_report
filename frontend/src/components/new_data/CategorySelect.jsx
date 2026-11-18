@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { isDarkMode } from '../../utils/darkMode';
 
 const CategorySelect = ({ cat, taskCategories, onSelect }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -23,21 +24,24 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
         category.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const dark = isDarkMode();
+
     return (
         <div className="position-relative" ref={dropdownRef}>
             <div
                 className={`form-select d-flex justify-content-between align-items-center ${!displayLabel ? 'text-muted' : ''}`}
                 style={{
-                    backgroundColor: '#fff',
+                    backgroundColor: dark ? '#141d1a' : '#fff',
+                    color: displayLabel ? (dark ? '#e4e9e7' : '#212529') : (dark ? '#7d8f89' : '#6c757d'),
                     backgroundImage: 'none',
                     minHeight: '38px',
-                    borderColor: isOpen ? '#065d48' : '#dee2e6',
+                    borderColor: isOpen ? '#065d48' : (dark ? '#2a3a35' : '#dee2e6'),
                     boxShadow: isOpen ? '0 0 0 0.25rem rgba(6, 93, 72, 0.25)' : 'none',
                     userSelect: 'none'
                 }}
                 onClick={() => setIsOpen(prev => !prev)}
             >
-                <span className="text-truncate me-2" style={{ color: displayLabel ? '#212529' : '#6c757d' }}>
+                <span className="text-truncate me-2">
                     {displayLabel || 'Select a category'}
                 </span>
                 <i className={`bi ${isOpen ? 'bi-chevron-up' : 'bi-chevron-down'} text-muted fs-085`}></i>
@@ -64,8 +68,8 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                         right: 0,
                         zIndex: 1050,
                         borderRadius: '8px',
-                        border: '1px solid #ced4da',
-                        backgroundColor: '#ffffff'
+                        border: `1px solid ${dark ? '#2a3a35' : '#ced4da'}`,
+                        backgroundColor: dark ? '#1a2421' : '#ffffff'
                     }}
                 >
                     {taskCategories.length > 5 && (
@@ -106,8 +110,8 @@ const CategorySelect = ({ cat, taskCategories, onSelect }) => {
                                             <span
                                                 className="badge rounded-pill"
                                                 style={{
-                                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(6, 93, 72, 0.1)',
-                                                    color: isSelected ? '#ffffff' : '#065d48',
+                                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : (dark ? 'rgba(95,199,172,0.15)' : 'rgba(6, 93, 72, 0.1)'),
+                                                    color: isSelected ? '#ffffff' : (dark ? '#5fc7ac' : '#065d48'),
                                                     fontSize: '0.75rem',
                                                     fontWeight: '600'
                                                 }}

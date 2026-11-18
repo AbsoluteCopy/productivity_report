@@ -9,6 +9,7 @@ import RunFinishedSummary from '../components/new_data/RunFinishedSummary';
 import ActiveRunView from '../components/new_data/ActiveRunView';
 import ReportForm from '../components/new_data/ReportForm';
 import CopyPreviousDayModal from '../components/new_data/CopyPreviousDayModal';
+import { isDarkMode } from '../utils/darkMode';
 
 const NewData = () => {
     const [searchParams] = useSearchParams();
@@ -1527,7 +1528,7 @@ const NewData = () => {
     }
 
     return (
-        <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+        <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: isDarkMode() ? '#0f1513' : '#f5f5f5' }}>
             <div className="row justify-content-center">
                 <div className="col-md-12 col-lg-12">
                     <div className="card shadow-sm">

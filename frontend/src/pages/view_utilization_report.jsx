@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import API_BASE_URL from "../config";
 import { parseDateInTimezone, getTimezone } from '../utils/dateUtils';
+import { isDarkMode } from '../utils/darkMode';
 
 
 const ViewUtilizationReport = () => {
@@ -635,7 +636,7 @@ const ViewUtilizationReport = () => {
                             ) : (
                                 <div className="table-responsive">
                                     <table className="table table-hover table-sm mb-0 font-12 align-middle">
-                                        <thead style={{ backgroundColor: '#f8f9fa' }}>
+                                        <thead style={{ backgroundColor: isDarkMode() ? '#223029' : '#f8f9fa' }}>
                                             <tr className='middle border-bottom'>
                                                 <th className='text-muted fw-semibold py-3 ps-4' colSpan={3}>EMPLOYEE NAME</th>
                                                 <th className='fw-bold text-dark py-3' colSpan={3}>{name ? name.toUpperCase() : 'N/A'}</th>

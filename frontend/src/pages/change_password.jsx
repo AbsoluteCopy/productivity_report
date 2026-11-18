@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
+import { isDarkMode } from '../utils/darkMode';
 
 const PASSWORD_RULES = [
     { key: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
@@ -235,7 +236,7 @@ const ChangePassword = () => {
 
                                 <div
                                     className="border rounded-3 p-3 mb-3"
-                                    style={{ backgroundColor: '#f8f9fa' }}
+                                    style={{ backgroundColor: isDarkMode() ? '#1a2421' : '#f8f9fa' }}
                                 >
                                     <div className="d-flex justify-content-between align-items-center mb-2">
                                         <span className="label-caps text-ink" style={{ fontSize: '0.7rem' }}>

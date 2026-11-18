@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import API_BASE_URL from "../config";
 import { getTimezoneOptions } from '../utils/dateUtils';
+import { applyDarkMode } from '../utils/darkMode';
 
 const Settings = () => {
     const [user, setUser] = useState(null);
     const [timezone, setTimezone] = useState('');
+    const [darkMode, setDarkMode] = useState(false);
+    const [darkModeSaving, setDarkModeSaving] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
@@ -24,6 +27,7 @@ const Settings = () => {
                 if (response.ok) {
                     setUser(data);
                     setTimezone(data.timezone || '');
+                    setDarkMode(Number(data.dark_mode) === 1);
                 } else {
                     setError(data.error || data.detail || 'Failed to load your profile.');
                 }
@@ -39,6 +43,59 @@ const Settings = () => {
     const handleUseBrowserTimezone = () => {
         const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
         if (detected) setTimezone(detected);
+    };
+
+    const handleDarkModeToggle = async () => {
+        const nextValue = !darkMode;
+        setDarkModeSaving(true);
+        setError('');
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/users/${user.id}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ dark_mode: nextValue ? 1 : 0 }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setDarkMode(Number(data.dark_mode) === 1);
+                const stored = JSON.parse(localStorage.getItem('user') || '{}');
+                localStorage.setItem('user', JSON.stringify({ ...stored, dark_mode: data.dark_mode }));
+                applyDarkMode({ ...stored, dark_mode: data.dark_mode });
+                Swal.fire({
+                    icon: 'success',
+                    title: `Dark mode ${data.dark_mode ? 'enabled' : 'disabled'}!`,
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000
+                });
+            } else {
+                const errorMessage = data.error || data.detail || 'Failed to update dark mode.';
+                setError(errorMessage);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Update Failed',
+                    text: errorMessage,
+                });
+            }
+        } catch {
+            const errorMsg = 'Network error. Please try again.';
+            setError(errorMsg);
+            Swal.fire({
+                icon: 'error',
+                title: 'Connection Error',
+                text: errorMsg,
+            });
+        } finally {
+            setDarkModeSaving(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -122,34 +179,83 @@ const Settings = () => {
                             {fetching ? (
                                 <div className="text-center py-4 text-muted">Loading...</div>
                             ) : (
+                                <>
+                                <div className="mb-4">
+                                    <div className="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <label className="form-label mb-0 fw-semibold">
+                                                <i className="bi bi-moon-stars me-1"></i> Dark Mode
+                                            </label>
+                                            <div className="form-text">
+                                                Applies a dark theme across the app.
+                                            </div>
+                                        </div>
+                                        <div className="form-check form-switch mb-0">
+                                            <input
+                                                className="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="darkModeToggle"
+                                                checked={darkMode}
+                                                onChange={handleDarkModeToggle}
+                                                disabled={darkModeSaving || !user}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div
+                                        className="mt-2 d-flex align-items-start"
+                                        style={{
+                                            background: "#fff8e1",
+                                            border: "1px solid #ffe082",
+                                            borderRadius: "8px",
+                                            padding: "10px 12px",
+                                            fontSize: "13px",
+                                            color: "#8d6e00",
+                                        }}
+                                    >
+                                        <i className="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                                        <span>
+                                            <strong>Experimental feature:</strong> Dark mode is still in testing and
+                                            may not display correctly on all pages. Some screens might look broken —
+                                            turn it off if you run into issues.
+                                        </span>
+                                    </div>
+                                </div>
                                 <form onSubmit={handleSubmit} noValidate>
                                     <div className="mb-3">
                                         <label className="form-label">Timezone</label>
-                                        <div className="input-group">
-                                            <select
-                                                className="form-select"
-                                                value={timezone}
-                                                onChange={(e) => setTimezone(e.target.value)}
-                                                disabled={!canEditTimezone}
+                                        {canEditTimezone ? (
+                                            <div className="input-group">
+                                                <select
+                                                    className="form-select"
+                                                    value={timezone}
+                                                    onChange={(e) => setTimezone(e.target.value)}
+                                                >
+                                                    <option value="">Server default (no timezone set)</option>
+                                                    {timezone && !timezoneOptions.includes(timezone) && (
+                                                        <option value={timezone}>{timezone}</option>
+                                                    )}
+                                                    {timezoneOptions.map((tz) => (
+                                                        <option key={tz} value={tz}>{tz}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={handleUseBrowserTimezone}
+                                                    title="Use my browser's timezone"
+                                                >
+                                                    <i className="bi bi-globe"></i> Auto
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="form-control-plaintext border rounded px-3 py-2"
+                                                style={{ backgroundColor: 'var(--bs-tertiary-bg, #f8f9fa)' }}
                                             >
-                                                <option value="">Server default (no timezone set)</option>
-                                                {timezone && !timezoneOptions.includes(timezone) && (
-                                                    <option value={timezone}>{timezone}</option>
-                                                )}
-                                                {timezoneOptions.map((tz) => (
-                                                    <option key={tz} value={tz}>{tz}</option>
-                                                ))}
-                                            </select>
-                                            <button
-                                                type="button"
-                                                className="btn btn-outline-secondary"
-                                                onClick={handleUseBrowserTimezone}
-                                                title="Use my browser's timezone"
-                                                disabled={!canEditTimezone}
-                                            >
-                                                <i className="bi bi-globe"></i> Auto
-                                            </button>
-                                        </div>
+                                                {timezone || 'Server default (no timezone set)'}
+                                            </div>
+                                        )}
                                         <div className="form-text">
                                             {canEditTimezone
                                                 ? 'Used for displaying dates and times in your reports.'
@@ -157,14 +263,17 @@ const Settings = () => {
                                         </div>
                                     </div>
 
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary w-100"
-                                        disabled={loading || !canEditTimezone}
-                                    >
-                                        {loading ? 'Saving...' : 'Save Settings'}
-                                    </button>
+                                    {canEditTimezone && (
+                                        <button
+                                            type="submit"
+                                            className="btn btn-primary w-100"
+                                            disabled={loading}
+                                        >
+                                            {loading ? 'Saving...' : 'Save Settings'}
+                                        </button>
+                                    )}
                                 </form>
+                                </>
                             )}
                         </div>
                     </div>

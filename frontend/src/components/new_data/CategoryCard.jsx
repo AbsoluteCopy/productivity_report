@@ -1,4 +1,5 @@
 import CategorySelect from './CategorySelect';
+import { isDarkMode } from '../../utils/darkMode';
 
 const PRESET_TIMES = ['15', '30', '45', '60', '90', '120'];
 
@@ -35,6 +36,9 @@ const CategoryCard = ({
     const showCustomTimeInput = !PRESET_TIMES.includes(String(cat.timeSpent)) || cat.timeSpent === '';
     const timeDisabled = cat.category === 'Others' && cat.hasTimeSpent;
     const matchedCategory = taskCategories.find(c => c.name === cat.category);
+    const dark = isDarkMode();
+    const softGreenBg = dark ? 'rgba(95,199,172,0.15)' : 'rgba(6, 93, 72, 0.1)';
+    const softGreenText = dark ? '#5fc7ac' : '#065d48';
 
     const handleTimeSelect = (e) => {
         const val = e.target.value;
@@ -48,7 +52,7 @@ const CategoryCard = ({
     };
 
     return (
-        <div className="card mb-3" style={{ border: '2px solid #e0e0e0' }}>
+        <div className="card mb-3" style={{ border: `2px solid ${dark ? '#2a3a35' : '#e0e0e0'}` }}>
             <div className="card-body">
                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <div className="d-flex align-items-center gap-2 flex-wrap">
@@ -91,7 +95,7 @@ const CategoryCard = ({
                                 <button
                                     type="button"
                                     className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
-                                    style={{ color: '#065d48', fontSize: '0.82rem' }}
+                                    style={{ color: softGreenText, fontSize: '0.82rem' }}
                                     onClick={() => onRenameOther(cat.id, cat.sub_category)}
                                 >
                                     <i className="bi bi-pencil-square me-1"></i>Rename
@@ -113,7 +117,7 @@ const CategoryCard = ({
                                         Suggested Time per Task (Minutes) *
                                     </label>
                                     {matchedCategory?.default_time && (
-                                        <span className="badge rounded-pill ms-2" style={{ backgroundColor: 'rgba(6, 93, 72, 0.1)', color: '#065d48', fontSize: '0.75rem', fontWeight: '600' }}>
+                                        <span className="badge rounded-pill ms-2" style={{ backgroundColor: softGreenBg, color: softGreenText, fontSize: '0.75rem', fontWeight: '600' }}>
                                             <i className="bi bi-clock me-1"></i>Standard: {matchedCategory.default_time} min{matchedCategory.default_time > 1 ? 's' : ''}
                                         </span>
                                     )}
@@ -245,13 +249,13 @@ const CategoryCard = ({
                                 {cat.tasks.length > 0 && (
                                     <div
                                         className="mt-2 shadow-sm"
-                                        style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '6px' }}
+                                        style={{ maxHeight: '180px', overflowY: 'auto', border: `1px solid ${dark ? '#2a3a35' : '#dee2e6'}`, borderRadius: '6px' }}
                                         ref={(el) => setTaskListRef(cat.id, el)}
                                     >
                                         <ul className="list-group list-group-flush mb-0">
                                             {cat.tasks.map((task, taskIndex) => (
-                                                <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
-                                                    <span className="text-break" style={{ fontSize: '0.9rem', color: '#333' }}>{task}</span>
+                                                <li key={taskIndex} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3" style={{ backgroundColor: dark ? (taskIndex % 2 === 0 ? '#1a2421' : '#1f2b28') : (taskIndex % 2 === 0 ? '#ffffff' : '#f8f9fa') }}>
+                                                    <span className="text-break" style={{ fontSize: '0.9rem', color: dark ? '#e4e9e7' : '#333' }}>{task}</span>
                                                     <button
                                                         type="button"
                                                         className="btn btn-sm btn-outline-danger py-0 px-2 ms-2"

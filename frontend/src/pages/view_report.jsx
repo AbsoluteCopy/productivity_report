@@ -17,6 +17,7 @@ import { Bar, Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { parseDateInTimezone, formatDateString, isMoreThanOneMonthOld as checkIsMoreThanOneMonthOld, getTimezone, parseNaiveDateTime } from '../utils/dateUtils';
+import { isDarkMode } from '../utils/darkMode';
 
 ChartJS.register(
     CategoryScale,
@@ -541,7 +542,7 @@ const ViewReport = () => {
             data: taskChartCounts,
             backgroundColor: taskChartColors,
             borderWidth: 2,
-            borderColor: '#fff',
+            borderColor: isDarkMode() ? '#1a2421' : '#fff',
         }]
     };
 
@@ -568,7 +569,7 @@ const ViewReport = () => {
             data: timeChartMinutes,
             backgroundColor: timeChartColors,
             borderWidth: 2,
-            borderColor: '#fff',
+            borderColor: isDarkMode() ? '#1a2421' : '#fff',
         }]
     };
 
@@ -605,7 +606,7 @@ const ViewReport = () => {
             }),
             backgroundColor: activityData.map((a, i) => categoryColors[i % categoryColors.length]),
             borderWidth: 1,
-            borderColor: '#fff',
+            borderColor: isDarkMode() ? '#1a2421' : '#fff',
             barPercentage: 1.0,
             categoryPercentage: 1.0,
         }]
@@ -1157,7 +1158,7 @@ const ViewReport = () => {
                         width: '100%',
                         position: 'relative',
                         zIndex: 1,
-                        backgroundColor: '#f8f9fa'
+                        backgroundColor: isDarkMode() ? '#1a2421' : '#f8f9fa'
                     }}
                     onScroll={handleTopScroll}
                 >
@@ -1396,7 +1397,7 @@ const ViewReport = () => {
                                                         const meetMins = Number(report.meeting_total || 0) % 60;
 
                                                         return (
-                                                            <tr key={report.id} className="fw-bold table-success middle" style={{ backgroundColor: '#f0fdf4' }}>
+                                                            <tr key={report.id} className="fw-bold table-success middle" style={{ backgroundColor: isDarkMode() ? '#1f2b28' : '#f0fdf4' }}>
                                                                 <td></td>
                                                                 <td></td>
                                                                 <td>

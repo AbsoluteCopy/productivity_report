@@ -1,11 +1,17 @@
 
+import { isDarkMode } from '../../utils/darkMode';
+
 const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => {
+    const dark = isDarkMode();
+    const accentColor = dailyTotals.minutes > 600 ? '#dc2626' : (dark ? '#5fc7ac' : '#065d48');
     return (
         <div
             className="card mb-4 border-0 shadow-sm"
             style={{
-                background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)',
-                border: '1px solid #bbf7d0',
+                background: dark
+                    ? 'linear-gradient(135deg, #14201c 0%, #1a2421 100%)'
+                    : 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)',
+                border: `1px solid ${dark ? '#2a3a35' : '#bbf7d0'}`,
                 borderRadius: '12px',
             }}
         >
@@ -18,7 +24,7 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                                 cx="28"
                                 cy="28"
                                 r="22"
-                                stroke="#e2e8f0"
+                                stroke={dark ? '#2a3a35' : '#e2e8f0'}
                                 strokeWidth="5"
                                 fill="transparent"
                             />
@@ -31,7 +37,7 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                                         ? '#ef4444'
                                         : dailyTotals.minutes >= 450
                                             ? '#10b981'
-                                            : '#065d48'
+                                            : (dark ? '#5fc7ac' : '#065d48')
                                 }
                                 strokeWidth="5"
                                 strokeDasharray={138.23}
@@ -55,7 +61,7 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                                 justifyContent: 'center',
                                 fontSize: '0.72rem',
                                 fontWeight: 700,
-                                color: dailyTotals.minutes > 600 ? '#dc2626' : '#065d48',
+                                color: accentColor,
                             }}
                         >
                             {dailyTotals.percent}%
@@ -69,7 +75,7 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                             </div>
                         )}
                         <div className="d-flex align-items-center gap-2 flex-wrap">
-                            <h5 className="mb-0 fw-bold" style={{ color: dailyTotals.minutes > 600 ? '#dc2626' : '#065d48' }}>
+                            <h5 className="mb-0 fw-bold" style={{ color: accentColor }}>
                                 Suggested Time Spent: {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours} hr${dailyTotals.totalHours > 1 ? 's' : ''} ` : ''}
                                 {dailyTotals.remainingMins} min{dailyTotals.remainingMins !== 1 ? 's' : ''}
                             </h5>

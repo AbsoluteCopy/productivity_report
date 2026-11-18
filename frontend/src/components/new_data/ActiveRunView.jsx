@@ -1,4 +1,5 @@
 import { fmtClock } from '../../utils/timeUtils';
+import { isDarkMode } from '../../utils/darkMode';
 
 const ActiveRunView = ({
     run,
@@ -16,6 +17,8 @@ const ActiveRunView = ({
     const cur = run.queue[run.index];
     const p = cur.payload;
     const running = !!run.startedAt;
+    const dark = isDarkMode();
+    const accentColor = overtime ? "#b14c4c" : (dark ? "#5fc7ac" : "#065d48");
     const pct = cur.expectedSeconds ? Math.min((elapsedSec / cur.expectedSeconds) * 100, 100) : 0;
 
     return (
@@ -56,7 +59,7 @@ const ActiveRunView = ({
                                                     cy={size / 2}
                                                     r={radius}
                                                     fill="none"
-                                                    stroke="#e5e7eb"
+                                                    stroke={dark ? '#2a3a35' : '#e5e7eb'}
                                                     strokeWidth={strokeWidth}
                                                 />
 
@@ -66,7 +69,7 @@ const ActiveRunView = ({
                                                     cy={size / 2}
                                                     r={radius}
                                                     fill="none"
-                                                    stroke={overtime ? "#b14c4c" : "#065d48"}
+                                                    stroke={accentColor}
                                                     strokeWidth={strokeWidth}
                                                     strokeLinecap="round"
                                                     strokeDasharray={circumference}
@@ -88,7 +91,7 @@ const ActiveRunView = ({
                                                         fontSize: "2.8rem",
                                                         fontWeight: 700,
                                                         fontVariantNumeric: "tabular-nums",
-                                                        color: overtime ? "#b14c4c" : "#065d48",
+                                                        color: accentColor,
                                                     }}
                                                 >
                                                     {fmtClock(running ? elapsedSec : 0)}
@@ -107,11 +110,11 @@ const ActiveRunView = ({
                                 <div
                                     className="rounded-3 p-3 mb-3"
                                     style={{
-                                        backgroundColor: "#fffbeb",
-                                        border: "1px solid #fde68a"
+                                        backgroundColor: dark ? "rgba(245,158,11,0.12)" : "#fffbeb",
+                                        border: `1px solid ${dark ? "#6b5410" : "#fde68a"}`
                                     }}
                                 >
-                                    <div className="fw-semibold text-warning-emphasis">
+                                    <div className={dark ? 'fw-semibold' : 'fw-semibold text-warning-emphasis'} style={{ color: dark ? '#fbbf24' : undefined }}>
                                         Suggested time reached
                                     </div>
 
