@@ -1,20 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    BarElement,
-    ArcElement,
-    Title,
-    Tooltip,
-    Legend,
-} from 'chart.js'; import API_BASE_URL from "../config";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement,LineElement,BarElement,ArcElement,Title,Tooltip,Legend } from 'chart.js';
+import API_BASE_URL from "../config";
 import { getCurrentDateTimeInTimezone, getCurrentDateInTimezone, formatDateString, parseDateInTimezone, formatNaiveTime, formatUTCDateTimeInTimezone } from '../utils/dateUtils';
 import AnalogClock from '../components/AnalogClock'
 import Announcement, { getAnnouncementVersion, getUpdatesForRole } from '../components/Announcement'
@@ -90,8 +80,8 @@ const Home = () => {
             console.error('Unable to read announcement status:', e);
         }
 
-        if (getUpdatesForRole(user.role).length === 0) return; // nothing to show this role
-        if (seenVersion === getAnnouncementVersion(user.role)) return; // already seen
+        if (getUpdatesForRole(user.role).length === 0) return;
+        if (seenVersion === getAnnouncementVersion(user.role)) return;
 
         const timer = setTimeout(() => {
             setShowAnnouncements(true);
@@ -151,11 +141,6 @@ const Home = () => {
         }
     }, [role]);
 
-    // Only genuinely active/away users (recent heartbeat) count as "online" -
-    // someone who closed their browser without clicking "Clock Out" still
-    // shows up in `onlineUsers` (their attendance row is still open) but with
-    // status 'offline'; they belong in the inactive list, flagged so an admin
-    // can spot the orphaned clock-in, not counted as if they were working.
     const activeOrAwayUsers = onlineUsers.filter(u => u.status !== 'offline');
     const staleClockedInById = useMemo(() => {
         const m = {};
@@ -188,8 +173,6 @@ const Home = () => {
             }
         });
     };
-
-
 
     useEffect(() => {
         if (user) {
@@ -298,16 +281,12 @@ const Home = () => {
     };
 
     const prepareChartData = (reports, year, month) => {
-        // Get all days in selected month
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-        // Initialize data array with zeros
         const timeSpentData = new Array(daysInMonth).fill(0);
 
-        // Fill in actual data from reports
         (reports || []).forEach(report => {
-            // Parse date properly to avoid timezone issues
             const reportDate = parseDateInTimezone(report.date);
             if (reportDate.getMonth() === month && reportDate.getFullYear() === year) {
                 timeSpentData[reportDate.getDate() - 1] = report.time_spent;
@@ -350,26 +329,19 @@ const Home = () => {
 
     const chartMonthLabel = new Date(chartMonth.year, chartMonth.month, 1)
         .toLocaleDateString('default', { month: 'long', year: 'numeric' });
+
     const isCurrentChartMonth = (() => {
         const now = new Date();
         return chartMonth.year === now.getFullYear() && chartMonth.month === now.getMonth();
     })();
 
-
-
     const { date, time } = currentTime;
     const isManager = ['admin', 'hr', 'supervisor'].includes(role);
-    // Viewer gets the same Team Status/Team Insights analytics as managers
-    // (company-scoped server-side), but keeps their own report pages/links
-    // rather than the manager ones used inside recentReportsCard.
+    
     const canSeeAnalytics = ['admin', 'hr', 'supervisor', 'viewer'].includes(role);
-    // TEMP PROD-ONLY: viewer loses access to real-time data (live Team Status
-    // + actual-time tracking elsewhere) until reverted. Remove this flag and
-    // its usages below to restore.
+    
     const canSeeLiveStatus = canSeeAnalytics && role !== 'viewer';
 
-    // Team insights (management only): most common tasks & top contributors, last 30 days.
-    // Dropdown option lists stay stable regardless of the active filters/period.
     const insightsFilterOptions = useMemo(() => {
         const employees = new Set();
         const tasks = new Set();
@@ -540,9 +512,6 @@ const Home = () => {
     );
 
     const formatPlainDate = (dateStr) => {
-        // dateStr is an unambiguous "YYYY-MM-DD" calendar date already — format its
-        // components directly rather than reinterpreting through a timezone, which
-        // would shift it to the previous day (Anchorage is behind UTC).
         const [y, m, d] = dateStr.split('-').map(Number);
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return `${months[m - 1]} ${d}, ${y}`;
@@ -1031,7 +1000,7 @@ const Home = () => {
                                             <button
                                                 className={`btn btn-danger w-100 ${attendance && attendance.clock_out ? 'disabled' : ''}`}
                                                 onClick={handleClockOut}
-                                                disabled={clockActionLoading || (attendance && attendance.clock_out)}
+                                                disabled={clockActionLoading || ((attendance && attendance.clock_out) || !attendance)}
                                             >
                                                 <i className="bi bi-box-arrow-right me-1"></i>
                                                 {clockActionLoading ? 'Clocking out...' : 'Clock Out'}

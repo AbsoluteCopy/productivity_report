@@ -280,6 +280,32 @@ const toMySQLDateTime = (value, timeZone = APP_TIMEZONE) => {
   return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute}:${parts.second}`;
 };
 
+// Helper: If a user's open attendance record was clocked in on a different
+// calendar date (in their own timezone) than today, automatically clock them
+// out at 23:59:59 of the clock-in date so sessions can't span midnight.
+// Returns true when a stale record was closed.
+const autoClockOutStaleAttendance = async (user) => {
+  try {
+    const tz = userTimeZone(user);
+    const today = toMySQLDateTime(new Date(), tz).slice(0, 10);
+    const [rows] = await pool.query(
+      'SELECT id, clock_in FROM attendance WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1',
+      [user.id]
+    );
+    if (rows.length === 0) return false;
+    const clockInDate = String(rows[0].clock_in).slice(0, 10);
+    if (clockInDate === today) return false;
+    await pool.query(
+      'UPDATE attendance SET clock_out = ? WHERE id = ? AND clock_out IS NULL',
+      [`${clockInDate} 23:59:59`, rows[0].id]
+    );
+    return true;
+  } catch (err) {
+    console.error('Auto clock-out error:', err);
+    return false;
+  }
+};
+
 const reportNotDeleted = (alias = '') => {
   const column = alias ? `${alias}.status` : 'status';
   return `(${column} IS NULL OR ${column} <> 'Deleted')`;
@@ -617,7 +643,7 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
     //    production only because its host happens to run on UTC).
     const [onlineRows] = await pool.query(
       `SELECT u.id, u.id_number, u.first_name, u.last_name, u.email, u.role, u.company, u.last_active_at,
-              u.current_task_label, u.current_task_started_at,
+              u.current_task_label, u.current_task_started_at, u.timezone,
               a.clock_in AS attendance_clock_in,
               TIMESTAMPDIFF(MINUTE, u.last_active_at, NOW()) AS minutes_since_active,
               (u.last_logout_at IS NOT NULL AND u.last_logout_at >= u.last_active_at) AS explicitly_logged_out
@@ -626,6 +652,21 @@ app.get(['/api/users/online', '/api/users/online/'], authenticate, async (req, r
        WHERE u.last_active_at >= NOW() - INTERVAL 5 MINUTE OR a.id IS NOT NULL
        ORDER BY (a.id IS NOT NULL) DESC, u.last_active_at DESC`
     );
+    // Auto clock out anyone whose open attendance record is from a previous
+    // calendar date (in their own timezone), so stale sessions don't show
+    // as still clocked in.
+    await Promise.all(onlineRows.filter(u => u.attendance_clock_in).map(async u => {
+      const tz = userTimeZone(u);
+      const today = toMySQLDateTime(new Date(), tz).slice(0, 10);
+      const clockInDate = String(u.attendance_clock_in).slice(0, 10);
+      if (clockInDate === today) return;
+      await pool.query(
+        'UPDATE attendance SET clock_out = ? WHERE user_id = ? AND clock_out IS NULL',
+        [`${clockInDate} 23:59:59`, u.id]
+      ).catch(err => console.error('Auto clock-out error:', err));
+      u.attendance_clock_in = null;
+    }));
+
     onlineRows.forEach(u => {
       u.clocked_in = !!u.attendance_clock_in;
       const mins = u.minutes_since_active;
@@ -1653,6 +1694,7 @@ app.get(['/api/admin/backup-sql', '/api/admin/backup-sql/'], authenticate, async
 // Attendance: current open clock-in for the logged-in user (null if clocked out)
 app.get(['/api/attendance/current', '/api/attendance/current/'], authenticate, async (req, res) => {
   try {
+    await autoClockOutStaleAttendance(req.user);
     const [rows] = await pool.query(
       'SELECT * FROM attendance WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1',
       [req.user.id]
@@ -1667,6 +1709,7 @@ app.get(['/api/attendance/current', '/api/attendance/current/'], authenticate, a
 // Attendance: clock in
 app.post(['/api/attendance/clock-in', '/api/attendance/clock-in/'], authenticate, async (req, res) => {
   try {
+    await autoClockOutStaleAttendance(req.user);
     const [open] = await pool.query(
       'SELECT id FROM attendance WHERE user_id = ? AND clock_out IS NULL LIMIT 1',
       [req.user.id]
@@ -1690,6 +1733,7 @@ app.post(['/api/attendance/clock-in', '/api/attendance/clock-in/'], authenticate
 // Attendance: clock out
 app.post(['/api/attendance/clock-out', '/api/attendance/clock-out/'], authenticate, async (req, res) => {
   try {
+    await autoClockOutStaleAttendance(req.user);
     const [open] = await pool.query(
       'SELECT id FROM attendance WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1',
       [req.user.id]
