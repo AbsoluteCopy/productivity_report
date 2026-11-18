@@ -540,9 +540,9 @@ const Home = () => {
                     <div className="btn-group" role="group" aria-label="Period">
                         {[
                             { key: 'today', label: 'Today' },
-                            { key: 'week', label: 'Weekly' },
-                            { key: '30d', label: 'Monthly' },
-                            { key: '90d', label: '90 Days' },
+                            { key: 'week', label: 'This Week' },
+                            { key: '30d', label: 'Last 30 days' },
+                            { key: '90d', label: 'Last 90 days' },
                             { key: 'custom', label: 'Pick a Day' },
                         ].map(opt => (
                             <button

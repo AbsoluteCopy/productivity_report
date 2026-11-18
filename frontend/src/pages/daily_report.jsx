@@ -276,7 +276,10 @@ const DailyReport = () => {
             reports = reports.filter(report => report.user_name === selectedUserFilter);
         }
 
-        if (dateFrom) {
+        if (dateFrom && !dateTo) {
+            reports = reports.filter(report => report.date === dateFrom);
+        }
+        else if (dateFrom) {
             reports = reports.filter(report => report.date >= dateFrom);
         }
 
