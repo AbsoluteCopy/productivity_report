@@ -29,6 +29,18 @@ const customStyles = {
 const formatTime = (value) => formatNaiveTime(value, { seconds: true });
 const formatDate = (value) => formatNaiveDate(value);
 
+// Compare two MySQL DATETIME strings as wall-clock values so sorting is
+// chronological rather than alphabetical on the formatted display string.
+const compareNaiveDateTime = (a, b) => {
+    const pa = parseNaiveDateTime(a);
+    const pb = parseNaiveDateTime(b);
+    if (!pa && !pb) return 0;
+    if (!pa) return 1;
+    if (!pb) return -1;
+    return Date.UTC(pa.year, pa.month - 1, pa.day, pa.hour, pa.minute, pa.second)
+         - Date.UTC(pb.year, pb.month - 1, pb.day, pb.hour, pb.minute, pb.second);
+};
+
 const formatDuration = (clockIn, clockOut) => {
     const inParts = parseNaiveDateTime(clockIn);
     const outParts = parseNaiveDateTime(clockOut);
@@ -47,6 +59,7 @@ export default function Attendance() {
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [dateSearch, setDateSearch] = useState("");  // YYYY-MM-DD filter
 
     const fetchAttendance = async () => {
         setLoading(true);
@@ -84,16 +97,19 @@ export default function Attendance() {
             name: "Date",
             selector: row => formatDate(row.clock_in),
             sortable: true,
+            sortFunction: (a, b) => compareNaiveDateTime(a.clock_in, b.clock_in),
         },
         {
             name: "Clock In",
             selector: row => formatTime(row.clock_in),
             sortable: true,
+            sortFunction: (a, b) => compareNaiveDateTime(a.clock_in, b.clock_in),
         },
         {
             name: "Clock Out",
             selector: row => formatTime(row.clock_out),
             sortable: true,
+            sortFunction: (a, b) => compareNaiveDateTime(a.clock_out, b.clock_out),
             cell: row => row.clock_out
                 ? formatTime(row.clock_out)
                 : <span className="badge bg-success">Clocked In</span>,
@@ -104,25 +120,32 @@ export default function Attendance() {
         },
     ];
 
-    const filtered = records.filter(r =>
-        `${r.first_name} ${r.last_name} ${r.id_number || ""}`.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = records.filter(r => {
+        const matchesSearch = `${r.first_name} ${r.last_name} ${r.id_number || ""}`
+            .toLowerCase().includes(search.toLowerCase());
+        const matchesDate = !dateSearch || String(r.clock_in || "").slice(0, 10) === dateSearch;
+        return matchesSearch && matchesDate;
+    });
 
     // Clock-ins / clock-outs per day, most recent 14 days with activity.
+    // Each user counts at most once per day, even with multiple records.
     const chartData = useMemo(() => {
         const byDay = {};
+        const keyFor = (d) => `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+        const userKey = (r) => r.user_id ?? `${r.first_name} ${r.last_name}`;
         records.forEach(r => {
+            const uid = userKey(r);
             const inParts = parseNaiveDateTime(r.clock_in);
             if (inParts) {
-                const key = `${inParts.year}-${String(inParts.month).padStart(2, '0')}-${String(inParts.day).padStart(2, '0')}`;
-                byDay[key] = byDay[key] || { ins: 0, outs: 0 };
-                byDay[key].ins += 1;
+                const key = keyFor(inParts);
+                byDay[key] = byDay[key] || { ins: new Set(), outs: new Set() };
+                byDay[key].ins.add(uid);
             }
             const outParts = parseNaiveDateTime(r.clock_out);
             if (outParts) {
-                const key = `${outParts.year}-${String(outParts.month).padStart(2, '0')}-${String(outParts.day).padStart(2, '0')}`;
-                byDay[key] = byDay[key] || { ins: 0, outs: 0 };
-                byDay[key].outs += 1;
+                const key = keyFor(outParts);
+                byDay[key] = byDay[key] || { ins: new Set(), outs: new Set() };
+                byDay[key].outs.add(uid);
             }
         });
         const days = Object.keys(byDay).sort().slice(-14);
@@ -131,12 +154,12 @@ export default function Attendance() {
             datasets: [
                 {
                     label: 'Clock Ins',
-                    data: days.map(d => byDay[d].ins),
+                    data: days.map(d => byDay[d].ins.size),
                     backgroundColor: '#055d47',
                 },
                 {
                     label: 'Clock Outs',
-                    data: days.map(d => byDay[d].outs),
+                    data: days.map(d => byDay[d].outs.size),
                     backgroundColor: '#6c757d',
                 },
             ],
@@ -177,13 +200,33 @@ export default function Attendance() {
                 </div>
 
                 <div className="card-body">
-                    <input
-                        type="text"
-                        className="form-control mb-3"
-                        placeholder="Search employee..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
+                    <div className="d-flex gap-2 mb-3">
+                        <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Search employee..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <input
+                            type="date"
+                            className="form-control"
+                            style={{ maxWidth: "180px" }}
+                            value={dateSearch}
+                            onChange={(e) => setDateSearch(e.target.value)}
+                            title="Filter by date"
+                        />
+                        {dateSearch && (
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                onClick={() => setDateSearch("")}
+                                title="Clear date filter"
+                            >
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        )}
+                    </div>
 
                     <DataTable
                         columns={columns}
