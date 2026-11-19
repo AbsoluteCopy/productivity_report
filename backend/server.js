@@ -49,7 +49,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Auto-migrate: Ensure actual_time, description, and attachment columns exist in daily_reports table
+// Auto-migrate: Ensure actual_time, description, name_insured, and attachment columns exist in daily_reports table
 (async () => {
   try {
     const [cols] = await pool.query(
@@ -63,6 +63,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     if (!existing.has('description')) {
       await pool.query("ALTER TABLE daily_reports ADD COLUMN description TEXT NULL DEFAULT NULL AFTER actual_time");
       console.log("Added column 'description' to daily_reports table.");
+    }
+    if (!existing.has('name_insured')) {
+      await pool.query("ALTER TABLE daily_reports ADD COLUMN name_insured VARCHAR(255) NULL DEFAULT NULL AFTER description");
+      console.log("Added column 'name_insured' to daily_reports table.");
     }
     if (!existing.has('attachment')) {
       await pool.query("ALTER TABLE daily_reports ADD COLUMN attachment VARCHAR(255) NULL DEFAULT NULL AFTER description");
@@ -977,6 +981,7 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
         updated_at: r.updated_at,
         actual_time: r.actual_time,
         description: r.description,
+        name_insured: r.name_insured,
         attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
         time_added: r.time_added,
         time_finished: r.time_finished,
@@ -1102,6 +1107,7 @@ app.get(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
       updated_at: r.updated_at,
       actual_time: r.actual_time,
       description: r.description,
+      name_insured: r.name_insured,
       attachment_url: r.attachment ? `/api/daily-reports/${r.id}/attachment` : null,
       time_added: r.time_added,
       time_finished: r.time_finished,
@@ -1121,7 +1127,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
   });
   try {
     let { date, task_category, sub_category, work_type, task_list, number_of_tasks,
-      time_spent, meeting_count, user, actual_time, description, time_added, time_finished, is_paused, paused_time } = req.body;
+      time_spent, meeting_count, user, actual_time, description, name_insured, time_added, time_finished, is_paused, paused_time } = req.body;
 
     // multipart sends everything as strings
     if (typeof task_list === 'string') {
@@ -1203,12 +1209,13 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
     const [result] = await pool.query(
       `INSERT INTO daily_reports
         (user_id, date, task_category, sub_category, work_type, task_list, number_of_tasks,
-         time_spent, meeting_count, actual_time, description, attachment, time_added, time_finished, is_paused, paused_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+         time_spent, meeting_count, actual_time, description, name_insured, attachment, time_added, time_finished, is_paused, paused_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [targetUserId, date, task_category, sub_category || null, work_type || null, taskListJson,
         number_of_tasks || 0, time_spent || 0, meeting_count || 0,
         Number(actual_time) || null,                      // seconds
         (description || '').trim() || null,
+        (name_insured || '').trim() || null,
         req.file ? req.file.filename : null,
         toMySQLDateTime(time_added),
         toMySQLDateTime(time_finished),
@@ -1264,8 +1271,9 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (number_of_tasks !== undefined) { updates.push('number_of_tasks = ?'); params.push(number_of_tasks); }
     if (time_spent !== undefined) { updates.push('time_spent = ?'); params.push(time_spent); }
     if (meeting_count !== undefined) { updates.push('meeting_count = ?'); params.push(meeting_count); }
-    const { description, actual_time } = req.body;
+    const { description, name_insured, actual_time } = req.body;
     if (description !== undefined) { updates.push('description = ?'); params.push(description || null); }
+    if (name_insured !== undefined) { updates.push('name_insured = ?'); params.push(name_insured ? String(name_insured).trim() || null : null); }
     if (actual_time !== undefined) { updates.push('actual_time = ?'); params.push(actual_time !== null && actual_time !== '' ? actual_time : null); }
     if (paused_time !== undefined) { updates.push('paused_time = ?'); params.push(paused_time !== null && paused_time !== '' ? Number(paused_time) : null); }
     if (time_added !== undefined) { updates.push('time_added = ?'); params.push(toMySQLDateTime(time_added)); }

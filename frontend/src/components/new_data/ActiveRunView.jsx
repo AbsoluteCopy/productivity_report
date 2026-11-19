@@ -7,6 +7,8 @@ const ActiveRunView = ({
     overtime,
     description,
     onDescriptionChange,
+    nameInsured,
+    onNameInsuredChange,
     onAttachmentChange,
     saving,
     onCancel,
@@ -137,7 +139,13 @@ const ActiveRunView = ({
                             {running ? (
                                 <>
                                     <div className="mb-3">
-                                        <label className="form-label fw-semibold text-green-dark">Description</label>
+                                        <label className="form-label fw-semibold text-green-dark">Name Insured (optional)</label>
+                                        <input type="text" className="form-control" value={nameInsured}
+                                            onChange={e => onNameInsuredChange(e.target.value)}
+                                            placeholder="Name of the insured" />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label fw-semibold text-green-dark">Description (optional)</label>
                                         <textarea className="form-control" rows={3} value={description}
                                             onChange={e => onDescriptionChange(e.target.value)}
                                             placeholder="What did you do for this task?" />

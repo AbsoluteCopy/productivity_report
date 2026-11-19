@@ -66,6 +66,7 @@ const NewData = () => {
     });
     const [now, setNow] = useState(Date.now());
     const [description, setDescription] = useState('');
+    const [nameInsured, setNameInsured] = useState('');
     const [attachment, setAttachment] = useState(null);
     const [saving, setSaving] = useState(false);
     const warnedRef = useRef(null), alarmPlayedRef = useRef(null);
@@ -141,7 +142,7 @@ const NewData = () => {
             text: 'Categories already ended are saved. The current timer and unstarted categories will be discarded.',
             icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, cancel'
         });
-        if (r.isConfirmed) { setRun(null); setDescription(''); setAttachment(null); clearCurrentTask(); }
+        if (r.isConfirmed) { setRun(null); setDescription(''); setNameInsured(''); setAttachment(null); clearCurrentTask(); }
     };
 
     const clearCategoryInputs = () => {
@@ -182,11 +183,13 @@ const NewData = () => {
                 if (description.trim()) {
                     body.description = description.trim();
                 }
+                body.name_insured = nameInsured.trim();
 
                 await axios.put(`${API_BASE_URL}/daily-reports/${cur.resumeReportId}/`, body);
 
                 setRun(null);
                 setDescription('');
+                setNameInsured('');
                 setAttachment(null);
                 clearCurrentTask();
                 if (paused) {
@@ -241,6 +244,7 @@ const NewData = () => {
             fd.append('task_list', JSON.stringify(cur.payload.task_list));
             fd.append('actual_time', backDated ? '' : actualSeconds);
             fd.append('description', description.trim());
+            fd.append('name_insured', nameInsured.trim());
             fd.append('time_added', timeAdded);
             fd.append('time_finished', timeFinished ?? '');
             fd.append('is_paused', paused ? '1' : '0');
@@ -266,6 +270,7 @@ const NewData = () => {
             const isLast = run.index + 1 >= run.queue.length;
 
             setDescription('');
+            setNameInsured('');
             setAttachment(null);
             clearCurrentTask();
             if (paused) {
@@ -658,6 +663,7 @@ const NewData = () => {
             };
 
             warnedRef.current = null;
+            setNameInsured(data.name_insured || '');
             reportCurrentTask(item.label);
             setRun({ queue: [item], index: 0, startedAt: isBackDatedItem(item) ? null : Date.now(), results: [], finished: false, id: Date.now() });
         } catch (err) {
@@ -1547,6 +1553,8 @@ const NewData = () => {
                 overtime={overtime}
                 description={description}
                 onDescriptionChange={setDescription}
+                nameInsured={nameInsured}
+                onNameInsuredChange={setNameInsured}
                 onAttachmentChange={setAttachment}
                 saving={saving}
                 onCancel={cancelRun}
