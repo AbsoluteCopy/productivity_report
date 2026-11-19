@@ -849,32 +849,32 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
     const hasTasks = !isRestrictedCategory(report.task_category) && Array.isArray(report.task_list) && report.task_list.length > 0;
     return (
         <div className="modal fade show" role="dialog" aria-modal="true" aria-labelledby="report-details-title" style={{ display: "block", backgroundColor: "rgba(0,0,0,.6)", }} tabIndex="-1" onMouseDown={(event) => { if (event.target === event.currentTarget) { onClose(); } }} > <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"> <div className="modal-content border-0 shadow-lg"> {/* Header */} <div className="modal-header main-background text-white">
-            <h5 id="report-details-title" className="modal-title fw-bold" > Report Details </h5>
+            <h5 id="report-details-title" className="modal-title fw-bold d-flex align-items-center"> <i className="bi bi-file-earmark-text me-2"></i> Report Details </h5>
             <button type="button" className="btn-close btn-close-white" onClick={onClose} aria-label="Close" /> </div> {/* Body */} <div className="modal-body bg-light"> {/* Basic Information */}
                 <div className="card border-0 shadow-sm mb-3">
                     <div className="card-body">
                         <div className="row g-3">
                             <div className="col-md-6">
-                                <small className="text-muted d-block"> Date </small>
+                                <small className="text-muted d-block"><i className="bi bi-calendar3 me-1"></i>Date</small>
                                 <div className="fw-semibold"> {report.date || "—"} </div>
                             </div>
                             <div className="col-md-6">
-                                <small className="text-muted d-block"> Category </small>
+                                <small className="text-muted d-block"><i className="bi bi-tag me-1"></i>Category</small>
                                 <span className="badge bg-primary fs-6"> {getDisplayCategory(report) || "—"} </span>
                             </div>
                             <div className="col-md-6">
-                                <small className="text-muted d-block"> Work Type </small>
+                                <small className="text-muted d-block"><i className="bi bi-briefcase me-1"></i>Work Type</small>
                                 <span className="badge bg-success fs-6"> {report.work_type || "—"} </span>
                             </div>
                             {report.user_name && (
                                 <div className="col-md-6">
-                                    <small className="text-muted d-block"> Employee </small>
+                                    <small className="text-muted d-block"><i className="bi bi-person me-1"></i>Employee</small>
                                     <div className="fw-semibold"> {report.user_name} </div>
                                 </div>
                             )}
                             {Number(report.is_paused) === 1 && (
                                 <div className="col-md-6">
-                                    <small className="text-muted d-block"> Status </small>
+                                    <small className="text-muted d-block"><i className="bi bi-pause-circle me-1"></i>Status</small>
                                     <span className="badge bg-warning text-dark fs-6"> Paused </span>
                                 </div>
                             )}
@@ -884,40 +884,52 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                 {showStatistics && (
                     <div className="row g-3 mb-3">
                         {Number(report.number_of_tasks) > 0 && (
-                            <div className="col-md-4">
-                                <div className="card text-center border-primary shadow-sm h-100">
-                                    <div className="card-body">
-                                        <h3 className="text-primary mb-1"> {report.number_of_tasks} </h3>
+                            <div className="col-md-3 col-6">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-2" style={{ width: "44px", height: "44px" }}>
+                                            <i className="bi bi-list-check text-primary fs-5"></i>
+                                        </div>
+                                        <h3 className="mb-0 text-primary"> {report.number_of_tasks} </h3>
                                         <small className="text-muted"> Tasks Completed </small>
                                     </div>
                                 </div>
                             </div>
                         )}
                         {Number(report.time_spent) > 0 && (
-                            <div className="col-md-4">
-                                <div className="card text-center border-success shadow-sm h-100">
-                                    <div className="card-body">
-                                        <h3 className="text-success mb-1"> {report.time_spent} </h3>
+                            <div className="col-md-3 col-6">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-2" style={{ width: "44px", height: "44px" }}>
+                                            <i className="bi bi-hourglass-split text-success fs-5"></i>
+                                        </div>
+                                        <h3 className="mb-0 text-success"> {report.time_spent} </h3>
                                         <small className="text-muted"> Suggested Time </small>
                                     </div>
                                 </div>
                             </div>
                         )}
                         {Number(report.actual_time) > 0 && (
-                            <div className="col-md-4">
-                                <div className="card text-center border-success shadow-sm h-100">
-                                    <div className="card-body">
-                                        <h3 className="text-success mb-1"> {Number((Number(report.actual_time) / 60).toFixed(2))} mins </h3>
+                            <div className="col-md-3 col-6">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-2" style={{ width: "44px", height: "44px" }}>
+                                            <i className="bi bi-clock text-info fs-5"></i>
+                                        </div>
+                                        <h3 className="mb-0 text-info"> {Number((Number(report.actual_time) / 60).toFixed(2))} mins </h3>
                                         <small className="text-muted"> Actual Time Spent </small>
                                     </div>
                                 </div>
                             </div>
                         )}
                         {Number(report.meeting_count) > 0 && (
-                            <div className="col-md-4">
-                                <div className="card text-center border-warning shadow-sm h-100">
-                                    <div className="card-body">
-                                        <h3 className="text-warning mb-1"> {report.meeting_count / 60} </h3>
+                            <div className="col-md-3 col-6">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-2" style={{ width: "44px", height: "44px" }}>
+                                            <i className="bi bi-people text-warning fs-5"></i>
+                                        </div>
+                                        <h3 className="mb-0 text-warning"> {report.meeting_count / 60} </h3>
                                         <small className="text-muted"> Meetings </small>
                                     </div>
                                 </div>
@@ -928,15 +940,16 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                 {/* Task List */}
                 {hasTasks && (
                     <div className="card shadow-sm border-0">
-                        <div className="card-header bg-white">
-                            <h6 className="mb-0 fw-bold"> Task List </h6>
+                        <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h6 className="mb-0 fw-bold"><i className="bi bi-list-task me-2 text-primary"></i>Task List</h6>
+                            <span className="badge bg-primary rounded-pill"> {report.task_list.length} </span>
                         </div>
                         <div className="card-body p-0">
                             <ul className="list-group list-group-flush">
                                 {report.task_list.map((task, index) => (
                                     <li key={`${report.id}-task-${index}`} className="list-group-item d-flex align-items-start">
-                                        <span className="badge bg-secondary me-3 mt-1"> {index + 1} </span>
-                                        <span> {task} </span>
+                                        <span className="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle me-3 mt-1 rounded-pill"> {index + 1} </span>
+                                        <span className="flex-grow-1"> {task} </span>
                                     </li>
                                 ))}
                             </ul>
@@ -947,7 +960,7 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                 {report.description && (
                     <div className="card shadow-sm border-0 mt-3">
                         <div className="card-header bg-white">
-                            <h6 className="mb-0 fw-bold"> Description </h6>
+                            <h6 className="mb-0 fw-bold"><i className="bi bi-chat-left-text me-2 text-primary"></i>Description</h6>
                         </div>
                         <div className="card-body">
                             <p className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{report.description}</p>
@@ -957,13 +970,13 @@ const ReportDetailsModal = ({ report, onClose, isRestrictedCategory, }) => {
                 {/* No task details */}
                 {!showStatistics && !hasTasks && (
                     <div className="card border-0 shadow-sm">
-                        <div className="card-body text-center text-muted py-4"> No additional task details available. </div>
+                        <div className="card-body text-center text-muted py-4"> <i className="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i> No additional task details available. </div>
                     </div>
                 )}
             </div>
             {/* Footer */}
             <div className="modal-footer">
-                <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
+                <button type="button" className="btn btn-secondary" onClick={onClose}>
                     Close
                 </button>
             </div>

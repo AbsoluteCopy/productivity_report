@@ -671,11 +671,6 @@ const NewData = () => {
     };
 
     const isWeekend = (dateString) => {
-        // parseDateInTimezone builds this as a UTC-midnight marker for the
-        // pure calendar date (not a real moment in any timezone) - it must be
-        // read back out as UTC too, or converting it to a real timezone like
-        // Alaska (UTC-9) shifts it into the previous day and misreads the
-        // weekday (e.g. Monday showing as Sunday).
         const date = parseDateInTimezone(dateString);
 
         const weekday = date.toLocaleDateString("en-US", {
@@ -782,9 +777,6 @@ const NewData = () => {
 
     const DUPLICATE_SKIP_CATEGORIES = ['Meeting', 'PTO', 'Holiday', 'Company Event'];
 
-    // Suffix formats offered when continuing past a duplicate task.
-    // `prefix` is the text before the number; `match` is the regex fragment used
-    // to detect already-used numbers for this format.
     const DUPLICATE_SUFFIX_FORMATS = {
         endorsement: { label: 'Endorsement', prefix: 'Endorsement #', match: 'Endorsement\\s*#?' },
         intakes_update: { label: 'Intakes Update', prefix: 'Intakes Update #', match: 'Intakes\\s+Update\\s*#?' },
@@ -840,7 +832,6 @@ const NewData = () => {
         }
     };
 
-    // Returns the renamed task ("Task (Rev. N)" / "Task (# N)"), or null if cancelled.
     const promptDuplicateTaskFormat = async (taskName, title, message, extraPool = [], existsRemote = null) => {
         const first = await Swal.fire({
             icon: 'warning',
