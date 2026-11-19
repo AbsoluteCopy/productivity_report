@@ -686,7 +686,7 @@ const ManageAccounts = () => {
     };
     const filteredUsers = useMemo(() => {
         return users.filter(user =>
-            `${user.first_name} ${user.last_name} ${user.id_number} ${user.username} ${user.email}`
+            `${user.first_name} ${user.last_name} ${user.id_number} ${user.username} ${user.email} ${user.company || ""}`
                 .toLowerCase()
                 .includes(search.toLowerCase())
         );
@@ -743,7 +743,7 @@ const ManageAccounts = () => {
                             name="search_employee_filter"
                             autoComplete="off"
                             className="form-control ps-5 pe-5"
-                            placeholder="Search employee..."
+                            placeholder="Search employee or company..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
