@@ -12,6 +12,7 @@ const EMPTY_CATEGORY = {
     status: "active",
     company: "",
     default_time: "",
+    repeatable: 0,
 };
 
 const customStyles = {
@@ -113,7 +114,8 @@ const ManageTaskCategory = () => {
             name: formData.name.trim(),
             default_time: formData.default_time !== '' && formData.default_time !== null && formData.default_time !== undefined
                 ? parseInt(formData.default_time, 10)
-                : null
+                : null,
+            repeatable: formData.repeatable ? 1 : 0
         };
         
         // If HR or supervisor role, ensure company is set to their own company
@@ -181,6 +183,7 @@ const ManageTaskCategory = () => {
             status: category.status,
             company: category.company || "",
             default_time: category.default_time !== null && category.default_time !== undefined ? category.default_time : "",
+            repeatable: category.repeatable ? 1 : 0,
         });
     };
 
@@ -233,6 +236,15 @@ const ManageTaskCategory = () => {
                     }`}
                 >
                     {row.status.toUpperCase()}
+                </span>
+            ),
+            sortable: true,
+        },
+        {
+            name: "Repeatable",
+            cell: row => (
+                <span className={`badge ${row.repeatable ? "bg-primary" : "bg-secondary"}`}>
+                    {row.repeatable ? "YES" : "NO"}
                 </span>
             ),
             sortable: true,
@@ -348,6 +360,22 @@ const ManageTaskCategory = () => {
                                 <small className="text-muted fs-08">
                                     When selected on Daily Report, Time Spent will automatically default to this duration.
                                 </small>
+                            </div>
+
+                            <div className="mb-3 form-check">
+                                <input
+                                    type="checkbox"
+                                    className="form-check-input"
+                                    id="repeatableCheck"
+                                    checked={!!formData.repeatable}
+                                    onChange={(e) => setFormData({ ...formData, repeatable: e.target.checked ? 1 : 0 })}
+                                />
+                                <label className="form-check-label fw-semibold small" htmlFor="repeatableCheck">
+                                    Allow Duplicate
+                                </label>
+                                <div className="form-text fs-08">
+                                    If checked, task can be submitted multiple times (e.g. duplicate tasks).
+                                </div>
                             </div>
 
                             <div className="mb-3">

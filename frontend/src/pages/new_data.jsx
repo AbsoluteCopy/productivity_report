@@ -764,6 +764,7 @@ const NewData = () => {
                     ...cat,
                     category: value,
                     sub_category: '',
+                    repeatable: Number(matchedCategory?.repeatable) === 1 ? 1 : 0,
                     timeSpent: (defaultTime !== null && defaultTime !== undefined && defaultTime !== '')
                         ? String(defaultTime)
                         : cat.timeSpent
@@ -779,6 +780,15 @@ const NewData = () => {
             return c.sub_category.trim();
         }
         return (c.category || '').trim();
+    };
+
+    const isRepeatableCategory = (cat) => {
+        if (!cat || !cat.category) return false;
+        if (Number(cat.repeatable) === 1) return true;
+        const names = new Set([cat.category, getEffectiveCatName(cat)]);
+        return [...names].some(n =>
+            taskCategories.some(c => c.name === n && Number(c.repeatable) === 1)
+        );
     };
 
     const DUPLICATE_SKIP_CATEGORIES = ['Meeting', 'PTO', 'Holiday', 'Company Event'];
@@ -897,13 +907,14 @@ const NewData = () => {
             c.id === id || (targetCatName && getEffectiveCatName(c).toLowerCase() === targetCatName.toLowerCase())
         );
         const allTasksInCat = sameCatRows.flatMap(c => c.tasks);
-        const checkServerDuplicate = targetCat.category && !DUPLICATE_SKIP_CATEGORIES.includes(targetCat.category);
+        const skipDuplicates = isRepeatableCategory(targetCat);
+        const checkServerDuplicate = !skipDuplicates && targetCat.category && !DUPLICATE_SKIP_CATEGORIES.includes(targetCat.category);
         const existsRemote = checkServerDuplicate
             ? async (name) => !!(await checkRemoteTaskDuplicate(name, targetCat))
             : null;
 
         let finalTask = newTask;
-        while (true) {
+        while (!skipDuplicates) {
             const isLocalDuplicate = allTasksInCat.some(
                 t => t.trim().toLowerCase() === finalTask.toLowerCase()
             );
@@ -1166,8 +1177,9 @@ const NewData = () => {
             if (cat.currentTask && cat.currentTask.trim()) {
                 let pendingTask = cat.currentTask.trim();
                 if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
+                    const skipDuplicates = isRepeatableCategory(cat);
                     const existsRemote = async (name) => !!(await checkRemoteTaskDuplicate(name, cat));
-                    while (true) {
+                    while (!skipDuplicates) {
                         // Check duplicate in local form
                         const isLocalDup = catTasks.some(t => t.trim().toLowerCase() === pendingTask.toLowerCase());
                         if (isLocalDup) {
@@ -1209,7 +1221,7 @@ const NewData = () => {
         // Check for duplicate tasks across rows of the same category
         const catTaskMap = {};
         for (let cat of processedCategories) {
-            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
+            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category) && !isRepeatableCategory(cat)) {
                 const catKey = getEffectiveCatName(cat).toLowerCase();
                 if (!catTaskMap[catKey]) catTaskMap[catKey] = new Set();
                 for (let ti = 0; ti < cat.tasks.length; ti++) {
@@ -1235,7 +1247,7 @@ const NewData = () => {
 
         // System-wide duplicate check for all tasks in all categories
         for (let cat of processedCategories) {
-            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category)) {
+            if (cat.category && !DUPLICATE_SKIP_CATEGORIES.includes(cat.category) && !isRepeatableCategory(cat)) {
                 for (let ti = 0; ti < cat.tasks.length; ti++) {
                     let t = cat.tasks[ti];
                     while (true) {

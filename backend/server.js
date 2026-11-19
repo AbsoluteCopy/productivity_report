@@ -997,6 +997,16 @@ app.get(['/api/daily-reports', '/api/daily-reports/'], authenticate, async (req,
   }
 });
 
+// Check if a task category allows duplicate tasks (repeatable = 1)
+const isRepeatableTaskCategory = async (categoryName) => {
+  if (!categoryName || !String(categoryName).trim()) return false;
+  const [rows] = await pool.query(
+    'SELECT id FROM task_categories WHERE LOWER(TRIM(name)) = LOWER(?) AND repeatable = 1 LIMIT 1',
+    [String(categoryName).trim()]
+  );
+  return rows.length > 0;
+};
+
 // 8a-2. Check duplicate task across system for category (Strict exact case-insensitive match)
 app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplicate/'], authenticate, async (req, res) => {
   try {
@@ -1009,6 +1019,10 @@ app.get(['/api/daily-reports/check-duplicate', '/api/daily-reports/check-duplica
     const effectiveCategory = (category.toLowerCase() === 'others' && sub_category && sub_category.trim())
       ? sub_category.trim()
       : category.trim();
+
+    if (await isRepeatableTaskCategory(effectiveCategory)) {
+      return res.json({ duplicate: false });
+    }
 
     let query = `
       SELECT r.id, r.date, r.task_category, r.sub_category, u.first_name, u.last_name, u.username
@@ -1144,16 +1158,23 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
       targetUserId = user;
     }
 
+    const effectiveCategory = (task_category === 'Others' && sub_category && sub_category.trim())
+      ? sub_category.trim()
+      : (task_category || '').trim();
+    const allowDuplicates = await isRepeatableTaskCategory(effectiveCategory);
+
     // Strict exact case-insensitive match deduplication (preserves SUB10498-3 vs SUB104983)
     let cleanTaskList = Array.isArray(task_list) ? task_list : [];
-    const seenPostTasks = new Set();
-    cleanTaskList = cleanTaskList.filter(t => {
-      if (typeof t !== 'string') return true;
-      const key = t.trim().toLowerCase();
-      if (seenPostTasks.has(key)) return false;
-      seenPostTasks.add(key);
-      return true;
-    });
+    if (!allowDuplicates) {
+      const seenPostTasks = new Set();
+      cleanTaskList = cleanTaskList.filter(t => {
+        if (typeof t !== 'string') return true;
+        const key = t.trim().toLowerCase();
+        if (seenPostTasks.has(key)) return false;
+        seenPostTasks.add(key);
+        return true;
+      });
+    }
     const taskListJson = JSON.stringify(cleanTaskList);
     // Validate non-empty task_list for working categories
     if (work_type === 'Working' && task_category && task_category !== 'Meeting') {
@@ -1164,11 +1185,7 @@ app.post(['/api/daily-reports', '/api/daily-reports/'], authenticate, uploadAtta
     }
 
     // System-wide duplicate check for each task in this category
-    const effectiveCategory = (task_category === 'Others' && sub_category && sub_category.trim())
-      ? sub_category.trim()
-      : (task_category || '').trim();
-
-    if (task_category && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(task_category)) {
+    if (task_category && !allowDuplicates && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(task_category)) {
       for (const t of cleanTaskList) {
         if (typeof t !== 'string' || !t.trim()) continue;
         const [dupRows] = await pool.query(`
@@ -1251,20 +1268,29 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     let params = [];
     let cleanTaskList = [];
 
+    const targetCategory = task_category || report.task_category;
+    const targetSubCategory = sub_category !== undefined ? sub_category : report.sub_category;
+    const effectiveCategory = (targetCategory === 'Others' && targetSubCategory && targetSubCategory.trim())
+      ? targetSubCategory.trim()
+      : (targetCategory || '').trim();
+    const allowDuplicates = await isRepeatableTaskCategory(effectiveCategory);
+
     if (date) { updates.push('date = ?'); params.push(date); }
     if (task_category) { updates.push('task_category = ?'); params.push(task_category); }
     if (sub_category !== undefined) { updates.push('sub_category = ?'); params.push(sub_category); }
     if (work_type !== undefined) { updates.push('work_type = ?'); params.push(work_type); }
     if (task_list !== undefined) {
       cleanTaskList = Array.isArray(task_list) ? task_list : [];
-      const seenPutTasks = new Set();
-      cleanTaskList = cleanTaskList.filter(t => {
-        if (typeof t !== 'string') return true;
-        const key = t.trim().toLowerCase();
-        if (seenPutTasks.has(key)) return false;
-        seenPutTasks.add(key);
-        return true;
-      });
+      if (!allowDuplicates) {
+        const seenPutTasks = new Set();
+        cleanTaskList = cleanTaskList.filter(t => {
+          if (typeof t !== 'string') return true;
+          const key = t.trim().toLowerCase();
+          if (seenPutTasks.has(key)) return false;
+          seenPutTasks.add(key);
+          return true;
+        });
+      }
       updates.push('task_list = ?');
       params.push(JSON.stringify(cleanTaskList));
     }
@@ -1281,13 +1307,7 @@ app.put(['/api/daily-reports/:id', '/api/daily-reports/:id/'], authenticate, asy
     if (is_paused !== undefined) { updates.push('is_paused = ?'); params.push(Number(is_paused) === 1 ? 1 : 0); }
 
     // System-wide duplicate check for each task in this category (excluding this report)
-    const targetCategory = task_category || report.task_category;
-    const targetSubCategory = sub_category !== undefined ? sub_category : report.sub_category;
-    const effectiveCategory = (targetCategory === 'Others' && targetSubCategory && targetSubCategory.trim())
-      ? targetSubCategory.trim()
-      : (targetCategory || '').trim();
-
-    if (cleanTaskList.length > 0 && targetCategory && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCategory)) {
+    if (cleanTaskList.length > 0 && !allowDuplicates && targetCategory && !['Meeting', 'PTO', 'Holiday', 'Company Event'].includes(targetCategory)) {
       for (const t of cleanTaskList) {
         if (typeof t !== 'string' || !t.trim()) continue;
         const [dupRows] = await pool.query(`
@@ -1442,7 +1462,7 @@ app.post(['/api/task-categories', '/api/task-categories/'], authenticate, async 
     if (!['admin', 'hr', 'supervisor'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Only Admin, HR, or Supervisor can create task categories.' });
     }
-    let { name, status, company, default_time } = req.body;
+    let { name, status, company, default_time, repeatable } = req.body;
     if (!name) return res.status(400).json({ error: 'Category name is required.' });
     if (['hr', 'supervisor'].includes(req.user.role)) company = req.user.company;
 
@@ -1450,8 +1470,8 @@ app.post(['/api/task-categories', '/api/task-categories/'], authenticate, async 
     if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
 
     const [result] = await pool.query(
-      'INSERT INTO task_categories (name, status, company, default_time, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-      [name.trim(), status || 'active', company || null, parsedDefaultTime]
+      'INSERT INTO task_categories (name, status, company, default_time, repeatable, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+      [name.trim(), status || 'active', company || null, parsedDefaultTime, repeatable ? 1 : 0]
     );
     const [created] = await pool.query('SELECT * FROM task_categories WHERE id = ?', [result.insertId]);
     return res.status(201).json(created[0]);
@@ -1474,7 +1494,7 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
       return res.status(403).json({ error: 'Cannot modify categories belonging to another company.' });
     }
 
-    let { name, status, company, default_time } = req.body;
+    let { name, status, company, default_time, repeatable } = req.body;
     let updates = [];
     let params = [];
     if (name) { updates.push('name = ?'); params.push(name.trim()); }
@@ -1487,6 +1507,10 @@ app.put(['/api/task-categories/:id', '/api/task-categories/:id/'], authenticate,
       if (isNaN(parsedDefaultTime)) parsedDefaultTime = null;
       updates.push('default_time = ?');
       params.push(parsedDefaultTime);
+    }
+    if (repeatable !== undefined) {
+      updates.push('repeatable = ?');
+      params.push(repeatable ? 1 : 0);
     }
 
     if (updates.length === 0) {
