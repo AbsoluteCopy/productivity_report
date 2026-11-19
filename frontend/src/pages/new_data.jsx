@@ -480,6 +480,45 @@ const NewData = () => {
     }, [editId, resumeId]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        const checkClockInStatus = async () => {
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                if (!user || ['admin', 'viewer', 'hr', 'supervisor'].includes(user.role)) return;
+
+                const { data } = await axios.get(`${API_BASE_URL}/attendance/current/`);
+                if (cancelled || (data && !data.clock_out)) return;
+
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Not Clocked In',
+                    text: 'You have not clocked in yet. Would you like to go back to the dashboard and clock in before continuing?',
+                    showCancelButton: true,
+                    confirmButtonText: 'Proceed Anyway',
+                    cancelButtonText: 'Go to Dashboard',
+                    confirmButtonColor: '#065d48',
+                    cancelButtonColor: '#d33',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                });
+
+                if (!cancelled && !result.isConfirmed) {
+                    navigate('/dashboard');
+                }
+            } catch (err) {
+                console.error('Error checking clock-in status:', err);
+            }
+        };
+
+        checkClockInStatus();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [navigate]);
+
+    useEffect(() => {
         fetchCategories();
     }, []);
 

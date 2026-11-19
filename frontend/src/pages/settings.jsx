@@ -186,9 +186,6 @@ const Settings = () => {
                                             <label className="form-label mb-0 fw-semibold">
                                                 <i className="bi bi-moon-stars me-1"></i> Dark Mode
                                             </label>
-                                            <div className="form-text">
-                                                Applies a dark theme across the app.
-                                            </div>
                                         </div>
                                         <div className="form-check form-switch mb-0">
                                             <input

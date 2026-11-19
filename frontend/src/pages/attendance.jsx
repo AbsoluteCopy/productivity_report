@@ -121,7 +121,7 @@ export default function Attendance() {
     ];
 
     const filtered = records.filter(r => {
-        const matchesSearch = `${r.first_name} ${r.last_name} ${r.id_number || ""}`
+        const matchesSearch = `${r.first_name} ${r.last_name} ${r.id_number || ""} ${r.company || ""}`
             .toLowerCase().includes(search.toLowerCase());
         const matchesDate = !dateSearch || String(r.clock_in || "").slice(0, 10) === dateSearch;
         return matchesSearch && matchesDate;
@@ -204,7 +204,7 @@ export default function Attendance() {
                         <input
                             type="text"
                             className="form-control"
-                            placeholder="Search employee..."
+                            placeholder="Search employee or company..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />

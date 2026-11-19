@@ -288,16 +288,18 @@ const ManageTaskCategory = () => {
                 </div>
 
                 <div className="card-body">
-                    <input type="text" className="form-control mb-3" placeholder="Search category..."
+                    <input type="text" className="form-control mb-3" placeholder="Search category or company..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
 
                     <DataTable
                         columns={columns}
-                        data={categories.filter((category) =>
-                            category.name.toLowerCase().includes(search.toLowerCase())
-                        )}
+                        data={categories.filter((category) => {
+                            const term = search.toLowerCase();
+                            return category.name.toLowerCase().includes(term) ||
+                                (category.company || "").toLowerCase().includes(term);
+                        })}
                         pagination
                         highlightOnHover
                         striped
