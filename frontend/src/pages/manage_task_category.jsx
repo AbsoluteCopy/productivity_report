@@ -126,10 +126,15 @@ const ManageTaskCategory = () => {
         setSaving(true);
 
         try {
+            const normalizeCompany = (value) => (value || "").trim().toLowerCase();
+            const payloadCompany = (['hr', 'supervisor'].includes(currentUser?.role) && currentUser?.company)
+                ? currentUser.company
+                : payload.company;
             const duplicate = categories.some(
                 (category) =>
                     category.name.toLowerCase() ===
                     formData.name.trim().toLowerCase() &&
+                    normalizeCompany(category.company) === normalizeCompany(payloadCompany) &&
                     category.id !== editingId
             );
 

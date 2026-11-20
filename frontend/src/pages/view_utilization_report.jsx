@@ -483,11 +483,9 @@ const ViewUtilizationReport = () => {
                 <div>
                     <h2
                         className="fw-bold mb-1"
-                        style={{ color: "#08060d", letterSpacing: "-0.5px" }}
+                        style={{ color: isDarkMode() ? '#e4e9e7' : '#08060d', letterSpacing: "-0.5px" }}
                     >
-                        <i
-                            className="bi bi-graph-up-arrow me-2 text-green"
-                        ></i>
+                        <i className="bi bi-graph-up-arrow me-2 text-green"></i>
                         Utilization Report
                     </h2>
                 </div>

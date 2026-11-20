@@ -694,11 +694,17 @@ const ManageAccounts = () => {
 
     const sortedAndFilteredCategories = useMemo(() => {
         // Backend already filters to global + this user's company — just search/sort here.
-        const filtered = taskCategories.filter(category =>
-            category.name.toLowerCase().includes(categorySearch.toLowerCase())
-        );
+        const targetUser = users.find(u => u.id === currentUserId);
+        const targetCompany = (targetUser?.company || '').trim().toLowerCase();
+        const filtered = taskCategories.filter(category => {
+            if (targetCompany) {
+                const catCompany = (category.company || '').trim().toLowerCase();
+                if (catCompany && catCompany !== targetCompany) return false;
+            }
+            return category.name.toLowerCase().includes(categorySearch.toLowerCase());
+        });
         return filtered.sort((a, b) => a.name.localeCompare(b.name));
-    }, [taskCategories, categorySearch]);
+    }, [taskCategories, categorySearch, users, currentUserId]);
 
     return (
         <div className="container mt-4">
