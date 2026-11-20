@@ -65,6 +65,25 @@ const Login = () => {
             setLoading(false);
         }
     };
+    
+    const features = [
+        {
+            icon: "⏱️",
+            title: "Time Tracking",
+            description: "Track work hours and task duration accurately"
+        },
+        {
+            icon: "📈",
+            title: "Analytics",
+            description: "Generate detailed productivity reports"
+        },
+        {
+            icon: "👥",
+            title: "Team Management",
+            description: "Monitor team performance and attendance"
+        }
+    ];
+
 
     return (
         <div className="login-page">
@@ -74,16 +93,34 @@ const Login = () => {
             <div className="blob blob2"></div>
             <div className="blob blob3"></div>
             <div className="blob blob4"></div>
+
+            {/* KPI Metrics Decoration */}
+              <div className="initial-features">
+                {features.map((feature, index) => (
+                    <div
+                        key={index}
+                        className="feature-card"
+                        style={{ animationDelay: `${index * 0.15}s` }}
+                    >
+                        <div className="feature-icon">{feature.icon}</div>
+                        <div className="feature-content">
+                            <h3 className="feature-title">{feature.title}</h3>
+                            <p className="feature-description">{feature.description}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             <div className="login-card">
                 {/* Logo */}
-                <div>
+                <div className="login-header">
                     <img
                         src="/images/gratus.png"
                         alt="Logo"
                         style={{
-                            width: "250px",
+                            width: "180px",
                             height: "auto",
-                            marginBottom: "15px",
+                            marginBottom: "12px",
                             objectFit: "contain",
                         }}
                         className="logo"
@@ -92,39 +129,20 @@ const Login = () => {
                     <h2 className="login-title">
                         Productivity Report
                     </h2>
-
-                    <p className="login-subtitle">
-                        Sign in to continue
+                    <p className="login-subtitle-small">
+                        Sign in to access your dashboard
                     </p>
                 </div>
 
                 {error && (
-                    <div
-                        style={{
-                            background: "#fff2f2",
-                            color: "#d32f2f",
-                            border: "1px solid #ffcdd2",
-                            borderRadius: "10px",
-                            padding: "12px",
-                            textAlign: "center",
-                            marginBottom: "20px",
-                            fontSize: "14px",
-                        }}
-                    >
+                    <div className="error-message">
                         {error}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: "20px" }}>
-                        <label
-                            style={{
-                                display: "block",
-                                marginBottom: "8px",
-                                color: "#065d48",
-                                fontWeight: "600",
-                            }}
-                        >
+                        <label className="login-input-label">
                             Email or Username
                         </label>
 
@@ -140,14 +158,7 @@ const Login = () => {
 
                     {/* Password */}
                     <div style={{ marginBottom: "28px" }}>
-                        <label
-                            style={{
-                                display: "block",
-                                marginBottom: "8px",
-                                color: "#065d48",
-                                fontWeight: "600",
-                            }}
-                        >
+                        <label className="login-input-label">
                             Password
                         </label>
 
