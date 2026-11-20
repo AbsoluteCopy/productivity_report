@@ -1,5 +1,6 @@
 import CategorySelect from './CategorySelect';
 import { isDarkMode } from '../../utils/darkMode';
+import { useState } from 'react';
 
 const PRESET_TIMES = ['15', '30', '45', '60', '90', '120'];
 
@@ -22,6 +23,7 @@ const CategoryCard = ({
     onHasTimeSpentChange,
     setTaskListRef,
 }) => {
+    const [isEditingCustomTime, setIsEditingCustomTime] = useState(false);
     const taskCount = Array.isArray(cat.tasks) ? cat.tasks.length : 0;
     const timePerTask = Number(cat.timeSpent) || 0;
     const totalCatEstMinutes = cat.category === 'Meeting'
@@ -30,10 +32,12 @@ const CategoryCard = ({
     const catActualMinutes = (cat.actualTime !== undefined && cat.actualTime !== null && cat.actualTime !== '')
         ? Number(cat.actualTime)
         : null;
-    const timeSelectValue = PRESET_TIMES.includes(String(cat.timeSpent))
-        ? String(cat.timeSpent)
-        : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : '');
-    const showCustomTimeInput = !PRESET_TIMES.includes(String(cat.timeSpent)) || cat.timeSpent === '';
+    const timeSelectValue = isEditingCustomTime
+        ? 'custom'
+        : (PRESET_TIMES.includes(String(cat.timeSpent))
+            ? String(cat.timeSpent)
+            : (cat.timeSpent !== '' && cat.timeSpent !== null && cat.timeSpent !== undefined ? 'custom' : ''));
+    const showCustomTimeInput = isEditingCustomTime || !PRESET_TIMES.includes(String(cat.timeSpent)) || cat.timeSpent === '';
     const timeDisabled = cat.category === 'Others' && cat.hasTimeSpent;
     const matchedCategory = taskCategories.find(c => c.name === cat.category);
     const dark = isDarkMode();
@@ -159,7 +163,11 @@ const CategoryCard = ({
                                         type="number"
                                         value={cat.timeSpent}
                                         onChange={(e) => onTimeSpentChange(cat.id, e.target.value)}
-                                        onBlur={(e) => onTimeSpentBlur(cat.id, e.target.value)}
+                                        onFocus={() => setIsEditingCustomTime(true)}
+                                        onBlur={(e) => {
+                                            setIsEditingCustomTime(false);
+                                            onTimeSpentBlur(cat.id, e.target.value);
+                                        }}
                                         min="0"
                                         step="1"
                                         placeholder="Enter minutes"
@@ -198,7 +206,11 @@ const CategoryCard = ({
                                             type="number"
                                             value={cat.timeSpent}
                                             onChange={(e) => onTimeSpentChange(cat.id, e.target.value)}
-                                            onBlur={(e) => onTimeSpentBlur(cat.id, e.target.value)}
+                                            onFocus={() => setIsEditingCustomTime(true)}
+                                            onBlur={(e) => {
+                                                setIsEditingCustomTime(false);
+                                                onTimeSpentBlur(cat.id, e.target.value);
+                                            }}
                                             min="0"
                                             step="1"
                                             placeholder="Enter minutes"

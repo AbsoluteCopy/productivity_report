@@ -1011,6 +1011,11 @@ const NewData = () => {
     };
 
     const handleTimeSpentChange = (id, value) => {
+        // Allow any input during typing, validation happens on blur/submit
+        // Remove leading zeros on change to prevent issues
+        if (value && typeof value === 'string' && /^0\d+/.test(value)) {
+            value = String(parseInt(value, 10));
+        }
         setCategories(prev => prev.map(cat =>
             cat.id === id ? { ...cat, timeSpent: value } : cat
         ));
