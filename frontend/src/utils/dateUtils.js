@@ -206,8 +206,11 @@ export const isMoreThanOneMonthOld = (dateString) => {
  */
 export const isMoreThan24HoursOld = (report) => {
   if (!report) return false;
-  const timeToCompare = report.created_at 
-    ? new Date(report.created_at).getTime() 
+  // created_at arrives as "YYYY-MM-DD HH:MM:SS" (mysql2 dateStrings). Normalize
+  // to ISO local form so Safari doesn't return Invalid Date.
+  const rawCreatedAt = report.created_at ? String(report.created_at).replace(' ', 'T') : null;
+  const timeToCompare = rawCreatedAt
+    ? new Date(rawCreatedAt).getTime()
     : parseDateInTimezone(report.date).getTime();
   if (isNaN(timeToCompare)) return false;
   const hoursAgo = (Date.now() - timeToCompare) / (1000 * 60 * 60);

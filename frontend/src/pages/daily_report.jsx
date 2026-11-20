@@ -535,6 +535,7 @@ const DailyReport = () => {
                                     title={editTitle}
                                     aria-label="Edit Report"
                                     onClick={() => handleEdit(row.id)}
+                                    disabled={isOldRecord}
                                 >
                                     <PencilIcon />
                                 </button>
