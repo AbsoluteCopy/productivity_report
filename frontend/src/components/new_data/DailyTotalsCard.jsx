@@ -15,23 +15,23 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                 borderRadius: '12px',
             }}
         >
-            <div className="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
-                {/* Left: Circular Progress Ring + Hours Display */}
-                <div className="d-flex align-items-center gap-3">
-                    <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0 }}>
+            <div className="card-body p-3 p-md-4 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+                {/* Left: Circular Progress Ring */}
+                <div className="d-flex align-items-center gap-3 flex-shrink-0">
+                    <div style={{ position: 'relative', width: '56px', height: '56px' }}>
                         <svg width="56" height="56" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)' }}>
                             <circle
                                 cx="28"
                                 cy="28"
-                                r="22"
+                                r="24"
                                 stroke={dark ? '#2a3a35' : '#e2e8f0'}
-                                strokeWidth="5"
+                                strokeWidth="4"
                                 fill="transparent"
                             />
                             <circle
                                 cx="28"
                                 cy="28"
-                                r="22"
+                                r="24"
                                 stroke={
                                     dailyTotals.minutes > 600
                                         ? '#ef4444'
@@ -39,10 +39,10 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                                             ? '#10b981'
                                             : (dark ? '#5fc7ac' : '#065d48')
                                 }
-                                strokeWidth="5"
-                                strokeDasharray={138.23}
+                                strokeWidth="4"
+                                strokeDasharray={150.8}
                                 strokeDashoffset={
-                                    138.23 - (138.23 * Math.min(dailyTotals.minutes / dailyTotals.targetMinutes, 1))
+                                    150.8 - (150.8 * Math.min(dailyTotals.minutes / dailyTotals.targetMinutes, 1))
                                 }
                                 strokeLinecap="round"
                                 fill="transparent"
@@ -59,7 +59,7 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '0.72rem',
+                                fontSize: '0.75rem',
                                 fontWeight: 700,
                                 color: accentColor,
                             }}
@@ -67,68 +67,75 @@ const DailyTotalsCard = ({ dailyTotals, isEditMode, editingUserName, date }) => 
                             {dailyTotals.percent}%
                         </div>
                     </div>
+                </div>
 
-                    <div>
-                        {isEditMode && editingUserName && (
-                            <div className="badge bg-light text-success border border-success-subtle px-2 py-1 mb-1 rounded-pill fs-072">
-                                <i className="bi bi-person-fill me-1"></i>Employee: {editingUserName}
-                            </div>
-                        )}
-                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                            <h5 className="mb-0 fw-bold" style={{ color: accentColor }}>
-                                Suggested Time Spent: {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours} hr${dailyTotals.totalHours > 1 ? 's' : ''} ` : ''}
-                                {dailyTotals.remainingMins} min{dailyTotals.remainingMins !== 1 ? 's' : ''}
-                            </h5>
-                            {dailyTotals.minutes >= 450 && dailyTotals.minutes <= 510 && (
-                                <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill fs-072">
-                                    <i className="bi bi-check-circle-fill me-1"></i>Full Day (7.5h)
-                                </span>
-                            )}
-                            {dailyTotals.minutes > 600 && (
-                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill fs-072">
-                                    <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 7.5h (Check Time per Task)
-                                </span>
-                            )}
+                {/* Middle: Hours Information */}
+                <div className="flex-grow-1 w-100">
+                    {isEditMode && editingUserName && (
+                        <div className="badge bg-light text-success border border-success-subtle px-2 py-1 mb-2 rounded-pill" style={{ fontSize: '0.7rem' }}>
+                            <i className="bi bi-person-fill me-1"></i>Employee: {editingUserName}
                         </div>
-                        <small className="text-muted">
-                            {dailyTotals.priorMinutes > 0 ? (
+                    )}
+
+                    {/* Suggested Hours Row */}
+                    <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <span className="fw-bold" style={{ color: accentColor, fontSize: '1rem' }}>
+                            Suggested: {dailyTotals.totalHours > 0 ? `${dailyTotals.totalHours}h ` : ''}
+                            {dailyTotals.remainingMins}m
+                        </span>
+                        {dailyTotals.minutes >= 450 && dailyTotals.minutes <= 510 && (
+                            <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.7rem' }}>
+                                <i className="bi bi-check-circle-fill me-1"></i>Full Day
+                            </span>
+                        )}
+                        {dailyTotals.minutes > 600 && (
+                            <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill" style={{ fontSize: '0.7rem' }}>
+                                <i className="bi bi-exclamation-triangle-fill me-1"></i>Exceeds 7.5h
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Details Row */}
+                    <div className="text-muted mb-2" style={{ fontSize: '0.8rem' }}>
+                        {dailyTotals.priorMinutes > 0 ? (
+                            <>
+                                <span className="fw-semibold text-dark">{dailyTotals.priorMinutes}m</span> logged + <span className="fw-semibold text-dark">{dailyTotals.currentMinutes}m</span> new &bull; Target: 7.5h
+                            </>
+                        ) : (
+                            `Total Work Hours for ${date} • Target: 7.5h (450m)`
+                        )}
+                    </div>
+
+                    {/* Actual Hours Row */}
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <span className="fw-bold text-green-dark" style={{ fontSize: '0.9rem' }}>
+                            Actual:{' '}
+                            {dailyTotals.actualMinutes > 0 ? (
                                 <>
-                                    <span className="fw-semibold text-dark">{dailyTotals.priorMinutes}m</span> already logged today + <span className="fw-semibold text-dark">{dailyTotals.currentMinutes}m</span> this entry &bull; Target: 7.5 hrs
+                                    {dailyTotals.totalActualHours > 0 ? `${dailyTotals.totalActualHours}h ` : ''}
+                                    {dailyTotals.remainingActualMins}m
                                 </>
                             ) : (
-                                `Total Work Hours for ${date} • Target: 7.5 hrs (450 mins)`
+                                'Not recorded'
                             )}
-                        </small>
-                        <div className="d-flex align-items-center gap-2 flex-wrap mt-1">
-                            <h6 className="mb-0 fw-bold text-green-dark">
-                                Actual Time Spent:{' '}
-                                {dailyTotals.actualMinutes > 0 ? (
-                                    <>
-                                        {dailyTotals.totalActualHours > 0 ? `${dailyTotals.totalActualHours} hr${dailyTotals.totalActualHours > 1 ? 's' : ''} ` : ''}
-                                        {dailyTotals.remainingActualMins} min{dailyTotals.remainingActualMins !== 1 ? 's' : ''}
-                                    </>
-                                ) : (
-                                    'Not recorded'
-                                )}
-                            </h6>
-                            {dailyTotals.actualMinutes > 0 && (
-                                <span className="badge bg-light text-dark border px-2 py-1 rounded-pill fs-072">
-                                    {dailyTotals.actualPercent}% of target
-                                </span>
-                            )}
-                        </div>
+                        </span>
+                        {dailyTotals.actualMinutes > 0 && (
+                            <span className="badge bg-light text-dark border px-2 py-1 rounded-pill" style={{ fontSize: '0.7rem' }}>
+                                {dailyTotals.actualPercent}%
+                            </span>
+                        )}
                     </div>
                 </div>
 
                 {/* Right: Tasks Count */}
-                <div className="d-flex align-items-center gap-3">
-                    <div className="text-end">
-                        <div className="fw-bold fs-5 text-green-dark">
+                <div className="d-flex align-items-center gap-3 flex-shrink-0 justify-content-center justify-content-md-end">
+                    <div className="text-center text-md-end ps-3" style={{ borderLeft: `1px solid ${dark ? '#2a3a35' : '#e2e8f0'}` }}>
+                        <div className="fw-bold text-green-dark" style={{ fontSize: '1.4rem', lineHeight: 1 }}>
                             {dailyTotals.tasksCount}
                         </div>
-                        <small className="text-muted d-block" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <small className="text-muted d-block" style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             {dailyTotals.priorTasks > 0
-                                ? `${dailyTotals.priorTasks} logged + ${dailyTotals.currentTasks} new`
+                                ? `${dailyTotals.priorTasks} + ${dailyTotals.currentTasks}`
                                 : 'Total Tasks'}
                         </small>
                     </div>

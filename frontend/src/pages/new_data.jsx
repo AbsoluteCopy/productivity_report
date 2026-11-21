@@ -435,7 +435,7 @@ const NewData = () => {
         const remainingMins = minutes % 60;
         const percent = Math.min(Math.round((minutes / targetMinutes) * 100), 999);
 
-        const actualMinutes = priorTotals.priorActual + currentActual;
+        const actualMinutes = ((priorTotals.priorActual + currentActual) / 60).toFixed(2);
         const totalActualHours = Math.floor(actualMinutes / 60);
         const remainingActualMins = actualMinutes % 60;
         const actualPercent = Math.min(Math.round((actualMinutes / targetMinutes) * 100), 999);
@@ -1583,17 +1583,17 @@ const NewData = () => {
     }
 
     return (
-        <div className="container py-4" style={{ minHeight: '100vh', backgroundColor: isDarkMode() ? '#0f1513' : '#f5f5f5' }}>
+        <div className="container py-3 py-md-4" style={{ minHeight: '100vh', backgroundColor: isDarkMode() ? '#0f1513' : '#f5f5f5' }}>
             <div className="row justify-content-center">
-                <div className="col-md-12 col-lg-12">
+                <div className="col-12 col-md-12 col-lg-12">
                     <div className="card shadow-sm">
-                        <div className="card-body p-4">
-                            <div className="d-flex justify-content-between align-items-center mb-4">
-                                <button type="button" className="btn btn-outline-secondary" onClick={handleBack}>
+                        <div className="card-body p-3 p-md-4">
+                            <div className="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2">
+                                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleBack}>
                                     ← Back
                                 </button>
 
-                                <h2 className="text-center fw-bold mb-0 text-green-dark">
+                                <h2 className="text-center fw-bold mb-0 text-green-dark flex-grow-1" style={{ fontSize: '1.25rem', fontSize: 'clamp(1.1rem, 4vw, 1.5rem)' }}>
                                     {isEditMode ? 'Edit Daily Report' : 'New Daily Report'}
                                     {isEditMode && editingIsPaused && (
                                         <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.55em', verticalAlign: 'middle' }}>
@@ -1610,7 +1610,7 @@ const NewData = () => {
                                             onClick={handleDeleteReport}
                                             title="Delete this report"
                                         >
-                                            <i className="bi bi-trash me-1"></i>Delete Report
+                                            <i className="bi bi-trash me-1"></i>Delete
                                         </button>
                                     )}
                                 </div>
