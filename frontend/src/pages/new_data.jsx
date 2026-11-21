@@ -121,7 +121,8 @@ const NewData = () => {
     const isBackDatedItem = (item) => {
         const d = item?.payload?.date;
         const wt = item?.payload?.work_type;
-        return !!d && (!wt || wt === 'Working') && d < new Date().toISOString().split('T')[0];
+        const currentDateInTimezone = getCurrentDateInTimezone();
+        return !!d && (!wt || wt === 'Working') && d < currentDateInTimezone;
     };
 
     const startNext = () => {
